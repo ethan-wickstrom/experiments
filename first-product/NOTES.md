@@ -109,6 +109,14 @@ Runner-up (ready if the test fails, or if Ethan wants a new product first): **a 
 - Assets (status tracked below): Show HN draft; r/MacApps post in Problem/Comparison/Pricing format (Tier 2 rules: real identity, LinkedIn, contact details, site with Privacy and Terms; no em dashes; one post per 30 days); a sourced guide page "what coding agents and dev tools leave on your disk" for getsizewise.app; an outreach list of people who described the problem in the last six weeks, each with a reply that helps on its own; X drafts once Ethan shares posts to learn his voice.
 - Every claim in every draft must be true of Sizewise 1.4 as shipped. No invented backstory: Ethan fills in why he built it.
 
+## Test 2 (runner-up, ready to run): design pass for agent-built web apps
+
+- Buyer: a solo developer who sells a SaaS or landing page built with coding agents and says it "looks AI-generated".
+- Offer to test: a working early version sold through Polar as software (not a preorder; Polar restricts preorders), $49 once per project with a 14-day refund, or a $15/month plan. Pick one before launch: one-time first, because Mac and indie buyers prefer it (Reddit research) and it avoids AI Designer's churn problem.
+- Demo the test needs: before/after of three real open-source agent-built apps, every route, rendered in Chromium here, plus one 30-second clip of the pick-a-direction step.
+- Pass: 10 paid early-access licenses from strangers within 7 days of launch. Signals that don't count: likes, stars, waitlist emails.
+- Known risks to check first: Reddit shows demand but nobody saying they paid for a tool; free skills (Impeccable, Taste Skill, ui-ux-pro-max) and Claude Design set a free floor; Ethan's taste is the moat and needs his time.
+
 ## Hypotheses (confidence, 0 to 100)
 
 | # | Hypothesis | Confidence | Evidence for | Evidence against |
