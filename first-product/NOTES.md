@@ -119,11 +119,14 @@ Runner-up (ready if the test fails, or if Ethan wants a new product first): **a 
 
 ## Hypotheses (confidence, 0 to 100)
 
-| # | Hypothesis | Confidence | Evidence for | Evidence against |
+| # | Hypothesis | Confidence (2026-10-15, after research) | Evidence for | Evidence against |
 |---|---|---|---|---|
-| H0 | Default buyer (solo dev with agents, already earning) is the best first buyer | 50 | Pays for tools today | Can build most tools themselves; floods every niche with free OSS |
-| H1 | Pro devs who buy native Mac tools on a company card are a better first buyer | 40 | Pay $89 to $99 for polish (Proxyman, TablePlus) | Saturated categories; slow to switch |
-| H2 | A product for Ethan's DSPy/GEPA audience has a distribution edge competitors lack | 35 | Retweets from researchers reach AI engineers with company cards | Small market; researchers pay little |
+| H0 | Default buyer (solo dev with agents, already earning) is the best first buyer for a utility | 25 (was 50) | Pays for plans and a few tools (Headroom, Rollcage, AI Designer) | Builds instead of buys; 21 of 21 categories already saturated; "I'd pay" statements aim at the model vendors |
+| H1 | Pro devs who buy native Mac tools on a company card are a better buyer | 40 | Proxyman, TablePlus, Fork named as happily paid for | Mature categories; slow to switch |
+| H2 | A product for the DSPy/GEPA audience has a distribution edge | 25 (was 35) | That audience amplifies research results | GEPA skill optimizers and FM eval tools already exist, Apple ships Evaluations |
+| H3 | Distribution, not product, is Ethan's binding constraint | 75 | Sizewise and /macos are polished and unlaunched; indie Mac devs say the same in 2026 interviews | Sizewise sales so far unknown |
+| H4 | Sizewise's first launch to developers yields 10 paid licenses from strangers within 7 days | 35 | Storage pain is frequent and already sells at about $10 (DaisyDisk, DiskFox); free scan lowers friction; /macos is a strong HN post | Mole (70k★, free) is the default recommendation; HN hostile to paid disk apps; $12.99 ceiling |
+| H5 | A new developer utility can't win on code alone in Oct 2026 | 85 | 10+ tools per pain within weeks; vendors absorb pains within months | Polished paid entrants still sell in crowded categories |
 
 ## Ideas tried
 
