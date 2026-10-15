@@ -23,7 +23,7 @@ I make a disk space app for the Mac, and pointed its scanner at the signed syste
 Some numbers from the two scans:
 
 - Counting the signed volume and the cryptexes, which are the same on every Mac with the same build, 27.0.1 is 4.37 GB bigger than 26.5.1: 24.4 GB against 20 GB.
-- Most of that is a new Rosetta cryptex, 7.3 GB, partly Intel caches that moved out of the OS cryptex, which shrank 4.05 GB. On an Apple silicon Mac, 27.0.1 keeps 3.09 GB of Intel copies of its system libraries and 4.14 GB of Rosetta's translations of them. The copy for its own chip is 2.49 GB.
+- The biggest change is a new Rosetta cryptex, 7.3 GB, partly Intel caches that moved out of the OS cryptex, which shrank 4.05 GB. On an Apple silicon Mac, 27.0.1 keeps 3.09 GB of Intel copies of its system libraries and 4.14 GB of Rosetta's translations of them. The copy for its own chip is 2.49 GB.
 - Apple Intelligence keeps its models in AssetsV2 folders that macOS protects even from administrators, so no app can measure them. Apple says up to 14 GB.
 
 The 27.0.1 scan ran on GitHub's macOS 27 virtual Mac. The page holds no one's own files. Click "What changed since 26.5.1" to color the map by what grew, shrank or is new.

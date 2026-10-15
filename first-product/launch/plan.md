@@ -16,7 +16,8 @@ Target: $10,000 from strangers by 31 December 2026. Today: $0 from strangers (Si
 | 0, a weekday 8 to 10am US Eastern | Hacker News | Show HN of https://getsizewise.app/macos, then the first comment | hn-macos-page.md |
 | 0 | X | One post with a screenshot of the /macos map, linking the page. No ask for upvotes. | waits on Ethan's voice samples |
 | 1 or 2 | r/MacApps | Sizewise post under Tier 2, Problem / Comparison / Pricing | r-macapps.md |
-| 1 to 7 | Reddit, X, GitHub | Replies to people who described the problem, each useful on its own, each saying how we found them | outreach.md (in progress) |
+| 1 or 2, only if the moderators say yes | r/MacOS | The /macos page, for the macOS 27 users watching System Data grow (rule 6: ask by modmail first; the modmail goes out by 2026-10-17) | outreach-replies.md, section 1 |
+| 0 to 7 | Reddit, GitHub | Replies to people who described the problem and are still stuck, each useful on its own. Replies that name Sizewise say how we found the person; replies in Mac subreddits name no app | outreach-replies.md |
 | 5 to 7 | Hacker News | Show HN for Sizewise itself, only if the /macos post didn't already bring the app most of its traffic | show-hn.md |
 
 Rules that apply to every post: no friends asked to upvote; answer every comment for the first two hours; no em dashes on Reddit (auto-removal); never post the same text twice; every claim true of Sizewise 1.4 as shipped.

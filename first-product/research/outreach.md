@@ -1,5 +1,7 @@
 # Sizewise launch outreach list: people who described Mac disk-space pain (2026-09-01 to 2026-10-15)
 
+**Re-checked later on 2026-10-15:** most of these threads were already solved, often within hours (one by a $9.99 DaisyDisk purchase). Which ones are still worth a reply, the subreddit rules on promotion, and the drafts are in `../launch/outreach-replies.md`.
+
 Compiled 2026-10-15. There are 39 people. Each one described their own problem in public. Each entry gives the link, a verbatim quote, what is filling the disk, whether a reply is still possible, and one helpful thing a reply could tell them even if they never install anything.
 
 **Counts**
@@ -110,7 +112,7 @@ Found by keyword search (System Data, disk space, worktrees, DerivedData and sim
   - Filling the disk: local LLM weights.
   - Mac: stated (Mac Studio).
   - Reply possible: yes (until about 2027-04-04). The comment sits in an unrelated thread.
-  - Helpful reply: Duplicates pile up across `ollama list`/`ollama rm`, `huggingface-cli delete-cache` (or `hf cache` in newer versions) and LM Studio's models folder. The `OLLAMA_MODELS` setting and LM Studio's model-directory setting can point at an external Thunderbolt SSD.
+  - Helpful reply: Duplicates pile up across `ollama list`/`ollama rm`, `hf cache ls`/`hf cache rm` (huggingface_hub 1.0 removed `huggingface-cli`) and LM Studio's models folder. The `OLLAMA_MODELS` setting and LM Studio's model-directory setting can point at an external Thunderbolt SSD.
 
 - **u/Beatsu**, r/MacOS, 2026-10-04, **Group B**. <https://www.reddit.com/r/MacOS/comments/1wxr0it/>
   - Quote: "When I open "Storage settings" it says I have 208GB of "System Data" which after a google search says I can't do anything about..."
@@ -201,7 +203,7 @@ Found by keyword search (System Data, disk space, worktrees, DerivedData and sim
   - Filling the disk: abandoned temporary Git packs (`tmp_pack_*`) from Codex Desktop's workspace diffs, 177 GB in total. macOS showed 559 GB of System Data. They cleaned it up carefully themselves.
   - Mac: stated.
   - Reply possible: yes (until about 2027-03-07). One commenter said "Same issue!"
-  - Helpful reply: `find ~ -path '*/.git/objects/pack/tmp_pack_*' -size +100M 2>/dev/null` is a quick recurring check. openai/codex#19588 tracks the same leak, with recurrences reported and a request for a per-workspace switch to turn it off.
+  - Helpful reply: Their files were under `$TMPDIR`, in `tmp.*` folders (corrected 2026-10-15; the post links openai/codex#43158, open, with reports up to 424 GiB). `du -sh "$TMPDIR"` is a quick recurring check. One commenter on #43158 also saw `tmp_pack_*` files growing inside a repo's own `.git/objects/pack`.
 
 - **u/pp_amorim** (comment), r/cursor, 2026-09-06, **Group A**. <https://www.reddit.com/r/cursor/comments/1w8558g/comment/p88jbkx/>
   - Quote: "I have 48gb of RAM. Cursor eats around 50 gb of storage every day."
@@ -228,7 +230,7 @@ Found with HN Algolia keyword searches and full-thread scans of the macOS 27 and
   - Filling the disk: about 200 GB of local models, agent-harness leftovers, and about 100 GB of npm data and node_modules.
   - Mac: not stated.
   - Reply possible: yes, until about 2026-10-26 (guess).
-  - Helpful reply: `find ~ -name node_modules -type d -prune -exec du -sh {} + 2>/dev/null | sort -h` lists every node_modules folder by size, and `npm cache clean --force` clears the npm cache. For models, check `ollama list`, `huggingface-cli delete-cache` and `~/.lmstudio/models`.
+  - Helpful reply: `find ~ -name node_modules -type d -prune -exec du -sh {} + 2>/dev/null | sort -h` lists every node_modules folder by size, and `npm cache clean --force` clears the npm cache. For models, check `ollama list`, `hf cache ls` and `~/.lmstudio/models`.
 
 - **busymom0**, 2026-10-07, **Group B**, and also a developer. <https://news.ycombinator.com/item?id=49993888> (story: "Tell HN: Apple not letting removal of AI models on macOS 27 is outrageous", 2026-10-07). Earlier post: <https://news.ycombinator.com/item?id=49792485>
   - Quote (2026-09-21): "My "system data" is taking up 193 GB. Is my Mac doing something wrong here? Anyway to see what's inside?" Their 2026-10-07 comment says System Data "exploded to 74 GB" after the RemoveMacAI script.

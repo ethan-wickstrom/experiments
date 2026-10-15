@@ -13,13 +13,16 @@ Why this number: $10k is about 150 licenses at $69, or about 1,000 paid user-mon
 | Date | Strangers who paid | Revenue | Refundable preorders | Signups (real emails, reached through complaints) | Note |
 |---|---|---|---|---|---|
 | 2026-10-15 | 0 | $0 | 0 | 0 | Research done; pitch sent (Sizewise developer launch, runner-up design pass); Show HN and r/MacApps drafts written |
+| 2026-10-15, later | 0 | $0 | 0 | 0 | Outreach list re-checked: most threads already solved; 8 replies and an r/MacOS modmail drafted (launch/outreach-replies.md); nothing posted |
 
 ## What needs Ethan (smallest asks first)
 
 1. His X handle, or 5 to 10 real posts, so drafts sound like him. Searched GitHub, ethan-wickstrom.com (down to our fetchers), LinkedIn, Exa; no handle found.
 2. Sizewise numbers so far: licenses sold, revenue, downloads, and which channels were tried. This calibrates the target and tells us whether his X audience buys Mac utilities.
 3. One sentence on why he built Sizewise, in his words, for the Show HN and r/MacApps posts (no invented backstory).
-4. A yes to post the Show HN and r/MacApps drafts this week (first post by 2026-10-20).
+4. A yes to post the Show HN and r/MacApps drafts this week (first post by 2026-10-20). Is HN user `ethan-wickstrom` yours (created 2025-10-25, karma 1, nothing posted)? Which Reddit account will you post from?
+5. Today: post the reply to u/BrownCowStunning_ (launch/outreach-replies.md, section 2) if you want it to help; the thread is a day old and the poster is still replying.
+6. By 2026-10-17: send the r/MacOS modmail (section 1) asking to post the /macos page once, then the r/codex replies to u/Calrose_rice and u/andysurtees.
 
 ## Facts we know (with source and whether checked)
 
@@ -88,6 +91,14 @@ Reddit research (full write-up: research/reddit.md; ~390k post titles and bodies
 - Agents deleting data: the most viral pain ("deleted 48k files", score 4,842) has the weakest buyers.
 - Mac buyers prefer one-time purchases and accept a lifetime price of about one to two years of subscription. Proxyman, TablePlus and Fork are named as tools developers happily pay for.
 
+Outreach re-check (2026-10-15, threads re-read through Arctic Shift, HN Algolia and WebFetch; details in launch/outreach-replies.md)
+- Most of the 39 people on research/outreach.md had an answer within hours of posting. u/cecoondog bought DaisyDisk ($9.99) four and a half hours after posting, on commenters' advice, and wrote "Best $10 purchase I've ever made"; Mole and OnyX were "too techie" (https://www.reddit.com/r/MacOS/comments/1x3hej6/). Others were fixed by Mole, by deleting Time Machine snapshots, by a restart, or by a macOS update.
+- Developers ask their agent instead of buying: "I just asked Claude where all my disk space went and it gave me a really useful breakdown" (https://news.ycombinator.com/item?id=50064993); in r/codex's "Codex disk usage" thread the most upvoted comment asks "Can Codex prune this back?", answered "It can. It's pretty good at it too" (https://www.reddit.com/r/codex/comments/1x1ytxw/). All five HN leads were answered with free commands.
+- Promotion rules (Arctic Shift rules endpoint): r/mac bans self-promotion and removed a disk-app maker's answer on u/funky_surprise's thread after a user called it AI-written promotion of "garbage software"; r/macbookpro and r/macbookair ban promotion; r/MacOS requires a modmail before promoting anything you made. Other makers already reply in these threads (neodisk.app, SpaceWise, FinderTools, Diskaroo, Mole's author).
+- An Apple Community user tip (neuroanatomist, 2026-10-03) says macOS 27 no longer reports purgeable space and counts it in System Data, which explains much of the reported System Data growth (https://discussions.apple.com/docs/DOC-250012471). Sizewise's purgeable-space guide describes the macOS 26 behavior; worth a macOS 27 note, and worth checking what Not in this map shows on 27 (unchecked).
+- HN user `ethan-wickstrom` exists: created 2025-10-25, karma 1, nothing posted. Matches the GitHub handle; unconfirmed that it's Ethan's.
+- Arctic Shift serves subreddit rules at /api/subreddits/rules?subreddits=NAME. reddit.com stays blocked for WebFetch and Exa.
+
 ## Working conclusion (2026-10-15, after six research tracks and 21 category checks)
 
 1. No open lane exists for a new developer utility. Every category checked (21, listed under "Ideas tried") already had 10 or more tools, mostly free, most built within weeks of the pain appearing. Anthropic and OpenAI absorb what remains within months. The default buyer (solo dev with agents) builds instead of buying: "absolutly eveyrone I know vibe-coded this thing" (https://news.ycombinator.com/item?id=47975381). That buyer is also the competitor.
@@ -106,7 +117,7 @@ Runner-up (ready if the test fails, or if Ethan wants a new product first): **a 
 - Pass: **10 paid licenses from strangers within 7 days of the first public post.** Strangers means not friends, not existing followers who know Ethan personally. Source of truth: Polar orders (Ethan reports the count).
 - Deadline: first post by 2026-10-20; read the result 7 days after the first post.
 - Kill or pivot rule: under 3 paid licenses in 7 days means the channel or the category is wrong for a quick win; run the runner-up. Between 3 and 9 means keep Sizewise as a slow SEO business and run the runner-up anyway.
-- Assets (status tracked below): Show HN draft; r/MacApps post in Problem/Comparison/Pricing format (Tier 2 rules: real identity, LinkedIn, contact details, site with Privacy and Terms; no em dashes; one post per 30 days); a sourced guide page "what coding agents and dev tools leave on your disk" for getsizewise.app; an outreach list of people who described the problem in the last six weeks, each with a reply that helps on its own; X drafts once Ethan shares posts to learn his voice.
+- Assets, all drafts, none posted or published (2026-10-15): Show HN for /macos (launch/hn-macos-page.md) and for Sizewise (launch/show-hn.md); r/MacApps post in Problem/Comparison/Pricing format (launch/r-macapps.md; Tier 2 rules: real identity, LinkedIn, contact details, site with Privacy and Terms; no em dashes; one post per 30 days); sourced guide "What coding agents and dev tools leave on your Mac" for getsizewise.app/agent-disk (launch/agent-disk/, rendered locally); the developer-week demo page (launch/dev-week/); llms.txt (launch/llms.txt); outreach list (research/outreach.md) and the replies still worth posting, plus an r/MacOS modmail (launch/outreach-replies.md); X outlines only (launch/x-outlines.md), waiting on Ethan's posts to learn his voice.
 - Every claim in every draft must be true of Sizewise 1.4 as shipped. No invented backstory: Ethan fills in why he built it.
 
 ## Test 2 (runner-up, ready to run): design pass for agent-built web apps
@@ -125,8 +136,10 @@ Runner-up (ready if the test fails, or if Ethan wants a new product first): **a 
 | H1 | Pro devs who buy native Mac tools on a company card are a better buyer | 40 | Proxyman, TablePlus, Fork named as happily paid for | Mature categories; slow to switch |
 | H2 | A product for the DSPy/GEPA audience has a distribution edge | 25 (was 35) | That audience amplifies research results | GEPA skill optimizers and FM eval tools already exist, Apple ships Evaluations |
 | H3 | Distribution, not product, is Ethan's binding constraint | 75 | Sizewise and /macos are polished and unlaunched; indie Mac devs say the same in 2026 interviews | Sizewise sales so far unknown |
-| H4 | Sizewise's first launch to developers yields 10 paid licenses from strangers within 7 days | 35 | Storage pain is frequent and already sells at about $10 (DaisyDisk, DiskFox); free scan lowers friction; /macos is a strong HN post | Mole (70k★, free) is the default recommendation; HN hostile to paid disk apps; $12.99 ceiling |
+| H4 | Sizewise's first launch to developers yields 10 paid licenses from strangers within 7 days | 25 (was 35; outreach re-check) | Storage pain is frequent and already sells at about $10 (DaisyDisk, DiskFox); free scan lowers friction; /macos is a strong HN post | Mole (70k★, free) is the default recommendation; HN hostile to paid disk apps; $12.99 ceiling; developers now ask Claude or Codex to find and clear space; every HN lead was answered with free commands |
 | H5 | A new developer utility can't win on code alone in Oct 2026 | 85 | 10+ tools per pain within weeks; vendors absorb pains within months | Polished paid entrants still sell in crowded categories |
+| H6 | Mac users who aren't developers pay about $10, within hours, for the disk app other people recommend when their disk fills | 70 | u/cecoondog bought DaisyDisk 4.5 hours after posting and another commenter downloaded it; Mole and OnyX "too techie" for them | One thread; many threads end with no purchase (snapshots, restart, update, Mole) |
+| H7 | Sizewise can reach those buyers inside the 7-day test | 20 | /macos fits r/MacOS, where System Data posts cluster, if moderators allow it; Sizewise has a System Data guide for search | Promotion banned in r/mac, r/macbookpro, r/macbookair; r/MacOS needs moderator approval; threads resolve within hours, usually by a recommendation of DaisyDisk or Mole |
 
 ## Ideas tried
 
