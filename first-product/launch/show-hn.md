@@ -43,4 +43,6 @@ DaisyDisk is $9.99, draws a sunburst, and deletes files permanently with a five-
 
 - "Paid disk apps hoard knowledge." The guides are free and sourced, and the scan is free. The license pays for Move to Trash and the change views.
 - "Why not `du`/ncdu/Mole?" They're good. `du` counts a cloned or hard-linked file at full size in every place; Sizewise asks APFS what deleting would return, and shows changes between scans on a map.
-- "Does it phone home?" It collects no data about your files. It goes online to check for updates and validate a license (see https://getsizewise.app/privacy for the exact list). [Confirm this matches the privacy page wording before posting.]
+- "Does it phone home?" Per the privacy page: it goes online for two things only, to check for updates and to activate a license once. Activation sends Polar the key and the Mac's model identifier, once; after that the license is checked on the Mac and Polar is never contacted again. Scanning without a license sends nothing. https://getsizewise.app/privacy
+  (This answers the objection raised on DiskFox's Show HN, where a commenter called periodic Polar license checks "a paid tracking cookie": https://news.ycombinator.com/item?id=49998987)
+- "Can my assistant use it?" Yes, if you turn on Let AI assistants read scan results in Settings; the assistant can read names and sizes in saved scans, and nothing else.
