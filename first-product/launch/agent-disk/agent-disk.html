@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What coding agents and dev tools leave on your Mac</title>
+<link rel="canonical" href="https://getsizewise.app/agent-disk">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Sizewise">
+<meta property="og:url" content="https://getsizewise.app/agent-disk">
+<meta property="og:title" content="What coding agents and dev tools leave on your Mac">
+<meta property="og:description" content="Where coding agents keep worktrees, transcripts and checkpoints on a Mac, why deleting a pnpm or Bun node_modules frees less than its size, and each tool’s own way to remove what you don’t need.">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:image" content="https://getsizewise.app/images/share-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Sizewise icon and the words “See what’s taking up space on your Mac” beside a map of folders, where the bigger the file, the bigger its rectangle.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="description" content="Where coding agents keep worktrees, transcripts and checkpoints on a Mac, why deleting a pnpm or Bun node_modules frees less than its size, and each tool’s own way to remove what you don’t need.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="/site.css">
+<meta name="text-scale" content="scale">
+<link rel="expect" href="#top" blocking="render">
+<script type="speculationrules">{"prerender": [{"where": {"and": [{"href_matches": "/*"}, {"not": {"href_matches": "/images/*"}}]}, "eagerness": "moderate"}]}</script>
+</head>
+<body>
+<header class="site-nav">
+  <a class="brand" href="/"><img src="/icon.svg" width="28" height="28" alt="">Sizewise</a>
+  <nav aria-label="Sizewise"><a href="/try">Try it</a><a class="get" href="/#download">Get Sizewise</a></nav>
+</header>
+<main class="doc stack">
+  <h1 id="top">What coding agents and dev tools leave on your Mac</h1>
+  <p>Coding agents often give each task its own copy of your project, and each copy gets its own dependencies and build files. Here is where the common agents and dev tools keep what they save, how long they keep it, and each tool’s own way to remove it.</p>
+  <p>What this page says about each tool comes from its own documentation, checked on October 15, 2026. If something here is out of date, <a href="mailto:support@getsizewise.app">tell us</a> and we’ll fix it.</p>
+
+  <h2>Worktrees: a copy of your project for each task</h2>
+  <p>Most of these tools use <a href="https://git-scm.com/docs/git-worktree">Git worktrees</a>: extra working folders for one repository. Worktrees share the repository’s history, but each has its own copy of your files. A new worktree starts with only the files Git tracks, so folders Git ignores, such as node_modules or a build folder, appear when you install and build in it, and each worktree gets its own. <a href="https://learn.chatgpt.com/docs/environments/git-worktrees">OpenAI’s Codex docs</a> warn: “Worktrees can take up a lot of disk space. Each one has its own set of repository files, dependencies, build caches, etc.” How much each extra node_modules takes depends on the package manager, as the section on node_modules below explains.</p>
+  <ul>
+    <li><code>git worktree list</code> lists a repository’s worktrees and the branch each one has checked out.</li>
+    <li><code>git worktree remove</code> and a worktree’s path deletes its folder, including ignored folders such as node_modules. Git refuses when the worktree has changed or untracked files, unless you add <code>--force</code>, which deletes those too. The branch stays. Delete it with <a href="https://git-scm.com/docs/git-branch"><code>git branch -d</code></a> when you no longer need it.</li>
+    <li><code>git worktree prune</code> clears Git’s records of worktrees whose folders were deleted another way.</li>
+  </ul>
+
+  <h2>Claude Code</h2>
+  <dl>
+    <dt>Worktrees</dt><dd><code>claude --worktree</code> and a name creates a worktree in .claude/worktrees at the root of your repository, on a new branch whose name starts with worktree-. The desktop app uses the same folder unless you change Worktree location in Settings &gt; Claude Code.<span class="note">When you exit a worktree session and nothing in it changed, <a href="https://code.claude.com/docs/en/worktrees">Claude Code removes</a> the worktree and its branch, asking first in a named session. When there’s work in it, Claude Code asks whether to keep it. Runs with <code>-p</code> leave their worktrees in place. Worktrees Claude made for subagents and background sessions are removed by a periodic sweep once they’re older than the cleanupPeriodDays setting, 30 days by default, unless they still hold work. In the desktop app, <a href="https://code.claude.com/docs/en/desktop">archiving a session</a> removes its worktree.</span></dd>
+    <dt>Transcripts</dt><dd>~/.claude/projects holds a transcript of each session: every message, tool call and tool result, including the contents of files Claude read.<span class="note"><a href="https://code.claude.com/docs/en/claude-directory">Claude Code deletes</a> each one once it’s older than cleanupPeriodDays, 30 days by default. It keeps transcripts of sessions you started or last continued in Claude Desktop or Cowork at any age, unless you set desktopSessionCleanupPeriodDays.</span></dd>
+    <dt>Checkpoints</dt><dd>~/.claude/file-history holds copies of files from before Claude edited them, which <code>/rewind</code> uses to restore your code.<span class="note"><a href="https://code.claude.com/docs/en/checkpointing">Claude Code keeps</a> them for the 100 most recent checkpoints in a session, and the same sweep deletes them about 30 days after the session last saved one.</span></dd>
+  </dl>
+  <p>To remove one project’s transcripts and checkpoints at once, run <code>claude purge</code> and the project’s path. It shows what it will delete and asks first. It also deletes Claude’s memory notes for the project and its entry in ~/.claude.json, with its trust setting and the MCP servers you added for it. You can no longer resume or rewind its past sessions. Before Claude Code 2.1.288, the command was <code>claude project purge</code>.</p>
+
+  <h2>Codex</h2>
+  <dl>
+    <dt>Worktrees</dt><dd>Codex keeps the worktrees it makes in ~/.codex/worktrees. To use another folder, open Settings &gt; Worktrees and change Worktree root.<span class="note">In the ChatGPT desktop app, <a href="https://learn.chatgpt.com/docs/environments/git-worktrees">Codex keeps</a> your 15 most recent Codex-managed worktrees by default and deletes older ones. It also deletes a chat’s worktree when you archive the chat. It keeps the worktrees of pinned chats and of chats still running, and permanent worktrees. Before deleting one, it saves a snapshot of the work, and the chat offers to restore it. Worktrees the Codex CLI makes with <code>--worktree</code> go in the same folder, and <a href="https://github.com/openai/codex/blob/e89b7c442c0433ad5167e72a5a25bb6d0712766a/codex-rs/worktree/src/settings.rs">Codex’s source code</a> shows the CLI doesn’t clean them up on its own.</span></dd>
+    <dt>Sessions</dt><dd>Codex saves each session’s transcript in ~/.codex/sessions, and moves archived ones to ~/.codex/archived_sessions.<span class="note">Its docs don’t say it deletes them on its own. <a href="https://learn.chatgpt.com/docs/developer-commands?surface=cli"><code>codex delete</code></a> and a session’s ID or name deletes one for good. <code>codex archive</code> only hides it from the session picker and keeps the transcript.</span></dd>
+    <dt>Checkpoints in your project</dt><dd>Codex’s docs don’t mention them, but in <a href="https://github.com/openai/codex/issues/29388">an open issue</a> from June 2026, a user reported that Codex’s turn-diff checkpoints were written as Git objects into the project’s own .git folder, and that nothing removed them after newer checkpoints replaced them. In that user’s project, <code>git count-objects</code> counted 8,476 loose objects taking 101.86 GiB. A comment on September 30 says it still happens with codex-cli 0.159.2.</dd>
+  </dl>
+  <p>To check a project and get the space back:</p>
+  <ol>
+    <li>In Terminal, in the project’s folder, run <a href="https://git-scm.com/docs/git-count-objects"><code>git count-objects -vH</code></a>. Its size line is the space loose objects take, the kind the issue describes.</li>
+    <li>Quit Codex and other apps that use the repository, so nothing writes to it while Git cleans up.</li>
+    <li>Run <a href="https://git-scm.com/docs/git-gc"><code>git gc</code></a>. It keeps every object a branch, tag, reflog or other ref still points to, and by default removes unreachable loose objects once they’re more than two weeks old.</li>
+    <li>To remove them whatever their age, run <code>git gc --prune=now</code>. Git warns that this “increases the risk of corruption if another process is writing to the repository concurrently.” It also removes work Git could otherwise still recover, such as a <a href="https://git-scm.com/docs/git-stash">stash you dropped</a> by mistake.</li>
+  </ol>
+  <p>A commenter on the issue notes that cleaning up “won’t stop Codex from re-creating snapshots,” so the space can build up again while the issue is open.</p>
+
+  <h2>Conductor and Cursor</h2>
+  <dl>
+    <dt>Conductor</dt><dd><a href="https://www.conductor.build/docs/concepts/git-worktrees">Conductor gives</a> each workspace its own worktree, usually in ~/conductor/workspaces, in a folder for each repository. Older workspaces can be in a .conductor folder inside the repository.<span class="note">Archive a workspace in Conductor when you’re done with it. You can <a href="https://www.conductor.build/docs/troubleshooting/issues">restore it later</a> from the History pane.</span></dd>
+    <dt>Cursor</dt><dd><a href="https://cursor.com/docs/cli/using">Cursor keeps</a> agent worktrees in ~/.cursor/worktrees, in a folder for each repository, whether they come from the editor or its CLI.<span class="note">Since Cursor 3.5, it <a href="https://cursor.com/docs/configuration/worktrees">deletes older worktrees</a> to keep at most 25 on your Mac by default, counting every project, and the cursor.worktreeMaxCount setting changes that limit. Its docs add that worktrees “created by /worktree skills or git worktree add” can be deleted too. In the editor, <code>/delete-worktree</code> removes one when you’re done.</span></dd>
+  </dl>
+
+  <h2>node_modules and virtual environments</h2>
+  <p>How much a project’s node_modules takes, and how much deleting it frees, depends on the package manager.</p>
+  <dl>
+    <dt>npm</dt><dd>npm writes a full copy of every package into each project. <a href="https://pnpm.io/motivation">pnpm’s docs</a> put it this way: “When using npm, if you have 100 projects using a dependency, you will have 100 copies of that dependency saved on disk.” Deleting an npm project’s node_modules frees about what it takes.</dd>
+    <dt>pnpm</dt><dd>pnpm keeps one copy of each package file in its store, ~/Library/pnpm/store on a Mac, and <code>pnpm store path</code> prints the one in use. It puts those files in each project without copying their data: <a href="https://pnpm.io/settings/node-modules#packageimportmethod">on a Mac, its default</a> is to clone them from the store, and to hard link them where it can’t clone.<span class="note">Run <a href="https://pnpm.io/cli/store"><code>pnpm store prune</code></a> to remove packages no project on your Mac uses. pnpm says it “is not harmful and has no side effects on your projects,” and downloads a removed package again if a later install needs it.</span></dd>
+    <dt>Bun</dt><dd>Bun keeps the packages it downloads in ~/.bun/install/cache, and <code>bun pm cache</code> prints the folder in use. <a href="https://bun.com/docs/pm/global-cache">On a Mac, its default</a> is to clone them into each project.<span class="note"><a href="https://bun.com/docs/pm/cli/pm"><code>bun pm cache rm</code></a> empties the cache. <code>bun pm cache prune</code> removes only packages Bun downloaded more than 30 days ago, including ones still in use, and Bun downloads them again when an install needs them.</span></dd>
+    <dt>uv</dt><dd>uv keeps the Python packages it downloads and builds in ~/.cache/uv, and <code>uv cache dir</code> prints the folder in use. <a href="https://docs.astral.sh/uv/reference/settings/#link-mode">On a Mac, its default</a> is to clone them into each virtual environment.<span class="note"><a href="https://docs.astral.sh/uv/concepts/cache/"><code>uv cache prune</code></a> removes entries uv no longer uses, and uv says it “is safe to run periodically.” <code>uv cache clean</code> removes everything, and uv downloads and builds packages again as it needs them.</span></dd>
+  </dl>
+  <p>A clone is an APFS copy that, <a href="https://developer.apple.com/documentation/foundation/about-apple-file-system">Apple says</a>, “occupies no additional space on disk”: both files share the same blocks until one of them changes. A hard link is a second name for the same file. Either way, a node_modules folder from pnpm or Bun, or a virtual environment from uv, looks as big as a full copy, but its package files share their data with the store or cache. Deleting the folder frees only the part no other file shares. The rest is freed only when nothing else, such as the store, the cache or another project, still uses it. <a href="https://pnpm.io/faq">pnpm’s FAQ</a> explains the hard-link case: “that 1MB is the same space on the disk addressed from two different locations.”</p>
+
+  <h2>Rust build folders</h2>
+  <p><a href="https://doc.rust-lang.org/cargo/reference/build-cache.html">Cargo builds</a> into a folder named target at the root of each project, so every project, and every worktree of one, has its own. Cargo cleans up its download cache on its own, but not target.</p>
+  <ul>
+    <li>Run <a href="https://doc.rust-lang.org/cargo/commands/cargo-clean.html"><code>cargo clean</code></a> in a project to delete its target folder. <code>cargo clean --dry-run</code> shows what it would delete. The next build compiles everything again.</li>
+    <li>~/.cargo/registry holds the crates Cargo downloaded: compressed .crate files in registry/cache and their unpacked sources in registry/src. When you build, <a href="https://doc.rust-lang.org/cargo/reference/config.html#cache">Cargo deletes</a> files there it hasn’t used in 3 months, or in 1 month for files it can make again without a download. It skips this when it runs offline.</li>
+  </ul>
+
+  <h2>Browsers and models</h2>
+  <dl>
+    <dt>Playwright</dt><dd>Playwright downloads Chromium, Firefox and WebKit to ~/Library/Caches/ms-playwright, and <a href="https://playwright.dev/docs/browsers#managing-browser-binaries">its docs</a> say they take a few hundred megabytes.<span class="note">Playwright deletes a browser version once no Playwright installation on your Mac needs it. <a href="https://playwright.dev/docs/browsers#uninstall-browsers"><code>npx playwright uninstall</code></a> removes the browsers of the installation you run it from, and adding <code>--all</code> removes every installation’s. <code>npx playwright install</code> downloads them again.</span></dd>
+    <dt>Hugging Face</dt><dd>Models and datasets you download with Hugging Face’s libraries go in ~/.cache/huggingface/hub, unless HF_HOME or HF_HUB_CACHE points somewhere else.<span class="note"><a href="https://huggingface.co/docs/huggingface_hub/guides/manage-cache"><code>hf cache ls</code></a> lists what’s there. <code>hf cache rm</code> and a repo ID, such as model/bert-base-cased, deletes one, and <code>hf cache prune</code> deletes revisions no branch or tag uses and unfinished downloads. Add <code>--dry-run</code> to see what either would delete. Version 1.0 of the huggingface_hub library <a href="https://huggingface.co/docs/huggingface_hub/concepts/migration">removed the older huggingface-cli command</a>, so guides that use <code>huggingface-cli delete-cache</code> are out of date.</span></dd>
+    <dt>Ollama</dt><dd><a href="https://docs.ollama.com/faq">Ollama keeps</a> models in ~/.ollama/models, or the folder the OLLAMA_MODELS variable names.<span class="note"><a href="https://docs.ollama.com/cli"><code>ollama ls</code></a> lists your models, and <code>ollama rm</code> and a model’s name deletes one. <code>ollama pull</code> downloads it again.</span></dd>
+    <dt>LM Studio</dt><dd><a href="https://lmstudio.ai/docs/app/advanced/import-model">LM Studio’s docs</a> show its models in ~/.lmstudio/models, in a folder for each publisher and model. You can <a href="https://lmstudio.ai/docs/app/basics/download-model">change that folder</a> in its My Models tab.<span class="note"><a href="https://lmstudio.ai/docs/cli/local-models/ls"><code>lms ls</code></a> lists each model with its size, and the total. LM Studio’s docs don’t describe a command to delete a model.</span></dd>
+  </dl>
+
+  <h2>Xcode, Docker and package caches</h2>
+  <p>Other Sizewise guides cover the rest of a developer’s disk: <a href="/xcode-storage">Xcode’s DerivedData, archives and simulators</a>, <a href="/docker-disk">Docker Desktop’s disk image</a>, <a href="/developer-caches">Homebrew, pip and npm caches</a>, and <a href="/android-storage">Android Studio’s SDK and emulators</a>.</p>
+
+  <h2>Advice to skip</h2>
+  <ul>
+    <li><strong>Deleting a worktree’s folder in Finder.</strong> Git keeps its record of the worktree until <code>git worktree prune</code> clears it, and the branch stays. <a href="https://www.conductor.build/changelog/0.36.2-model-picker-bug-fixes">Conductor’s changelog</a> asks: “please do not move or delete workspace or repo directories outside Conductor.” Use <code>git worktree remove</code>, or the tool’s own archive or delete.</li>
+    <li><strong>Deleting a project’s .git folder to shrink it.</strong> The workaround in the Codex issue labels <code>rm -rf .git &amp;&amp; git init</code> “Nuclear.” It deletes every commit, branch and stash that exists only on your Mac. <code>git gc</code>, above, removes only objects nothing points to.</li>
+    <li><strong>Deleting files inside a package store or cache by hand.</strong> uv’s docs say “it’s never safe to modify the cache directly,” such as by removing a file or folder. Use the tool’s own command, such as <code>pnpm store prune</code>, <code>bun pm cache rm</code> or <code>uv cache clean</code>.</li>
+    <li><strong>Deleting ~/.claude or ~/.codex.</strong> Next to transcripts, they hold your settings and can hold your sign-in. Claude Code’s docs say not to delete ~/.claude.json, ~/.claude/settings.json or ~/.claude/plugins, which “hold your auth, preferences, and installed plugins.” Use <code>claude purge</code> or <code>codex delete</code> instead.</li>
+  </ul>
+
+  <h2>How to see yours</h2>
+  <p><img src="/images/selection.webp" width="2000" height="1250" loading="lazy" decoding="async" alt="A Sizewise window showing a sample home folder as a map: Movies, Library with Developer and CoreSimulator, Pictures and Downloads, each a rectangle sized by the space it takes, with a selected folder outlined and its size in the status bar."></p>
+  <ol>
+    <li>In Sizewise, choose <strong>File &gt; Scan Folder</strong> and choose your home folder, or scan your whole disk to see these folders next to everything else.</li>
+    <li>Lock a folder with a click to see what deleting it would free. When that’s less than its size, Sizewise shows what keeps the rest, such as copies that share their data.</li>
+    <li>Scan the same folder again next week, and if it grew a lot, a strip over the map names up to three places where the space went.</li>
+  </ol>
+  <p>Sizewise shows where the space is, and you decide what goes. It asks before every move, and moves files only to the Trash, so you can put them back.</p>
+
+  <h2>Try it on your Mac</h2>
+  <p>Scanning is free, with no account. A license, $12.99 once, adds Move to Trash. It needs macOS Sequoia or later.</p>
+  <p><a class="button" href="/#download">Get Sizewise</a></p>
+</main>
+<footer class="site-footer">
+  <nav aria-label="More about Sizewise"><a href="/release-notes.html">Release notes</a><a href="/macos">What macOS puts on your Mac</a><a href="/system-data">What’s in System Data</a><a href="/storage-full">When your Mac is full</a><a href="/compare">Compare disk apps</a><a href="/press.html">Press</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="mailto:support@getsizewise.app">Contact</a></nav>
+  <p>Polar sells Sizewise for Tallied, Inc.</p>
+</footer>
+</body>
+</html>
