@@ -12,12 +12,14 @@ Why this number: $10k is about 150 licenses at $69, or about 1,000 paid user-mon
 
 | Date | Strangers who paid | Revenue | Refundable preorders | Signups (real emails, reached through complaints) | Note |
 |---|---|---|---|---|---|
-| 2026-10-15 | 0 | $0 | 0 | 0 | Research started |
+| 2026-10-15 | 0 | $0 | 0 | 0 | Research done; pitch sent (Sizewise developer launch, runner-up design pass); Show HN and r/MacApps drafts written |
 
 ## What needs Ethan (smallest asks first)
 
 1. His X handle, or 5 to 10 real posts, so drafts sound like him. Searched GitHub, ethan-wickstrom.com (down to our fetchers), LinkedIn, Exa; no handle found.
 2. Sizewise numbers so far: licenses sold, revenue, downloads, and which channels were tried. This calibrates the target and tells us whether his X audience buys Mac utilities.
+3. One sentence on why he built Sizewise, in his words, for the Show HN and r/MacApps posts (no invented backstory).
+4. A yes to post the Show HN and r/MacApps drafts this week (first post by 2026-10-20).
 
 ## Facts we know (with source and whether checked)
 
