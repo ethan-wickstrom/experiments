@@ -9,6 +9,6 @@ Files:
 
 Tested 2026-10-15 in Chromium 1194 (Playwright), light and dark, no console errors. Rendered numbers: Monday 88.8 GB, Friday 152 GB, grew 63.7 GB; largest changes: Rust target +22.9 GB, a model download +16.4 GB, Docker.raw +9 GB, six worktrees 7.22 GB (Monday's one was 918 MB), simulators and Xcode +5.54 GB.
 
-To ship: copy both files to the site root next to `map.js`, add `/dev-week` to `sitemap.xml` and the footer if wanted. Before shipping, confirm the worktree location sentence against the developer guide's sources (Claude Code's `.claude/worktrees` is cited from a third-party hook README; the guide draft checks it against Claude Code's docs).
+To ship: copy both files to the site root next to `map.js`, add `/dev-week` to `sitemap.xml` and the footer if wanted. The worktree location is verified: Claude Code docs say `claude --worktree` creates worktrees in `.claude/worktrees` at the repository root (see ../agent-disk/agent-disk.md sources).
 
 Ethan's call: a real before/after of his own home folder (scripts/atlas.ts, names anonymized) would be stronger than a sample, but takes a week to collect.
