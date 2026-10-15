@@ -78,9 +78,26 @@ Paid-tool landscape (full write-up: research/landscape.md, ~280 links, [V] = ver
 - Launch assets: Screen Studio ~25k monthly users at $108/yr; one-time clones Screen Charm $54k and ScreenSage $50k all-time [V]; App Store screenshot tools $3–7.5k [V]; App Store submissions up 84% year on year.
 - Avoid: usage meters (CodexBar free, 22.5k★; SessionWatcher revenue down 41.5% in 30 days), session managers (Orca 92.8k★ free), MCP managers (MCP Router ended 2026-09-18), notifications, terminals, context builders, sandboxes, visual pointing tools (PinVari, $39.99, made $58 [V]).
 
-## Working conclusion so far
+## Working conclusion (2026-10-15, after six research tracks and 21 category checks)
 
-Any agent-adjacent developer tool that a coding agent can build in a weekend already exists several times over as free open source (two categories checked in under an hour, 25+ tools). The first product therefore needs an advantage outside code: a channel Ethan owns, taste and polish people pay for over free tools (the TablePlus pattern), curated or growing data, or a buyer who cannot build it themselves. Treat "nobody has built this" as unlikely for any idea, and check before believing it.
+1. No open lane exists for a new developer utility. Every category checked (21, listed under "Ideas tried") already had 10 or more tools, mostly free, most built within weeks of the pain appearing. Anthropic and OpenAI absorb what remains within months. The default buyer (solo dev with agents) builds instead of buying: "absolutly eveyrone I know vibe-coded this thing" (https://news.ycombinator.com/item?id=47975381). That buyer is also the competitor.
+2. Money still reaches small makers in crowded categories when the product is polished, shows measurable value, and reaches buyers: Rollcage ($29 to $39 once), Headroom ($1.8k MRR on top of a free CLI), AI Designer ($9.0k MRR), Skillry ($2.5k MRR), Screen Studio clones ($50k+ all-time).
+3. Distribution is the binding constraint, for indie Mac developers generally and for Ethan specifically: Sizewise is finished, priced, and sold through Polar, and has had no public launch on HN or Reddit (checked 2026-10-15).
+4. Therefore the decision rule is speed to a paying stranger, and the product that wins it is the one already built.
+
+## Decision
+
+Strongest direction: **launch Sizewise to Mac developers whose disks keep filling up** (Xcode, Docker, package caches, agent worktrees, model weights), with Show Changes ("where did the space go since last week?") as the reason to pay. Fastest possible path to a paying stranger: the product is live, free to scan, $12.99 once, with Terms, Privacy, refunds and developer guides already written.
+
+Runner-up (ready if the test fails, or if Ethan wants a new product first): **a design pass for agent-built web apps.** One command captures every route of a running app, renders a few complete design directions on the user's own screens, applies the chosen one through the user's coding agent as tokens and component changes, then checks every route for drift. Money in the category is verified (AI Designer $9.0k MRR, Skillry $2.5k MRR, studios at $1.5k to $8k). Crowded (Mowgli, Remarked, Fragments, Foundry, Kagome, Tell, free skills with 80k to 136k stars); its moat is Ethan's taste, which needs his time.
+
+## Test 1: Sizewise developer launch
+
+- Pass: **10 paid licenses from strangers within 7 days of the first public post.** Strangers means not friends, not existing followers who know Ethan personally. Source of truth: Polar orders (Ethan reports the count).
+- Deadline: first post by 2026-10-20; read the result 7 days after the first post.
+- Kill or pivot rule: under 3 paid licenses in 7 days means the channel or the category is wrong for a quick win; run the runner-up. Between 3 and 9 means keep Sizewise as a slow SEO business and run the runner-up anyway.
+- Assets (status tracked below): Show HN draft; r/MacApps post in Problem/Comparison/Pricing format (Tier 2 rules: real identity, LinkedIn, contact details, site with Privacy and Terms; no em dashes; one post per 30 days); a sourced guide page "what coding agents and dev tools leave on your disk" for getsizewise.app; an outreach list of people who described the problem in the last six weeks, each with a reply that helps on its own; X drafts once Ethan shares posts to learn his voice.
+- Every claim in every draft must be true of Sizewise 1.4 as shipped. No invented backstory: Ethan fills in why he built it.
 
 ## Hypotheses (confidence, 0 to 100)
 
