@@ -38,6 +38,17 @@ Market facts (checked 2026-10-15)
 - "Coding agent records a polished demo video" is saturated: shot-scraper video (Simon Willison, 2026-06-30), aidemo, demowright, NextDemo, Screenify, vosso voila, demo-dev, ScreenCI, walkr, demo-machine, Screen Browser, two AutoDemos, ultrademo, Paralect skill. Most are free.
 - "See what my coding agent sends to the model" is saturated with free tools: ccglass, claude-tap, claude-inspector, LoopLens, Claudoscope (free Mac menu bar app), claude-spyglass, llm-interceptor, cc-wire-analyzer, llm-proxyman, cost-xray. Proxyman also ships an MCP server.
 
+Selling mechanics (checked 2026-10-15)
+- Polar lists "Pre-orders & Paid waitlist" as a restricted business that needs closer review (https://docs.polar.sh/merchant-of-record/acceptable-use). Running a preorder test through the Tallied, Inc. Polar account that sells Sizewise could trigger a review of that account. Safer test design: sell a working early version (software that exists, with a license and the same 14-day no-questions refund Sizewise uses). That is ordinary software sales on Polar, and money for a working product is stronger proof than a deposit.
+
+Ethan's product voice (from getsizewise.app home, press, terms and release notes; X voice still unknown)
+- Opens with the reader's situation as a plain question, then the answer in two short sentences: "Disk full, and no idea why? Open any folder as a map. The bigger the file, the bigger its rectangle."
+- Second person, present tense, short declaratives. No exclamation marks, no emoji, no superlatives.
+- Concrete, checkable numbers: "A startup disk with 17.5 million items. Mapped in about a minute and a half."
+- Names the exact UI ("Move to Trash", "Show Changes") and says what happens step by step.
+- States limits and user control up front: "You confirm every move, and files go only to the Trash." "Skip it, and Sizewise maps everything else and lists the folders it skipped."
+- Money is spelled out: price, tax, number of Macs, which updates, refund window, what the card statement says.
+
 ## Working conclusion so far
 
 Any agent-adjacent developer tool that a coding agent can build in a weekend already exists several times over as free open source (two categories checked in under an hour, 25+ tools). The first product therefore needs an advantage outside code: a channel Ethan owns, taste and polish people pay for over free tools (the TablePlus pattern), curated or growing data, or a buyer who cannot build it themselves. Treat "nobody has built this" as unlikely for any idea, and check before believing it.
