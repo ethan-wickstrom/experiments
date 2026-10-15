@@ -78,6 +78,12 @@ Paid-tool landscape (full write-up: research/landscape.md, ~280 links, [V] = ver
 - Launch assets: Screen Studio ~25k monthly users at $108/yr; one-time clones Screen Charm $54k and ScreenSage $50k all-time [V]; App Store screenshot tools $3–7.5k [V]; App Store submissions up 84% year on year.
 - Avoid: usage meters (CodexBar free, 22.5k★; SessionWatcher revenue down 41.5% in 30 days), session managers (Orca 92.8k★ free), MCP managers (MCP Router ended 2026-09-18), notifications, terminals, context builders, sandboxes, visual pointing tools (PinVari, $39.99, made $58 [V]).
 
+Reddit research (full write-up: research/reddit.md; ~390k post titles and bodies via the Arctic Shift archive API, fresh to 2026-10-15; PullPush now refuses agents with HTTP 429)
+- Money signals by strength: usage limits (~2,140 authors, money goes to the vendors); AI-built apps not production-ready (~1,040 authors, money goes to human services and audits); finding first users (~2,430, crowded); dictation (~570, crowded); **Mac storage eaten by developer and agent files (129 posts Aug–Oct): DaisyDisk (~$10, "worth every cent") and DiskFox ($9.99) sell, Mole (free) is the most recommended** (https://www.reddit.com/r/MacOS/comments/1x3hej6/ , https://www.reddit.com/r/macapps/comments/1wz36bh/).
+- Design for agent-built UI: lots of demand, but no Aug–Oct comment from anyone who paid for a tool; people use free skills (Impeccable, unslop, Taste Skill), Claude Design, Figma MCP, or another model subscription. Counter-evidence to the runner-up, weighed against AI Designer's verified $9.0k MRR.
+- Agents deleting data: the most viral pain ("deleted 48k files", score 4,842) has the weakest buyers.
+- Mac buyers prefer one-time purchases and accept a lifetime price of about one to two years of subscription. Proxyman, TablePlus and Fork are named as tools developers happily pay for.
+
 ## Working conclusion (2026-10-15, after six research tracks and 21 category checks)
 
 1. No open lane exists for a new developer utility. Every category checked (21, listed under "Ideas tried") already had 10 or more tools, mostly free, most built within weeks of the pain appearing. Anthropic and OpenAI absorb what remains within months. The default buyer (solo dev with agents) builds instead of buying: "absolutly eveyrone I know vibe-coded this thing" (https://news.ycombinator.com/item?id=47975381). That buyer is also the competitor.
