@@ -23,7 +23,9 @@ from typing import Any
 import anyio
 import dspy
 
+from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnCancelled, TurnControl
+from frond.agent.diffing import make_diff
 from frond.agent.lm import build_lm, context_window, last_usage, total_cost
 from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Investigation
@@ -33,6 +35,7 @@ from frond.agent.shell import JobManager, ShellRunner
 from frond.agent.streaming import StreamSink, SubmitStreamer
 from frond.agent.tools import Delegate, Toolbox
 from frond.events import (
+    ChangeKind,
     CodeDelta,
     CommandStarted,
     Compacted,
@@ -71,7 +74,7 @@ class AgentConfig:
     step_timeout: float = 600.0
     approval: Mode = "auto"
     repl_policy: str = "strict"
-    max_output_chars: int = 8_000
+    max_output_chars: int = 16_000
     subagent_steps: int = 16
     context_window: int | None = None
     prompt_cache: bool = True
@@ -111,6 +114,8 @@ def format_history(records: list[TurnRecord]) -> str:
 def describe_error(exc: BaseException) -> str:
     text = f"{type(exc).__name__}: {exc}"
     lowered = text.lower()
+    if "to fix" in lowered:
+        return text  # the LM layer already explained the remedy
     if "auth" in lowered or "api key" in lowered or "401" in lowered:
         text += "\nCheck that the API key for this provider is set and valid."
     elif "rate" in lowered and "limit" in lowered:
@@ -208,6 +213,7 @@ class Agent:
         self.policy = Policy(config.approval, approver)
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)
         self.jobs = JobManager(self.log_dir, self.emit)
+        self.checkpoints = Checkpoints()
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -215,6 +221,7 @@ class Agent:
             jobs=self.jobs,
             policy=self.policy,
             delegate=Delegate(self._run_subagent, self._run_subagents),
+            checkpoints=self.checkpoints,
         )
         self.pool = ReplPool(
             workspace.root,
@@ -320,6 +327,7 @@ class Agent:
         self.control.reset()
         record = TurnRecord(next(self._turns), request)
         self._current, self._step, self._steps_taken = record, 0, 0
+        self.checkpoints.begin(record.index)
         started = time.monotonic()
         self.emit(TurnStarted(record.index, request, tuple(attachments)))
         inputs = {
@@ -434,6 +442,29 @@ class Agent:
             return None
 
     # ── housekeeping ─────────────────────────────────────────────────────────
+
+    def undo(self) -> str:
+        """Restore the files changed by the most recent turn that changed any. Returns a summary."""
+        if self.busy:
+            raise RuntimeError("stop the current turn before undoing")
+        result = self.checkpoints.undo()
+        if result is None:
+            return "nothing to undo: no turn has changed files through frond's tools"
+        checkpoint, restored = result
+        for item in restored:
+            display = self.workspace.rel(item.path)
+            old = (item.before or b"").decode("utf-8", errors="replace")
+            new = (item.after or b"").decode("utf-8", errors="replace")
+            kind: ChangeKind = "delete" if item.after is None else "create" if item.before is None else "edit"
+            diff = make_diff(old, new, display, created=item.before is None, deleted=item.after is None)
+            self._emit(FileChanged(display, kind, diff.text, diff.added, diff.removed, scope="undo"))
+        self.workspace.invalidate()
+        paths = ", ".join(self.workspace.rel(r.path) for r in restored) or "no files"
+        summary = f"reverted the file changes of turn {checkpoint.turn}: {paths}"
+        if checkpoint.lost:
+            summary += f" (could not restore: {', '.join(checkpoint.lost)})"
+        self.history.append(TurnRecord(next(self._turns), "/undo", f"(the user {summary})", "done"))
+        return summary
 
     def reset_repl(self) -> None:
         self.pool.reset()

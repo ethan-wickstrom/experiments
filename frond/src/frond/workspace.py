@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import bisect
 import datetime as dt
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -166,12 +168,28 @@ class Workspace:
         return found
 
     def directories(self) -> list[str]:
+        files = self.files()
+        cached = getattr(self, "_dirs", None)
+        if cached is not None and cached[0] is files:
+            return cached[1]
         dirs: set[str] = set()
-        for f in self.files():
+        for f in files:
             parts = f.split("/")[:-1]
             for i in range(1, len(parts) + 1):
                 dirs.add("/".join(parts[:i]) + "/")
-        return sorted(dirs)
+        result = sorted(dirs)
+        self._dirs = (files, result)
+        return result
+
+    def mention_index(self) -> FuzzyIndex:
+        """A fuzzy index over files and folders, rebuilt only when the file list changes."""
+        files = self.files()
+        cached = getattr(self, "_mention_index", None)
+        if cached is not None and cached[0] is files:
+            return cached[1]
+        index = FuzzyIndex(files + self.directories())
+        self._mention_index = (files, index)
+        return index
 
     # ── context for the agent ────────────────────────────────────────────────
 
@@ -339,12 +357,56 @@ def fuzzy_score(query: str, candidate: str) -> float | None:
 
 
 def fuzzy_rank(query: str, candidates: list[str], limit: int = 50) -> list[str]:
-    if not query:
-        return candidates[:limit]
-    scored = []
-    for cand in candidates:
-        s = fuzzy_score(query, cand)
-        if s is not None:
-            scored.append((s, cand))
-    scored.sort(key=lambda t: (-t[0], len(t[1]), t[1]))
-    return [c for _, c in scored[:limit]]
+    return FuzzyIndex(candidates).rank(query, limit)
+
+
+class FuzzyIndex:
+    """Fuzzy search over a fixed list of paths, fast enough to run on every keystroke in a large repository.
+
+    Basename-prefix matches are found with a cheap scan first; otherwise a compiled subsequence regex filters
+    candidates before the (slower, Python-level) scoring, which only ever sees a bounded number of them.
+    """
+
+    MAX_SCORED = 3000
+
+    def __init__(self, items: list[str]) -> None:
+        self.items = items
+        self.lower = [s.lower().replace("\n", " ") for s in items]
+        self.base = [low.rstrip("/").rsplit("/", 1)[-1] for low in self.lower]
+        self.blob = "\n".join(self.lower)
+        self.offsets: list[int] = []
+        self._last: tuple[str, list[int]] = ("", [])
+        pos = 0
+        for low in self.lower:
+            self.offsets.append(pos)
+            pos += len(low) + 1
+
+    def rank(self, query: str, limit: int = 50) -> list[str]:
+        if not query:
+            return self.items[:limit]
+        q = query.lower()
+        items = self.items
+        prefixed = [i for i, b in enumerate(self.base) if b.startswith(q)]
+        if len(prefixed) >= limit:
+            prefixed.sort(key=lambda i: (len(items[i]), items[i]))
+            return [items[i] for i in prefixed[:limit]]
+        # Possessive "[^c\\n]*+c" steps make the subsequence test linear (no backtracking).
+        body = "".join(f"[^{re.escape(c)}\\n]*+{re.escape(c)}" for c in q)
+        last_query, last_found = self._last
+        if last_query and q.startswith(last_query) and len(last_found) < 20_000:
+            step = re.compile(body)  # typing extends the query: only re-check what matched before
+            found = [i for i in last_found if step.match(self.lower[i])]
+        else:  # one C-level pass over every path
+            pattern = re.compile("(?m)^" + body)
+            found = [bisect.bisect_right(self.offsets, m.start()) - 1 for m in pattern.finditer(self.blob)]
+        self._last = (q, found)
+        if len(found) > self.MAX_SCORED:
+            found.sort(key=lambda i: len(items[i]))
+            found = found[: self.MAX_SCORED]
+        scored = []
+        for i in found:
+            score = fuzzy_score(query, items[i])
+            if score is not None:
+                scored.append((score, items[i]))
+        scored.sort(key=lambda t: (-t[0], len(t[1]), t[1]))
+        return [c for _, c in scored[:limit]]

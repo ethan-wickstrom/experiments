@@ -177,3 +177,15 @@ class AppTest(WorkspaceCase):
                 self.assertLessEqual(str_width("".join(row)), width)
             self.assertIsNotNone(frame.cursor)
         self.assertIn("<pre>", to_html(h.frame(), self.app.theme))
+
+    def test_undo_command_shows_reverted_diff(self):
+        h = self.make([Step("Edit.", "edit('src/app.py', 'return 1', 'return 5')\nSUBMIT(response='ok')")])
+        h.type("edit it\n")
+        self.assertTrue(h.wait())
+        self.assertIn("return 5", (self.root / "src/app.py").read_text())
+        h.type("/undo\n")
+        h.pump()
+        screen = h.text()
+        self.assertIn("↶ Reverted the file changes of turn 1: src/app.py", screen)
+        self.assertIn("✎ src/app.py", screen)
+        self.assertIn("return 1", (self.root / "src/app.py").read_text())

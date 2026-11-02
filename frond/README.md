@@ -45,6 +45,9 @@ decoded on the fly from the model's `SUBMIT("""...""")` call.
 - **Approvals.** Edits inside the workspace and ordinary commands run freely. Recursive deletes, history-rewriting
   git commands, pushes, `sudo`, piping downloads into a shell, and writes outside the workspace ask first (`--yolo`
   never asks, `--read-only` forbids changes).
+- **Undo.** Every change goes through frond's tools, so each turn checkpoints the original bytes of the files it
+  touches; `/undo` restores the last turn exactly (edits, new files and their new folders, deletions, renames) and
+  tells the agent it happened. Changes made by shell commands such as formatters are not tracked.
 - **Background jobs.** `sh(..., background=True)` starts dev servers and watchers that outlive a step; `/jobs` and
   `/kill` manage them.
 - **Terminal craft.** Truecolor with a 256-colour fallback, dark and light palettes derived from your terminal's
@@ -96,7 +99,7 @@ Project instructions in `AGENTS.md` (or `CLAUDE.md`) from the git root down to t
 
 ```sh
 uv sync
-uv run python -m unittest discover -s tests -t .   # 70 tests: decoder, layout, tools, REPL, agent turns, the app
+uv run python -m unittest discover -s tests -t .   # 73 tests: decoder, layout, tools, REPL, agent turns, undo, the app
 uv run ruff check && uv run ruff format --check && uv run ty check
 ```
 

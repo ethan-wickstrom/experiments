@@ -26,7 +26,7 @@ class ReadingTest(WorkspaceCase):
         tools = self.toolbox()
         out = tools.view("src/app.py")
         self.assertTrue(out.startswith("  1│ line 1"))
-        self.assertIn("100 more lines", out)
+        self.assertIn("200 more lines", out)
         self.assertEqual(tools.view("src/app.py", 499).splitlines(), ["499│ line 499", "500│ line 500"])
 
     def test_missing_file_suggests_alternatives(self):

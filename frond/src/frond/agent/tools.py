@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from frond.agent.checkpoints import Checkpoints
 from frond.agent.diffing import make_diff
 from frond.agent.patch import FileOp, PatchError, apply_chunks, parse_patch
 from frond.agent.policy import Policy
@@ -30,7 +31,7 @@ from frond.agent.web import fetch_text
 from frond.events import Emit, FileChanged, FileViewed, PlanItem, PlanStatus, PlanUpdated, SearchRan
 from frond.workspace import SKIP_DIRS, Workspace, fuzzy_rank
 
-VIEW_WINDOW = 400
+VIEW_WINDOW = 300
 MAX_LINE = 2000
 MAX_READ_BYTES = 2_000_000
 MAX_OUTPUT_CHARS = 24_000
@@ -139,8 +140,10 @@ class Toolbox:
         scope: str = "",
         read_only: bool = False,
         delegate: Delegate | None = None,
+        checkpoints: Checkpoints | None = None,
     ) -> None:
         self.ws = workspace
+        self.checkpoints = checkpoints
         self.emit = emit
         self.shell = shell
         self._jobs = jobs
@@ -210,8 +213,13 @@ class Toolbox:
             raise PermissionError("this agent is read-only; report what should change instead")
         self.policy.check_write(p, self.ws.is_inside(p))
 
+    def _remember(self, p: Path) -> None:
+        if self.checkpoints is not None:
+            self.checkpoints.record(p.resolve() if p.is_symlink() else p)
+
     def _commit(self, p: Path, display: str, old: str | None, new: str) -> tuple[int, int]:
         target = p.resolve() if p.is_symlink() else p
+        self._remember(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         if old is not None and "\r\n" in old and "\r\n" not in new:
             new = new.replace("\n", "\r\n")
@@ -238,7 +246,7 @@ class Toolbox:
 
     def view(self, path: str, start: int = 1, end: int | None = None) -> str:
         """Show a text file with line numbers (`  12│ code`), or list a directory.
-        Without `end`, shows up to 400 lines from `start`. Read code with this before editing it."""
+        Without `end`, shows up to 300 lines from `start`. Read code with this before editing it."""
         p = self._path(path)
         display = self.ws.rel(p)
         if p.is_dir():
@@ -611,6 +619,7 @@ class Toolbox:
             for op, p, old, new in planned:
                 display = self.ws.rel(p)
                 if op.kind == "delete":
+                    self._remember(p)
                     p.unlink()
                     diff = make_diff(old or "", "", display, deleted=True)
                     self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))
@@ -619,6 +628,8 @@ class Toolbox:
                 assert new is not None
                 if op.move_to:
                     dest = self._path(op.move_to)
+                    self._remember(p)
+                    self._remember(dest)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     os.replace(p, dest)
                     added, removed = self._commit(dest, self.ws.rel(dest), old, new)
@@ -640,6 +651,8 @@ class Toolbox:
             if not recursive:
                 raise ToolError(f"{display} is a directory; pass recursive=True to delete it and its contents")
             count = sum(1 for _ in p.rglob("*"))
+            if self.checkpoints is not None:
+                self.checkpoints.record_tree(p)
             shutil.rmtree(p)
             self.emit(FileChanged(display + "/", "delete", f"(directory with {count} entries)", 0, 0, scope=self.scope))
             self.ws.invalidate()
@@ -648,6 +661,7 @@ class Toolbox:
             old = self._read_text(p, display)
         except ToolError:
             old = ""
+        self._remember(p)
         p.unlink()
         diff = make_diff(old, "", display, deleted=True)
         self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))
@@ -663,6 +677,12 @@ class Toolbox:
             raise FileExistsError(f"{self.ws.rel(d)} already exists")
         self._check_write(s)
         self._check_write(d)
+        if self.checkpoints is not None:
+            if s.is_dir():
+                self.checkpoints.record_move(s, d)
+            else:
+                self._remember(s)
+                self._remember(d)
         d.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(s), str(d))
         self.emit(FileChanged(self.ws.rel(d), "move", "", 0, 0, old_path=self.ws.rel(s), scope=self.scope))

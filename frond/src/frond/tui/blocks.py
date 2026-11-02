@@ -392,6 +392,8 @@ class DiffCard(Item):
         if kind == "gap":
             return panel_line(styled("⋯", t.faint), width, t)
         style = {"add": t.add, "del": t.remove, "ctx": Style(bg=t.panel)}[kind]
+        if self.kind == "create":
+            style = Style(bg=t.panel)  # a new file is all additions: markers suffice, a solid tint is just noise
         bg = style.bg or t.panel
         base = Style(bg=bg)
         mark = {"add": "+", "del": "−", "ctx": " "}[kind]
@@ -576,12 +578,19 @@ class StepBlock(Block):
 
     def _code_panel(self, code: str, width: int, ctx: Ctx) -> list[Line]:
         t = ctx.theme
-        rows = highlight(code, "python", t.syntax, Style(bg=t.panel))
         streaming = self.state == "writing"
         full = ctx.details or self.expanded
-        limit = len(rows) if full else (12 if streaming else 8)
-        hidden = max(0, len(rows) - limit)
-        shown = rows[-limit:] if streaming else rows[:limit]
+        total = code.count("\n") + 1
+        limit = total if full else (12 if streaming else 8)
+        hidden = max(0, total - limit)
+        if streaming and hidden:
+            # Re-highlighting a long block on every frame is the hot path while code streams in; only the tail
+            # is visible, so highlight that (with some lines of lead-in for context).
+            source = "\n".join(code.split("\n")[-(limit + 40) :])
+            shown = highlight(source, "python", t.syntax, Style(bg=t.panel))[-limit:]
+        else:
+            rows = highlight(code, "python", t.syntax, Style(bg=t.panel))
+            shown = rows[:limit]
         label = self._label(ctx)
         out: list[Line] = []
         if streaming and hidden:

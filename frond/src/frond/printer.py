@@ -87,7 +87,7 @@ class Printer:
                 self.log(self.c(_YELLOW if level != "error" else _RED, text))
             case ev.TurnFinished(response=response, status=status, error=error, duration=duration, steps=steps):
                 self.final = event
-                summary = f"{status} · {steps} steps · {duration:.1f}s"
+                summary = f"{status} · {steps} step{'s' if steps != 1 else ''} · {duration:.1f}s"
                 self.log(self.c(_GREEN if status == "done" else _YELLOW, "◆ ") + self.c(_DIM, summary))
                 if error:
                     self.log(self.c(_RED, error))

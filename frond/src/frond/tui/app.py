@@ -7,6 +7,7 @@ mouse hit-testing, which is what lets ``frond.tui.headless`` drive the very same
 
 from __future__ import annotations
 
+import logging
 import queue
 import re
 import threading
@@ -44,14 +45,17 @@ from frond.tui.screen import Buffer, Renderer
 from frond.tui.style import ColorMode, Style, Theme, blend, luminance, make_theme
 from frond.tui.terminal import Terminal
 from frond.tui.text import Line, Span, line_width, pad, str_width, styled, truncate
-from frond.workspace import Workspace, fuzzy_rank
+from frond.workspace import Workspace
 
 MAX_INPUT_ROWS = 8
+MAX_KEPT_OUTPUT = 200_000
+FRAME_INTERVAL = 1 / 60
 MAX_MENTION_BYTES = 400_000
 COMMANDS: tuple[tuple[str, str], ...] = (
     ("help", "keys and commands"),
     ("new", "start a fresh conversation"),
     ("reset", "restart the Python REPL (forget its variables)"),
+    ("undo", "revert the files changed in the last turn"),
     ("details", "show or hide full code, output and diffs (ctrl+o)"),
     ("copy", "copy the last answer to the clipboard"),
     ("jobs", "list background jobs"),
@@ -71,7 +75,8 @@ Keys
   ctrl+l         redraw · ctrl+z suspend
   @              attach files or folders · /  run a command
 Text selection: hold shift (option in iTerm2/Terminal.app) while dragging, or use /copy.
-Commands: /new /reset /details /copy /jobs /kill /model /quit"""
+Commands: /new /undo /reset /details /copy /jobs /kill /model /quit
+/undo reverts the files frond changed in its last turn (changes made by shell commands are not tracked)."""
 
 
 class AgentLike(Protocol):
@@ -79,6 +84,7 @@ class AgentLike(Protocol):
 
     def start_turn(self, request: str, attachments: dict[str, str] | None = None) -> None: ...
     def cancel(self) -> None: ...
+    def undo(self) -> str: ...
     def reset_repl(self) -> None: ...
     def clear(self) -> None: ...
     def close(self) -> None: ...
@@ -154,6 +160,7 @@ class App:
         self.current: StepBlock | None = None
         self.response: ResponseBlock | None = None
         self.plan: PlanBlock | None = None
+        self.undo_block: StepBlock | None = None
         self.commands: dict[int, CommandCard] = {}
         self.subagents: dict[int, SubAgentCard] = {}
         self.subqueries: dict[int, SubQueryItem] = {}
@@ -240,6 +247,10 @@ class App:
         return block
 
     def _attach_item(self, item: Item, scope: str = "") -> None:
+        if scope == "undo" and self.undo_block is not None:
+            self.undo_block.items.append(item)
+            self.undo_block.touch()
+            return
         if scope:
             return  # sub-agent activity is summarised on its card
         target = self.current
@@ -286,6 +297,8 @@ class App:
             case ev.ExecOutput(step=step, text=text):
                 block = self._step(step)
                 block.output += text
+                if len(block.output) > MAX_KEPT_OUTPUT:
+                    block.output = block.output[-MAX_KEPT_OUTPUT // 2 :]
                 block.touch()
             case ev.ExecFinished(step=step, output=output, error=error, duration=duration, final=final):
                 block = self._step(step)
@@ -299,7 +312,16 @@ class App:
                         self.response = None
                 else:
                     block.state = "done"
-                    block.output = "" if output.startswith("(no output") else output
+                    kept = (
+                        output
+                        if len(output) <= MAX_KEPT_OUTPUT
+                        else output[: MAX_KEPT_OUTPUT // 2]
+                        + (
+                            f"\n… [{len(output) - MAX_KEPT_OUTPUT:,} characters not shown] …\n"
+                            + output[-MAX_KEPT_OUTPUT // 2 :]
+                        )
+                    )
+                    block.output = "" if output.startswith("(no output") else kept
                 block.touch()
             case ev.ResponseDelta(text=text):
                 if self.response is None:
@@ -518,6 +540,17 @@ class App:
                 if self.agent is not None:
                     self.agent.reset_repl()
                 self.add(NoticeBlock("info", "restarted the Python REPL; its variables are gone"))
+            case "undo":
+                if self.running:
+                    self.flash("stop the current turn first (esc)")
+                    return
+                if self.agent is not None:
+                    self.undo_block = StepBlock(0, 0)
+                    self.undo_block.state = "done"
+                    self.add(self.undo_block)
+                    summary = self.agent.undo()
+                    self.undo_block.reasoning = "↶ " + summary[0].upper() + summary[1:]
+                    self.undo_block.touch()
             case "details":
                 self.toggle_details()
             case "copy":
@@ -729,8 +762,7 @@ class App:
         if token.kind == "command":
             items = [(f"/{n}", d) for n, d in COMMANDS if n.startswith(token.query.lower())]
         else:
-            candidates = self.workspace.files() + self.workspace.directories()
-            items = [(p, "") for p in fuzzy_rank(token.query, candidates, limit=40)]
+            items = [(p, "") for p in self.workspace.mention_index().rank(token.query, limit=40)]
         if not items:
             self.popup = None
             return
@@ -1136,39 +1168,57 @@ class App:
                 block.touch()
             self.renderer = Renderer(self.color_mode)
             terminal.on_resume = self._renderer_invalidate
-            last_tick = 0.0
+            last_tick = last_render = 0.0
+            failures = 0
             while not self.should_quit:
-                now = time.monotonic()
-                animate = self.running or (self.flash_text and now < self.flash_until)
-                timeout = 0.02 if self.decoder.pending() else (0.08 if animate else 0.5)
-                data = terminal.read(timeout)
-                if data:
-                    for event in self.decoder.feed(data):
-                        self.on_input(event)
-                elif self.decoder.pending():
-                    for event in self.decoder.flush():
-                        self.on_input(event)
-                if self.pump():
-                    self.dirty = True
-                if terminal.resized:
-                    terminal.resized = False
+                try:
+                    last_tick, last_render = self._iterate(terminal, last_tick, last_render)
+                    failures = 0
+                except Exception as exc:  # keep the session alive through a UI bug; it is logged
+                    failures += 1
+                    logging.getLogger("frond.tui").exception("UI error")
+                    if failures > 20:
+                        raise
+                    self.add(NoticeBlock("error", f"UI error (details in the log): {exc!r}"))
                     self._renderer_invalidate()
-                    self.dirty = True
-                now = time.monotonic()
-                if now - last_tick >= 0.08:
-                    last_tick = now
-                    if animate or self.running:
-                        self.tick += 1
-                        self.dirty = True
-                if self.dirty:
-                    cols, rows = terminal.size()
-                    frame = self.draw(cols, rows)
-                    terminal.write(self.renderer.render(frame, cursor_visible=self.approval is None))
         finally:
             self.should_quit = True
             if self.approval is not None:
                 self.approval.done.set()
             terminal.stop()
+
+    def _iterate(self, terminal: Terminal, last_tick: float, last_render: float) -> tuple[float, float]:
+        """One turn of the event loop: read input, apply agent events, and render at most 60 times a second."""
+        now = time.monotonic()
+        animate = self.running or (self.flash_text and now < self.flash_until)
+        timeout = 0.02 if self.decoder.pending() else (0.08 if animate else 0.5)
+        if self.dirty:
+            timeout = min(timeout, max(0.0, FRAME_INTERVAL - (now - last_render)))
+        data = terminal.read(timeout)
+        if data:
+            for event in self.decoder.feed(data):
+                self.on_input(event)
+        elif self.decoder.pending():
+            for event in self.decoder.flush():
+                self.on_input(event)
+        if self.pump():
+            self.dirty = True
+        if terminal.resized:
+            terminal.resized = False
+            self._renderer_invalidate()
+            self.dirty = True
+        now = time.monotonic()
+        if now - last_tick >= 0.08:
+            last_tick = now
+            if animate:
+                self.tick += 1
+                self.dirty = True
+        if self.dirty and now - last_render >= FRAME_INTERVAL:
+            cols, rows = terminal.size()
+            frame = self.draw(cols, rows)
+            terminal.write(self.renderer.render(frame, cursor_visible=self.approval is None))
+            last_render = now
+        return last_tick, last_render
 
 
 def _tokens(n: int) -> str:

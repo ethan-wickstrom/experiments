@@ -175,5 +175,56 @@ class AgentTurnTest(WorkspaceCase):
         self.assertIn("### turn 1 · user", format_history(agent.history))
 
 
+class UndoTest(WorkspaceCase):
+    files: ClassVar[dict[str, str]] = {
+        "keep.py": "x = 1\n",
+        "gone.txt": "delete me\n",
+        "old_name.txt": "rename me\n",
+        "empty_dir/.keep": "",
+    }
+
+    def test_undo_restores_edits_creations_deletions_and_moves(self):
+        steps = [
+            Step(
+                "Change everything.",
+                "edit('keep.py', 'x = 1', 'x = 2')\n"
+                "write('new/deep/file.py', 'print(1)\\n')\n"
+                "delete('gone.txt')\n"
+                "move('old_name.txt', 'new_name.txt')\n"
+                "write('empty_dir/added.txt', 'hi')",
+            ),
+            Step("Done.", "SUBMIT(response='changed')"),
+        ]
+        agent, _ = scripted_agent(self, steps)
+        agent.run_turn("change things")
+        self.assertTrue((self.root / "new/deep/file.py").exists())
+        summary = agent.undo()
+        self.assertIn("turn 1", summary)
+        self.assertEqual((self.root / "keep.py").read_text(), "x = 1\n")
+        self.assertEqual((self.root / "gone.txt").read_text(), "delete me\n")
+        self.assertEqual((self.root / "old_name.txt").read_text(), "rename me\n")
+        self.assertFalse((self.root / "new_name.txt").exists())
+        self.assertFalse((self.root / "new").exists())  # created directories are removed again
+        self.assertFalse((self.root / "empty_dir/added.txt").exists())
+        self.assertTrue((self.root / "empty_dir").is_dir())  # but pre-existing ones stay
+        self.assertTrue(self.root.is_dir())
+        self.assertIn("reverted", agent.history[-1].response)
+        self.assertTrue(any(isinstance(e, FileChanged) and e.scope == "undo" for e in self.events))
+        self.assertIn("nothing to undo", agent.undo())
+
+    def test_undo_goes_back_one_turn_at_a_time(self):
+        steps = [
+            Step("First.", "edit('keep.py', 'x = 1', 'x = 2')\nSUBMIT(response='1')"),
+            Step("Second.", "edit('keep.py', 'x = 2', 'x = 3')\nSUBMIT(response='2')"),
+        ]
+        agent, _ = scripted_agent(self, steps)
+        agent.run_turn("one")
+        agent.run_turn("two")
+        agent.undo()
+        self.assertEqual((self.root / "keep.py").read_text(), "x = 2\n")
+        agent.undo()
+        self.assertEqual((self.root / "keep.py").read_text(), "x = 1\n")
+
+
 if __name__ == "__main__":
     unittest.main()
