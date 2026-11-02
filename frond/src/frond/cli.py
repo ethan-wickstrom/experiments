@@ -14,9 +14,11 @@ from typing import TYPE_CHECKING
 from frond import __version__
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import dspy
 
-    from frond.agent.session import AgentConfig
+    from frond.agent.session import AgentConfig, TurnRecord
     from frond.workspace import Workspace
 
 
@@ -36,6 +38,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="run one turn without the TUI: progress on stderr, the answer on stdout",
     )
     p.add_argument("--json", action="store_true", help="with -p: write every event as a JSON line on stdout")
+    p.add_argument(
+        "-c",
+        "--continue",
+        dest="resume",
+        action="store_true",
+        help="continue the most recent conversation in this workspace",
+    )
     p.add_argument("-m", "--model", help="main model, e.g. anthropic/claude-sonnet-5-5")
     p.add_argument("--sub-model", help="model for llm_query sub-calls and sub-agents (default: a smaller sibling)")
     p.add_argument("-C", "--cwd", type=Path, help="workspace directory (default: the current directory)")
@@ -141,15 +150,33 @@ def main(argv: list[str] | None = None) -> int:
     )
     prompt = " ".join(args.prompt).strip()
 
+    from frond.sessions import SessionStore
+
+    store = SessionStore(workspace.root)
+    session_file = store.new_path()
+    restored = []
+    if args.resume:
+        latest = store.latest()
+        if latest is None:
+            print("frond: no earlier conversation in this workspace; starting a new one", file=sys.stderr)
+        else:
+            session_file, restored = latest, store.load(latest)
+
+    def persist(records: list) -> None:
+        store.save(session_file, records, model)
+
     if not interactive:
-        return run_headless(args, config, workspace, prompt, lm)
+        return run_headless(args, config, workspace, prompt, lm, persist, restored)
 
     from frond.tui.app import App
     from frond.tui.style import detect_color_mode
 
     app = App(workspace, model=model, sub_model=sub_model, color_mode=detect_color_mode(), note=note)
-    agent = Agent(config, workspace, app.emit, approver=app.approver, lm=lm, sub_lm=lm)
+    agent = Agent(config, workspace, app.emit, approver=app.approver, lm=lm, sub_lm=lm, persist=persist)
     app.attach(agent)
+    if restored:
+        agent.restore(restored)
+        app.restore(restored, session_file.name)
     if prompt:
         app.start_turn(prompt)
     theme = None if args.theme == "auto" else args.theme
@@ -177,7 +204,13 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def run_headless(
-    args: argparse.Namespace, config: AgentConfig, workspace: Workspace, prompt: str, lm: dspy.LM | None
+    args: argparse.Namespace,
+    config: AgentConfig,
+    workspace: Workspace,
+    prompt: str,
+    lm: dspy.LM | None,
+    persist: Callable[[list[TurnRecord]], None] | None = None,
+    restored: list[TurnRecord] | None = None,
 ) -> int:
     from frond.agent.session import Agent
     from frond.printer import Printer
@@ -188,7 +221,9 @@ def run_headless(
         print("frond: no prompt given (pass one as an argument or on stdin)", file=sys.stderr)
         return 2
     printer = Printer(json_mode=args.json, verbose=args.verbose)
-    agent = Agent(config, workspace, printer, lm=lm, sub_lm=lm)
+    agent = Agent(config, workspace, printer, lm=lm, sub_lm=lm, persist=persist)
+    if restored:
+        agent.restore(restored)
     try:
         record = agent.run_turn(prompt, {})
     except KeyboardInterrupt:

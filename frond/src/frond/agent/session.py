@@ -15,6 +15,7 @@ import tempfile
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -194,8 +195,10 @@ class Agent:
         approver: Approver | None = None,
         lm: dspy.LM | None = None,
         sub_lm: dspy.LM | None = None,
+        persist: Callable[[list[TurnRecord]], None] | None = None,
     ) -> None:
         self.config = config
+        self.persist = persist
         self.workspace = workspace
         self._emit = emit
         self.control = TurnControl()
@@ -351,6 +354,7 @@ class Agent:
         record.steps = self._steps_taken
         record.duration = time.monotonic() - started
         self.history.append(record)
+        self._save()
         self.workspace.invalidate()
         self.emit(
             TurnFinished(record.index, record.response, record.status, record.error, record.duration, record.steps)
@@ -464,7 +468,20 @@ class Agent:
         if checkpoint.lost:
             summary += f" (could not restore: {', '.join(checkpoint.lost)})"
         self.history.append(TurnRecord(next(self._turns), "/undo", f"(the user {summary})", "done"))
+        self._save()
         return summary
+
+    def restore(self, records: list[TurnRecord]) -> None:
+        """Continue an earlier conversation: the agent sees its turns (the REPL starts fresh)."""
+        self.history = list(records)
+        self._turns = itertools.count(max((r.index for r in records), default=0) + 1)
+
+    def _save(self) -> None:
+        if self.persist is not None:
+            try:
+                self.persist(self.history)
+            except Exception as exc:  # never lose a turn's result over a disk problem
+                self._emit(Notice("warn", f"could not save the session: {exc}"))
 
     def reset_repl(self) -> None:
         self.pool.reset()

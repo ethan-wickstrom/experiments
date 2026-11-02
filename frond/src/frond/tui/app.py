@@ -19,6 +19,7 @@ from typing import Literal, Protocol
 
 from frond import events as ev
 from frond.agent.policy import Decision
+from frond.agent.session import TurnRecord
 from frond.tui.blocks import (
     Block,
     CommandCard,
@@ -472,6 +473,27 @@ class App:
             if budget <= 0:
                 break
         return found
+
+    def restore(self, records: list[TurnRecord], source: str) -> None:
+        """Show the turns of a resumed conversation (their replies; the step-by-step detail is not kept)."""
+        for record in records:
+            if record.request == "/undo":
+                self.add(NoticeBlock("info", record.response.strip("()")))
+                continue
+            self.add(UserBlock(record.request))
+            if record.response:
+                block = ResponseBlock()
+                block.text, block.streaming = record.response, False
+                self.add(block)
+                self.last_response = record.response
+            self.add(TurnFooter(record.status, record.steps, record.duration, record.error, None))
+        self.add(
+            NoticeBlock(
+                "info",
+                f"resumed {len(records)} earlier turn{'s' if len(records) != 1 else ''} "
+                f"from {source}; the Python REPL starts fresh",
+            )
+        )
 
     def start_turn(self, text: str) -> None:
         if self.agent is None:
