@@ -120,6 +120,21 @@ def glob_to_regex(pattern: str) -> re.Pattern[str]:
     return re.compile("".join(out) + r"\Z")
 
 
+# Commands a read-only sub-agent may not run: a heuristic guard (redirection, in-place editors, file management,
+# state-changing git, package installs, formatters in write mode), not a sandbox.
+MUTATING_COMMAND = re.compile(
+    r"(?:^|[^<>&0-9])>>?\s*(?!&|/dev/null)[^\s&|]"
+    r"|\b(?:sed|perl)\s+(?:-\S*i|--in-place)|\btee\b"
+    r"|(?:^|[;&|(]\s*|\bxargs\s+|\bsudo\s+)(?:rm|rmdir|mv|cp|touch|mkdir|chmod|chown|ln|truncate|dd|install|patch)\b"
+    r"|\bgit\s+(?:add|commit|checkout|switch|reset|restore|clean|stash|merge|rebase|apply|am|cherry-pick|revert"
+    r"|push|pull|fetch|tag|branch\s+-[dDmM]|worktree|submodule|rm|mv|init|config)\b"
+    r"|\b(?:pip3?|uv|npm|pnpm|yarn|bun|cargo|gem|brew|apt(?:-get)?|poetry|conda)\s+"
+    r"(?:install|add|remove|uninstall|update|upgrade|sync|lock|init|publish|i|ci)\b"
+    r"|\bgo\s+(?:get|install|mod\s+tidy)\b"
+    r"|\bruff\s+format\b(?!.*--check)|\b(?:black|gofmt\s+-w|rustfmt)\b|--fix\b|--write\b|\s-w\s"
+)
+
+
 def _is_binary(sample: bytes) -> bool:
     return b"\0" in sample[:8192]
 
@@ -595,25 +610,37 @@ class Toolbox:
         except PatchError as exc:
             raise ToolError(str(exc)) from None
         planned: list[tuple[FileOp, Path, str | None, str | None]] = []  # op, path, old, new
+        touched: set[Path] = set()
+
+        def claim(path: Path) -> None:
+            if path in touched:
+                raise ToolError(f"{self.ws.rel(path)} appears more than once in this patch; combine its hunks")
+            touched.add(path)
+
         with self._write_lock:
             for op in ops:
                 p = self._path(op.path)
                 display = self.ws.rel(p)
                 self._check_write(p)
+                claim(p)
                 if op.kind == "add":
                     if p.exists():
                         raise ToolError(f"*** Add File: {display} already exists; use *** Update File")
                     planned.append((op, p, None, op.content))
                 elif op.kind == "delete":
-                    planned.append((op, p, self._read_text(p, display), None))
+                    planned.append((op, p, self._read_text(p, display, strict=True), None))
                 else:
-                    old = self._read_text(p, display)
+                    old = self._read_text(p, display, strict=True)
                     try:
                         new = apply_chunks(old, op.chunks, display) if op.chunks else old
                     except PatchError as exc:
                         raise ToolError(str(exc)) from None
                     if op.move_to:
-                        self._check_write(self._path(op.move_to))
+                        dest = self._path(op.move_to)
+                        if dest.exists() and dest != p:
+                            raise ToolError(f"*** Move to: {self.ws.rel(dest)} already exists")
+                        self._check_write(dest)
+                        claim(dest)
                     planned.append((op, p, old, new))
             summary = []
             for op, p, old, new in planned:
@@ -647,7 +674,15 @@ class Toolbox:
         if not p.exists() and not p.is_symlink():
             raise self._missing(display)
         self._check_write(p)
-        if p.is_dir() and not p.is_symlink():
+        if p.is_symlink():  # remove the link itself, never what it points to
+            target = os.readlink(p)
+            if self.checkpoints is not None:
+                self.checkpoints.record_link(p, target)
+            p.unlink()
+            self.emit(FileChanged(display, "delete", f"(symbolic link to {target})", 0, 0, scope=self.scope))
+            self.ws.invalidate()
+            return f"deleted symbolic link {display} (it pointed to {target})"
+        if p.is_dir():
             if not recursive:
                 raise ToolError(f"{display} is a directory; pass recursive=True to delete it and its contents")
             count = sum(1 for _ in p.rglob("*"))
@@ -700,6 +735,11 @@ class Toolbox:
         and watchers; it returns `r.job` for job_output()/job_kill(). The user sees every command."""
         if not isinstance(command, str) or not command.strip():
             raise ToolError("command must be a non-empty string")
+        if self.read_only and MUTATING_COMMAND.search(command):
+            raise PermissionError(
+                "this agent is read-only and the command looks like it changes files or state; "
+                "report what should be run instead"
+            )
         self.policy.check_command(command)
         workdir = self._path(cwd) if cwd else self.ws.root
         if not workdir.is_dir():

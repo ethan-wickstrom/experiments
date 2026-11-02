@@ -173,6 +173,7 @@ class App:
         self.details = False
         self.popup: Popup | None = None
         self.approval: ApprovalRequest | None = None
+        self.pending_approvals: list[ApprovalRequest] = []
         self.quit_armed = 0.0
         self.flash_text = ""
         self.flash_until = 0.0
@@ -230,10 +231,13 @@ class App:
                 break
             n += 1
             if isinstance(item, ApprovalRequest):
-                self.approval = item
-                self.popup = None
-                if self.terminal is not None:
-                    self.terminal.bell()
+                if self.approval is None:
+                    self.approval = item
+                    self.popup = None
+                    if self.terminal is not None:
+                        self.terminal.bell()
+                else:
+                    self.pending_approvals.append(item)  # parallel tool calls can ask at once: one at a time
             else:
                 self.apply(item)
             self.dirty = True
@@ -409,6 +413,7 @@ class App:
         self, response: str, status: ev.TurnStatus, error: str | None, duration: float, steps: int
     ) -> None:
         self.flash_until = 0.0
+        self.decline_pending_approvals()
         for block in self.steps.values():
             if block.state in ("thinking", "writing", "running"):
                 block.state = "stopped" if status == "cancelled" else "done"
@@ -514,8 +519,16 @@ class App:
     def stop(self) -> None:
         if self.running and not self.stopping and self.agent is not None:
             self.stopping = True
+            self.decline_pending_approvals()
             self.agent.cancel()
             self.flash("stopping…")
+
+    def decline_pending_approvals(self) -> None:
+        for request in [r for r in (self.approval, *self.pending_approvals) if r is not None]:
+            request.decision = "no"
+            request.done.set()
+        self.approval = None
+        self.pending_approvals.clear()
 
     def submit(self) -> None:
         text = self.editor.text
@@ -771,7 +784,7 @@ class App:
             return
         request.decision = choice
         request.done.set()
-        self.approval = None
+        self.approval = self.pending_approvals.pop(0) if self.pending_approvals else None
         self.flash({"yes": "allowed once", "always": "allowed for this session", "no": "declined"}[choice])
 
     # ── popup ────────────────────────────────────────────────────────────────
@@ -1205,8 +1218,7 @@ class App:
                     self._renderer_invalidate()
         finally:
             self.should_quit = True
-            if self.approval is not None:
-                self.approval.done.set()
+            self.decline_pending_approvals()
             terminal.stop()
 
     def _iterate(self, terminal: Terminal, last_tick: float, last_render: float) -> tuple[float, float]:

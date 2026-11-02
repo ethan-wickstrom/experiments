@@ -123,6 +123,13 @@ class WritingTest(WorkspaceCase):
         with self.assertRaises(PermissionError):
             tools.write("x.txt", "nope")
 
+    def test_read_only_toolbox_refuses_modifying_commands(self):
+        tools = self.toolbox(read_only=True)
+        for command in ("echo hi > notes.txt", "sed -i 's/a/b/' x", "git checkout -b x", "uv add requests"):
+            with self.assertRaisesRegex(PermissionError, "read-only"):
+                tools.sh(command)
+        self.assertEqual(tools.sh("echo fine 2>&1")["output"].strip(), "fine")
+
     def test_plan_parses_statuses(self):
         self.toolbox().plan(["[x] one", "[>] two", "three"])
         items = self.of_type(PlanUpdated)[-1].items

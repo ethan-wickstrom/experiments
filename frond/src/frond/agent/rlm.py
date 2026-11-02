@@ -29,6 +29,7 @@ from dspy.utils.exceptions import format_error_for_lm
 from frond.agent.tools import display_signature
 
 ERROR_PREFIXES = ("[Error]", "[Type Error]")
+NOTE_CODE = "# compacted"
 
 
 class Hooks:
@@ -238,22 +239,30 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             return history
         entries = list(history.entries)
         old, recent = entries[: -self.keep_recent], entries[-self.keep_recent :]
+        # Summaries from earlier compactions are kept whole: clipping them would silently drop what they carry.
         shrunk = [
-            REPLEntry(reasoning=_clip(e.reasoning, 600), code=_clip(e.code, 1500), output=_clip(e.output, 800))
+            e
+            if e.code == NOTE_CODE
+            else REPLEntry(reasoning=_clip(e.reasoning, 600), code=_clip(e.code, 1500), output=_clip(e.output, 800))
             for e in old
         ]
         compacted = REPLHistory(entries=shrunk + recent, max_output_chars=history.max_output_chars)
         if len(compacted.format()) > budget:
-            transcript = REPLHistory(entries=old, max_output_chars=4000).format()
+            earlier = [e.output for e in old if e.code == NOTE_CODE]
+            steps = [(i, e) for i, e in enumerate(old) if e.code != NOTE_CODE]
+            transcript = "\n".join(
+                ["Summary of even earlier steps:\n" + text for text in earlier]
+                + [e.format(index=i, max_output_chars=4000) for i, e in steps]
+            )
             summary = self.hooks.summarize(transcript)
             if summary is None:
                 summary = "\n".join(
-                    f"- step {i + 1}: {_clip(e.reasoning, 200)} → {_clip(e.output.strip(), 200)}"
-                    for i, e in enumerate(old)
+                    [*earlier]
+                    + [f"- step {i + 1}: {_clip(e.reasoning, 200)} → {_clip(e.output.strip(), 200)}" for i, e in steps]
                 )
             note = REPLEntry(
                 reasoning=f"(steps 1-{len(old)} were compacted to save context)",
-                code="# compacted",
+                code=NOTE_CODE,
                 output="Summary of the earlier steps of this turn:\n" + summary,
             )
             compacted = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)

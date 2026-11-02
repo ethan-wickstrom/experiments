@@ -6,12 +6,15 @@ Two input formats are accepted because different models are fluent in different 
   ``*** Delete File``/``*** Move to``, ``@@`` context anchors), and
 * ordinary unified diffs (``--- a/x`` / ``+++ b/x`` / ``@@ -1,3 +1,4 @@``).
 
-Hunks are located by their content, never by line numbers, so slightly stale diffs still apply. Matching
-falls back from exact to trailing-whitespace-insensitive to fully whitespace-insensitive comparison.
+Hunks are located by their content, so slightly stale diffs still apply. Matching falls back from exact to
+trailing-whitespace-insensitive to fully whitespace-insensitive comparison; when a fallback matches, context lines
+keep the file's own text (indentation, line endings), and only added lines come from the patch. Unified-diff line
+numbers are used only to place pure insertions, which have no content to match.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
@@ -24,9 +27,17 @@ class PatchError(ValueError):
 @dataclass
 class Chunk:
     anchor: str | None
-    old: list[str] = field(default_factory=list)
-    new: list[str] = field(default_factory=list)
+    ops: list[tuple[str, str]] = field(default_factory=list)  # (" " | "-" | "+", text)
     eof: bool = False
+    line_hint: int | None = None  # unified diffs: the old start line, used to place pure insertions
+
+    @property
+    def old(self) -> list[str]:
+        return [text for op, text in self.ops if op != "+"]
+
+    @property
+    def new(self) -> list[str]:
+        return [text for op, text in self.ops if op != "-"]
 
 
 @dataclass
@@ -106,16 +117,10 @@ def _parse_envelope(text: str) -> list[FileOp]:
 
 
 def _add_line(chunk: Chunk, line: str) -> None:
-    if line.startswith("+"):
-        chunk.new.append(line[1:])
-    elif line.startswith("-"):
-        chunk.old.append(line[1:])
-    elif line.startswith(" "):
-        chunk.old.append(line[1:])
-        chunk.new.append(line[1:])
+    if line.startswith(("+", "-", " ")):
+        chunk.ops.append((line[0], line[1:]))
     elif line == "":
-        chunk.old.append("")
-        chunk.new.append("")
+        chunk.ops.append((" ", ""))
     elif line.startswith("\\"):
         pass  # "\ No newline at end of file"
     else:
@@ -145,7 +150,8 @@ def _parse_unified(text: str) -> list[FileOp]:
             ):
                 cur = lines[i]
                 if cur.startswith("@@"):
-                    chunk = Chunk(None)
+                    header = _UNIFIED_HUNK.match(cur)
+                    chunk = Chunk(None, line_hint=int(header.group(1)) if header else None)
                     chunks.append(chunk)
                 elif chunk is not None and not cur.startswith(("diff --git", "index ", "new file", "deleted file")):
                     _add_line(chunk, cur)
@@ -167,6 +173,7 @@ def _parse_unified(text: str) -> list[FileOp]:
     return ops
 
 
+_UNIFIED_HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+\d+(?:,\d+)? @@")
 _NORMALIZERS: tuple[Callable[[str], str], ...] = (lambda s: s, str.rstrip, str.strip)
 
 
@@ -191,6 +198,7 @@ def apply_chunks(original: str, chunks: list[Chunk], path: str) -> str:
     lines = original.split("\n")
     if had_newline:
         lines.pop()
+    eol = "\r" if "\r\n" in original else ""  # added lines follow the file's line endings
     replacements: list[tuple[int, int, list[str]]] = []
     pos = 0
     for n, chunk in enumerate(chunks, 1):
@@ -199,19 +207,37 @@ def apply_chunks(original: str, chunks: list[Chunk], path: str) -> str:
             if idx is None:
                 raise PatchError(f"{path}: hunk {n}: anchor line not found: {chunk.anchor!r}")
             pos = idx + 1
-        old, new = chunk.old, chunk.new
+        ops = chunk.ops
+        old = [text for op, text in ops if op != "+"]
         if not old:
-            at = pos if chunk.anchor else len(lines)
-            replacements.append((at, 0, new))
+            if chunk.anchor:
+                at = pos
+            elif chunk.line_hint is not None:
+                at = max(0, min(chunk.line_hint, len(lines)))  # "@@ -2,0 +3 @@" inserts after line 2
+            else:
+                at = len(lines)
+            replacements.append((at, 0, [text + eol for op, text in ops if op == "+"]))
+            pos = at
             continue
         idx = _seek(lines, old, pos, chunk.eof)
-        if idx is None and old and old[-1] == "":
-            old, new = old[:-1], new[:-1] if new and new[-1] == "" else new
-            idx = _seek(lines, old, pos, chunk.eof)
+        if idx is None and ops and ops[-1] == (" ", ""):
+            ops = ops[:-1]  # a trailing blank context line the file may not have at its end
+            old = [text for op, text in ops if op != "+"]
+            idx = _seek(lines, old, pos, chunk.eof) if old else pos
         if idx is None:
             preview = "\n".join(old[:8])
             raise PatchError(f"{path}: hunk {n}: could not find these lines (re-read the file and retry):\n{preview}")
-        replacements.append((idx, len(old), new))
+        replacement: list[str] = []
+        cursor = idx
+        for op, text in ops:
+            if op == " ":
+                replacement.append(lines[cursor])  # the file's own text, not the patch's copy
+                cursor += 1
+            elif op == "-":
+                cursor += 1
+            else:
+                replacement.append(text + eol)
+        replacements.append((idx, len(old), replacement))
         pos = idx + len(old)
     for idx, length, new in sorted(replacements, key=lambda r: r[0], reverse=True):
         lines[idx : idx + length] = new

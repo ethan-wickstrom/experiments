@@ -211,8 +211,6 @@ class Agent:
             else build_lm(config.sub_model, prompt_cache=config.prompt_cache)
         )
         self.window: int | None = config.context_window
-        if self.window is None:
-            threading.Thread(target=self._lookup_window, name="frond-window", daemon=True).start()
         self.policy = Policy(config.approval, approver)
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)
         self.jobs = JobManager(self.log_dir, self.emit)
@@ -260,6 +258,8 @@ class Agent:
         self._stream_step: int | None = None
         self._thread: threading.Thread | None = None
         self._closed = False
+        if self.window is None:  # started last: the lookup thread reports through emit(), which needs the above
+            threading.Thread(target=self._lookup_window, name="frond-window", daemon=True).start()
 
     # ── event plumbing ───────────────────────────────────────────────────────
 
@@ -457,6 +457,11 @@ class Agent:
         checkpoint, restored = result
         for item in restored:
             display = self.workspace.rel(item.path)
+            if item.moved_from is not None:
+                self._emit(
+                    FileChanged(display, "move", "", 0, 0, old_path=self.workspace.rel(item.moved_from), scope="undo")
+                )
+                continue
             old = (item.before or b"").decode("utf-8", errors="replace")
             new = (item.after or b"").decode("utf-8", errors="replace")
             kind: ChangeKind = "delete" if item.after is None else "create" if item.before is None else "edit"
