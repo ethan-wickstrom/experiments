@@ -1,0 +1,16 @@
+# E0a: Harbor's reference solutions on every TB 4.0 task in this VM (ledger E0a).
+# Not a comparison: it finds the tasks that fail whatever the agent does (infrastructure, GPUs, the network), so the
+# experiments can exclude them before spending anything. `python -m bench.analyze ... --failing oracle` lists them.
+id = "E0a"
+title = "Which TB 4.0 tasks can pass at all in this VM"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = "datasets/terminal-bench@4.0.0.txt"
+exclude = ["datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt"]  # cannot start in this VM (G20)
+trials = 1
+batch = 66
+seed = 0
+concurrency = 2
+
+[[arms]]
+name = "oracle"
+agent = "oracle"

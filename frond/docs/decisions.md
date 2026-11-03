@@ -202,3 +202,21 @@ Each stays closed unless new evidence reopens it:
   - an unintercepted network for the VM: not available to this session.
 - Effect on measurement: all arms see the same environment, so paired comparisons are unaffected. Absolute pass rates in this VM now match a normal network for tasks whose `main` container reaches the internet. TB 4.0's separate verifier containers do not get the overlay; E0a shows whether any of them needs the network.
 - Evidence: with the overlay, the oracle passed `fin-saccr-rwa` (24/24 tests) and `satb-audio-transcription` (40/40), which it failed without it (ledger G7).
+
+## D28 · Pre-registered specs, sequential confidence sequences, and a fixed task population (2026-11-03, active)
+- Decision:
+  - an experiment is a TOML spec in `bench/experiments/`, committed before its first trial: tasks, a seeded run order, batches, arms, trials, and claims with their tests and margins. `bench/matrix.py` runs it and `bench/analyze.py` evaluates it from the same file;
+  - a claim holds when its one-sided p-value, Holm-adjusted across the spec's claims, is below alpha. The exact Wilcoxon signed-rank test serves pass-rate claims, and a bootstrap test serves cost-ratio claims;
+  - between batches, pass-rate claims are read through betting confidence sequences (Waudby-Smith and Ramdas), which allow stopping at any batch without inflating error; specs opt in with `stop_early`;
+  - arms alternate order across batches (ABBA); only the first k valid trials of a task count; trials whose environment failed before the agent started are reported and not scored; Harbor retries only those;
+  - cost is computed per model call from `bench/prices.toml`, because frond's main and sub-models have different prices;
+  - the task population is the TB 4.0 tasks that start in this VM with their declared resources: 56 of 66 (G20).
+- Rejected:
+  - Harbor's default retries: they cover `NonZeroAgentExitCodeError`, and a retried trial overwrites the first attempt, so an agent's crash could be replaced by a later success;
+  - reading a fixed-size test after every batch, as `research.md` planned: it inflates the error rate, which the protocol had accepted as a cost;
+  - group-sequential alpha spending (O'Brien–Fleming): it needs the number of looks fixed in advance and normal approximations, which 22-task batches of 0/1 outcomes do not justify;
+  - `--cpus ignore` to run all 66 tasks: it changes every task's resources, not only the 10 that do not fit; excluding the 10 keeps the other 56 as their authors specified;
+  - SciPy for the statistics: the bench stays standard-library-only, like frond, and the exact tests are short;
+  - Harbor's own `cost_usd` for frond: it is not filled for installed agents, and one price per run cannot separate main and sub-model calls.
+- Evidence: `tests/test_bench.py` checks the Wilcoxon p-values against enumeration of every sign assignment, the confidence sequence's coverage by simulation, the ABBA plan, the retry list, and an analysis of synthetic Harbor jobs.
+

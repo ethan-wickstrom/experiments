@@ -1,0 +1,13 @@
+# TB 4.0 tasks that cannot start in a 4-CPU machine without a GPU, from each task.toml's declared resources.
+# Docker refuses a container that asks for more CPUs than the host has (ledger G20, decision D28).
+# Regenerate after a dataset change: tasks whose [environment] or [verifier.environment] asks for cpus > 4 or gpus > 0.
+distributed-dedup  # agent 8 CPUs, verifier 8 CPUs
+formal-crypto  # agent 8 CPUs, verifier 8 CPUs
+fp8-rmsnorm-gemm  # agent 1 GPU, verifier 1 GPU
+jax-speedrun-gpu  # agent 16 CPUs, agent 1 GPU, verifier 16 CPUs, verifier 1 GPU
+lake-temp-glm  # agent 8 CPUs
+live-database-cutover  # agent 16 CPUs, verifier 16 CPUs
+math-eval-grader  # agent 8 CPUs, agent 1 GPU, verifier 8 CPUs, verifier 1 GPU
+payments-pipeline-fix  # verifier 6 CPUs
+shadow-relay  # agent 8 CPUs, verifier 8 CPUs
+wdm-design  # agent 8 CPUs, verifier 8 CPUs

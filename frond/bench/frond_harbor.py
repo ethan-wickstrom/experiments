@@ -129,6 +129,9 @@ class FrondOptions(InstalledAgentOptions):
     effort: Annotated[str | None, Cli("--effort")] = Field(
         default=None, description="the main model's reasoning effort: low, medium, high, xhigh, max (frond: high)"
     )
+    layout: Annotated[str | None, Cli("--layout")] = Field(
+        default=None, description="how each step sees the history: turns (frond's) or chat (DSPy's); H6"
+    )
 
 
 class Frond(BaseInstalledAgent):

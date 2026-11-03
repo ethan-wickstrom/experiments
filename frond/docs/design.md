@@ -279,7 +279,7 @@ Requirements to design, code, tests and status. Design commitments without a req
 
 | Req | Decisions | Code | Tests | Status (2026-11-03) | Ledger |
 |---|---|---|---|---|---|
-| R1 | D20, D21 | `bench/frond_harbor.py` | — | unmeasured | E1, E11 |
+| R1 | D20, D21, D28 | `bench/frond_harbor.py`, `bench/matrix.py`, `bench/analyze.py` | `test_bench` | unmeasured; the machinery is in place | E1, E11 |
 | R2 | D10, D22 | `agent/snapshots.py`, `agent/tools.py` | `test_command_undo` | per-change diffs only; no net view | R2, B4 |
 | R3 | D22 | `world/merge.py` (`revert`) | `test_world` | the revert keeps later edits; `/undo` is not switched to it yet | R3, B4b |
 | R4 | D09 | `tui/app.py`, `agent/session.py` | `test_steering`, `test_app` | steer and queue done; stop latency unmeasured | B17 |

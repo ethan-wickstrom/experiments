@@ -119,6 +119,14 @@ class CacheLayoutTest(WorkspaceCase):
         self.assertGreater(share, 0.7)
         self.assertLess(self.cost(after), 0.6 * self.cost(before), (self.cost(before), self.cost(after)))
 
+    def test_the_chat_layout_is_dspys_own(self):
+        """H6's control arm: the history inside one user message, cached as DSPy alone would cache it."""
+        stock = self.run_turn(dspy.ChatAdapter(), steps=4)
+        chat = self.run_turn(FrondAdapter(cache_breakpoints=True, layout="chat"), steps=4)
+        self.assertEqual(chat, stock)
+        with self.assertRaises(ValueError):
+            FrondAdapter(layout="scroll")
+
     def test_the_breakpoint_lands_on_the_latest_reply(self):
         steps = [Step("one", "print(1)"), Step("two", "print(2)"), Step("done", 'SUBMIT("""ok""")')]
         agent, engine = scripted_agent(self, steps)

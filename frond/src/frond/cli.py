@@ -66,6 +66,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--no-mouse", action="store_true", help="leave the mouse to the terminal (native selection)")
     p.add_argument("--no-prompt-cache", action="store_true", help="disable provider-side prompt caching")
     p.add_argument(
+        "--layout",
+        choices=["turns", "chat"],
+        default="turns",
+        help="how each step sees the history: turns (frond's, cache-friendly) or chat (DSPy's stock layout); "
+        "an experiment arm (H6)",
+    )
+    p.add_argument(
         "--demo", action="store_true", help="scripted session in a temporary sample project (no API key needed)"
     )
     p.add_argument(
@@ -163,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:
         context_window=args.context_window or (200_000 if args.demo or args.script else None),
         prompt_cache=not args.no_prompt_cache,
         effort=None if args.effort == "default" else args.effort,
+        layout=args.layout,
     )
     prompt = " ".join(args.prompt).strip()
 
@@ -287,6 +295,7 @@ def export_run(agent: Agent, directory: Path) -> None:
                 f.write(json.dumps(record, default=str) + "\n")
     this_run = [r for r in agent.history if r.first_seq > agent.steps.loaded]
     metrics = {
+        "config": dataclasses.asdict(agent.config),  # what the run was configured with, to check each arm's setup
         "turns": len(this_run),
         "steps": sum(r.steps for r in this_run),
         "continued_after_seq": agent.steps.loaded,

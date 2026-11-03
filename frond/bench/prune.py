@@ -6,7 +6,7 @@ was still extracting, and those trials failed before the agent started. This rem
 uses and that were already unused at the previous pass, one ``docker rmi`` at a time, so an image is never removed
 in the seconds between its pull and the creation of its container.
 
-    python bench/prune.py --while-pid <harbor pid> [--interval 60] [--log prune.log]
+    python -m bench.prune --while-pid <harbor pid> [--interval 60] [--log prune.log]
 """
 
 from __future__ import annotations

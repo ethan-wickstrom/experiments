@@ -121,6 +121,7 @@ class ExportTest(WorkspaceCase):
         self.assertEqual(metrics["tool_failures"], {"edit": 1})
         self.assertEqual(metrics["failed_edits"], 1)
         self.assertEqual((metrics["turns"], metrics["steps"]), (1, 4))
+        self.assertEqual(metrics["config"]["layout"], "turns")
         calls = [json.loads(line) for line in (out / "calls.jsonl").read_text().splitlines()]
         self.assertTrue(calls)
         self.assertTrue(all({"role", "model", "usage", "raw_usage"} <= set(c) for c in calls))
