@@ -27,11 +27,11 @@ import anyio
 import dspy
 
 from frond.agent import compat
-from frond.agent.adapter import FrondAdapter, escape_marker, user_tag
+from frond.agent.adapter import NOTE, FrondAdapter, escape_marker, user_tag
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
 from frond.agent.freshness import Observations
-from frond.agent.lm import PROVIDER_ERRORS, build_lm, caches_by_marks, context_window, last_usage, total_cost
+from frond.agent.lm import PROVIDER_ERRORS, Refused, build_lm, caches_by_marks, context_window, last_usage, total_cost
 from frond.agent.metrics import RunMetrics
 from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Compaction, Investigation
@@ -596,7 +596,7 @@ class Agent:
 
     def _on_field(self, name: str, text: str) -> None:
         step = self._stream_step
-        if name == "reasoning" and step is not None:
+        if name == NOTE and step is not None:
             self.emit(ReasoningDelta(step, text))
         elif name == "code" and step is not None:
             self.emit(CodeDelta(step, text))
@@ -704,6 +704,8 @@ class Agent:
         except Exception as exc:
             record.status, record.error = "error", describe_error(exc)
             record.error_kind = "provider" if isinstance(exc, PROVIDER_ERRORS) else type(exc).__name__
+            if isinstance(exc, Refused):
+                self.metrics.refusal = exc.category
             if not isinstance(exc, (dspy.LMError, ValueError)):
                 self.emit(Notice("error", "".join(traceback.format_exception(exc, limit=-4)).rstrip()))
         finally:

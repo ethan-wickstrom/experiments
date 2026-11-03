@@ -4,13 +4,13 @@ Updated 2026-11-03, second session: the program's first model calls. The key wor
 
 ## In flight
 
-E0, the pilot: `uv run python -m bench.matrix bench/experiments/e0-pilot.toml`, run from a worktree of `main` at the merge of the G36 fix (`/home/user/run-e0`, D47), whose `frond/jobs` links to this checkout's `frond/jobs`. One trial per model on 10 tasks, Haiku, then Sonnet, then Opus (D48): $76.50 on the guesses; the runner stops before any job that could pass $100 (D43). Its log is `frond/jobs/E0/run.log`. The first start was stopped in its Haiku job by G36 (DSPy's 64 KiB SSE line limit); its jobs are `frond/jobs/E0-aborted-1`. If the session ended with E0 unfinished, its trials are lost with the VM: rerun it.
+E0, the pilot, restarts from a worktree of `main` at the merge of G41–G43's fixes (`/home/user/run-e0`, D47), whose `frond/jobs` links to this checkout's `frond/jobs`: `uv run python -m bench.matrix bench/experiments/e0-pilot.toml`, log `frond/jobs/E0/run.log`. One trial per model on 10 tasks, Haiku, then Sonnet, then Opus (D48); the runner stops before any job that could pass $100 (D43). Two earlier starts are kept for the guard: `jobs/E0-aborted-1` (stopped for G36) and `jobs/E0-protocol-v1` (Haiku done, then every Sonnet call refused as reasoning extraction, G41, until the VM restarted). Their Haiku results are under the old protocol and are not E0's. A VM restart kills the run and Docker: run `scripts/dev-env.sh`, then rerun, which resumes finished jobs.
 
 E0a is done: 53 of the 55 tasks that start pass under the reference solutions, and the three that fail here are excluded (`bench/results/2026-11-03-e0a-oracle/`).
 
 ## Next, in order (research-first, D16)
 
-1. E0: analyse with `uv run python -m bench.analyze bench/experiments/e0-pilot.toml --out bench/results/<date>-e0`; the report's protocol table gives adherence per step (D46). On the first 8 Haiku trials: pass 0/8, $0.04 a trial, 88% of input from cache, 32% of replies off protocol (21% recovered, 11% cost a step). Record the run's spending in `bench/budget.toml` (D49).
+1. E0: analyse with `uv run python -m bench.analyze bench/experiments/e0-pilot.toml --out bench/results/<date>-e0`; the report's protocol table gives adherence per step (D46). Under the old protocol Haiku passed 0 of 10 at about $0.05 a trial, with a third of its replies off protocol. Record the run's spending in `bench/budget.toml` (D49).
 2. Review findings: all closed (F1–F68: fixed, verified or declined). New ones go into the ledger as they arrive; REQ-3 holds Devin's unposted security findings.
 3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), E0b's spec (2 more trials per task on that model, for the variance that sizes E1–E6), and the program's budget, as a new REQ from E0's measured costs: E1 alone, at 56 tasks × 3 trials × 2 arms, is several hundred dollars on Sonnet.
 4. E1–E6 and E11 in the order in `research.md`, once the budget allows.
@@ -31,5 +31,6 @@ E0a is done: 53 of the 55 tasks that start pass under the reference solutions, a
 - Tasks: every TB 4.0 task allows its agent 8 hours. frond's `--max-steps` (40) bounds its cost per task.
 - Harbor: `uvx --from harbor[dspy]==0.25.0 --with 'dspy>=3.1.3,<3.3' harbor …`; the runner warms it with retries, since a first install can stall (G32). The oracle agent passes TB 4.0.0 tasks in this VM.
 - Opus 5.5 at high effort opens most replies with a line of narration and often skips the field markers (G34); measured, and recovered where unambiguous.
+- Never ask a model to put its reasoning in its reply: Anthropic's classifiers refuse that as reasoning extraction (Sonnet 5.5 did, G41). Each step's reply has a `note` field instead (D51); a refusal ends the turn as a provider failure (G43).
 - In default Docker, frond's sandbox runs under Landlock: user namespaces are refused there.
 - VM limits: 4 CPUs, 15 GB RAM, 29 GB of disk.

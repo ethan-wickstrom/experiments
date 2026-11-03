@@ -27,6 +27,12 @@ from dspy.adapters.chat_adapter import field_header_pattern
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
 
+# The field in which each step's reply says what the step does: a short note for the user, not the model's thinking,
+# which stays in its thinking blocks. Asking for reasoning in the output is what Anthropic's classifiers decline as
+# reasoning extraction (Sonnet 5.5 refused every E0 step under DSPy's reasoning field), and its guidance is to ask for
+# a short explanation instead (G41, D51). Internally the text is still kept as each step's ``reasoning``.
+NOTE = "note"
+NOTE_DESC = "One or two sentences for the user: what this step does, and what you expect its result to show."
 VOLATILE = ("iteration", "repl_variables", "stale_reads", "open_scopes")  # change every step: after the cached prefix
 NOTE_CODE = "# folded"  # the code shown for a FoldEntry
 STEER_CODE = "# user message"  # the code shown for a UserEntry
@@ -166,24 +172,24 @@ def recover_action(signature: type[dspy.Signature], completion: str) -> dict[str
             return None  # a repeated parameter, or text that is no parameter, could hide a second action (F50)
         params = {name: value.strip("\n") for name, value in found}
         reasoning = without_markers(completion[: call.start()])
-        if fields == {"reasoning", "code"} and set(params) == {"code"}:
-            return {"reasoning": reasoning, "code": f"```python\n{params['code']}\n```"}
-        if fields == {"reasoning", "tool", "args"}:
+        if fields == {NOTE, "code"} and set(params) == {"code"}:
+            return {NOTE: reasoning, "code": f"```python\n{params['code']}\n```"}
+        if fields == {NOTE, "tool", "args"}:
             args: dict[str, Any] = {}
             for name, value in params.items():
                 try:
                     args[name] = json.loads(value)
                 except ValueError:
                     args[name] = value
-            return {"reasoning": reasoning, "tool": call.group(1), "args": args}
+            return {NOTE: reasoning, "tool": call.group(1), "args": args}
         return None
-    if fields != {"reasoning", "code"}:
+    if fields != {NOTE, "code"}:
         return None
     blocks = list(FENCE.finditer(completion))
     if len(blocks) != 1:
         return None
     block = blocks[0]
-    return {"reasoning": without_markers(completion[: block.start()]), "code": f"```python\n{block.group(1)}\n```"}
+    return {NOTE: without_markers(completion[: block.start()]), "code": f"```python\n{block.group(1)}\n```"}
 
 
 LAYOUTS = ("turns", "chat")
@@ -281,9 +287,9 @@ class FrondAdapter(dspy.ChatAdapter):
                 continue
             replies += 1
             if "tool" in signature.output_fields:
-                reply = {"reasoning": entry.reasoning, **tool_call(entry.code)}
+                reply = {NOTE: entry.reasoning, **tool_call(entry.code)}
             else:
-                reply = {"reasoning": entry.reasoning, "code": f"```python\n{entry.code}\n```"}
+                reply = {NOTE: entry.reasoning, "code": f"```python\n{entry.code}\n```"}
             messages.append({"role": "assistant", "content": self.format_assistant_message_content(signature, reply)})
             step = getattr(entry, "step", 0) or replies
             folded = isinstance(entry, FoldEntry)  # built by frond from escaped outputs, with the user's lines tagged
