@@ -110,6 +110,42 @@ class ForkTest(WorkspaceCase):
         self.assertEqual((self.root / "notes.txt").read_text(), "start\n")
         self.assertTrue((self.root / CHECK).exists())
 
+    def test_a_branch_can_start_jobs_and_is_told_it_cannot_fork(self):  # Devin, #15 (F29, F31)
+        steps = [
+            Step("Branch.", "FORK(['one', 'two'], steps=2)"),
+            Step("One starts a job.", "print(sh('sleep 5', background=True))"),
+            Step("One forks.", "FORK(['deeper', 'wider'], steps=1)"),
+            Step("Two.", "SUBMIT(response='two')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, _ = self.agent(steps)
+        record = agent.run_turn("go")
+        self.assertEqual(record.response, "ok")
+        outputs = [r.output for r in agent.steps.records() if r.agent and r.kind == "step"]
+        self.assertRegex(outputs[0], r"job \d+ \(pid \d+\) running")  # its log directory exists (F29)
+        self.assertIn("FORK is not available inside a branch", outputs[1])  # the host's refusal, no NameError (F31)
+
+    def test_a_branchs_sub_model_calls_are_billed_to_the_branch(self):  # Devin, #15 (F30)
+        from frond.agent.scripted import ScriptedEngine, scripted_lm
+        from frond.agent.session import Agent
+
+        steps = [
+            Step("Branch.", "FORK(['one', 'two'], steps=1)"),
+            Step("One asks.", "print(llm_query('hi'))"),
+            Step("Two.", "SUBMIT(response='two')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        main = scripted_lm(ScriptedEngine(steps))
+        sub = scripted_lm(ScriptedEngine([], sub_answer=lambda prompt: "hello"))
+        reference, _ = scripted_agent(self, [], max_steps=12)
+        agent = Agent(reference.config, self.ws, self.events.append, lm=main, sub_lm=sub)
+        self.addCleanup(agent.close)
+        agent.config.fork = agent.rlm.max_branches = agent.pool.root.max_branches = 2
+        agent.run_turn("go")
+        self.assertEqual(len(sub.history), 1)
+        self.assertEqual(set(agent.metrics.sub_branch_calls), {0})
+        self.assertTrue(agent.metrics.sub_branch_calls[0].startswith("branch"))
+
     def test_with_fork_off_there_is_no_fork(self):
         steps = [Step("Try.", "FORK(['a', 'b'])"), Step("Done.", "SUBMIT(response='ok')")]
         agent, engine = self.agent(steps, branches=1)

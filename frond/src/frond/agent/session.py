@@ -900,12 +900,16 @@ class Agent:
             repl = self.pool.root.fork()
             repl.tools.update({getattr(fn, "__name__", ""): fn for fn in toolbox.functions()})
             first_call = len(self.lm.history)
+            first_sub_call = len(self.sub_lm.history)
             try:
                 with dspy.context(send_stream=None):
                     result = branching.run(repl, note, request.steps, hooks)
             finally:  # the branch's model calls, so its cost can be told from the main line's (H2)
                 for call in range(first_call, len(self.lm.history)):
                     self.metrics.branch_calls[call] = scope
+                if self.sub_lm is not self.lm:  # its llm_query and sub-agent calls too (F30); the main line waits
+                    for call in range(first_sub_call, len(self.sub_lm.history)):
+                        self.metrics.sub_branch_calls[call] = scope
             if isinstance(result, dspy.Prediction):
                 submitted, report = True, str(result.get("response") or "")
         except TurnCancelled:
