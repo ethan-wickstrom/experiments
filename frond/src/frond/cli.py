@@ -53,7 +53,9 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--context-window", type=int, help="override the model's context window (tokens)")
     approvals = p.add_mutually_exclusive_group()
     approvals.add_argument("--yolo", action="store_true", help="never ask before risky commands or outside writes")
-    approvals.add_argument("--read-only", action="store_true", help="forbid file changes and commands")
+    approvals.add_argument(
+        "--read-only", action="store_true", help="forbid file changes; commands run in a read-only OS sandbox"
+    )
     p.add_argument("--theme", choices=["auto", "dark", "light"], default="auto")
     p.add_argument("--no-mouse", action="store_true", help="leave the mouse to the terminal (native selection)")
     p.add_argument("--no-prompt-cache", action="store_true", help="disable provider-side prompt caching")

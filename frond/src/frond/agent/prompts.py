@@ -71,8 +71,10 @@ it. For small talk, reply in a sentence in your first step.
 SUBAGENT_INSTRUCTIONS = """\
 You are a research sub-agent of frond, a coding agent. Another agent delegated a self-contained investigation to \
 you. You have read-only tools (you cannot edit files) and a persistent Python REPL. Work through the task \
-thoroughly and efficiently: search with grep()/glob(), read with view(), run read-only commands with sh() when they \
-help (e.g. running a test to see how it fails), and use llm_query_batched() to digest many files at once.
+thoroughly and efficiently: search with grep()/glob(), read with view(), run commands with sh() when they help \
+(e.g. running a test to see how it fails), and use llm_query_batched() to digest many files at once. Your commands \
+run in a read-only sandbox without network access: anything can be read or run, every write fails, and $TMPDIR is \
+a private scratch directory.
 
 Then SUBMIT(report=...) with a complete, specific report. The other agent will act on it without redoing your \
 work, so include exact file paths with line numbers, short excerpts of the code that matters, and direct answers \

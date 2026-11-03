@@ -45,7 +45,13 @@ decoded on the fly from the model's `SUBMIT("""...""")` call.
   (looked up from DSPy's model metadata), plus the session cost. Long turns compact their own earlier steps.
 - **Approvals.** Edits inside the workspace and ordinary commands run freely. Recursive deletes, history-rewriting
   git commands, pushes, `sudo`, piping downloads into a shell, and writes outside the workspace ask first (`--yolo`
-  never asks, `--read-only` forbids changes).
+  never asks; `--read-only` forbids changes and runs commands in the read-only sandbox below).
+- **Read-only sandbox.** Sub-agents are read-only, and so is `--read-only` mode. Their commands run in an OS
+  sandbox in which every filesystem write fails. Anything can still be read or run, including test suites.
+  - On Linux: a user and mount namespace with every mount read-only and no network. Landlock is the fallback
+    where user namespaces are blocked.
+  - On macOS: Seatbelt (untested in this build).
+  - Where no sandbox is available, read-only agents get no shell.
 - **Undo.** Every change goes through frond's tools, so each turn checkpoints the original bytes of the files it
   touches; `/undo` restores the last turn exactly (edits, new files and their new folders, deletions, renames) and
   tells the agent it happened. Changes made by shell commands such as formatters are not tracked.
@@ -92,7 +98,10 @@ Project instructions in `AGENTS.md` (or `CLAUDE.md`) from the git root down to t
 - `agent/repl.py` and `agent/_worker.py` implement DSPy's `CodeInterpreter` protocol with a persistent CPython
   process: live stdout, SIGINT interruption that keeps the namespace, per-step timeouts, and a
   [PEP 578](https://peps.python.org/pep-0578/) audit hook that steers file writes and subprocesses onto the tools,
-  where the user can see them. It is a guard rail, not a sandbox: commands run with your permissions.
+  where the user can see them. It is a guard rail, not a sandbox: the main agent's commands run with your
+  permissions.
+- `agent/_sandbox.py` is the read-only sandbox, a stdlib-only helper. Before exec'ing the command it applies the
+  strongest restriction available, then checks that the workspace really is unwritable; otherwise it runs nothing.
 - `agent/streaming.py` is the `send_stream` sink DSPy writes chunks to; it parses the ChatAdapter's field markers
   incrementally and is also where a stopped turn aborts the in-flight LM call.
 - `tui/` is a small immediate-mode TUI: an input decoder, a cell buffer with a diffing renderer, text wrapping that
@@ -102,7 +111,7 @@ Project instructions in `AGENTS.md` (or `CLAUDE.md`) from the git root down to t
 
 ```sh
 uv sync
-uv run python -m unittest discover -s tests -t .   # 105 tests: decoder, layout, tools, REPL, agent turns, undo, sessions, the app
+uv run python -m unittest discover -s tests -t .   # 111 tests: decoder, layout, tools, REPL, agent turns, undo, sessions, the app
 uv run ruff check && uv run ruff format --check && uv run ty check
 ```
 

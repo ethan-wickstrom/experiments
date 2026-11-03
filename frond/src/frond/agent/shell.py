@@ -15,6 +15,8 @@ import select
 import shutil
 import signal
 import subprocess
+import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -64,6 +66,42 @@ def clean_output(text: str) -> str:
 def shell_argv(command: str) -> list[str]:
     bash = shutil.which("bash")
     return [bash, "-c", command] if bash else ["/bin/sh", "-c", command]
+
+
+SANDBOX_HELPER = Path(__file__).with_name("_sandbox.py")
+SANDBOX_UNAVAILABLE = 125
+_sandbox_probes: dict[str, tuple[bool, str]] = {}
+_sandbox_lock = threading.Lock()
+
+
+def sandboxed_argv(argv: list[str], tmpdir: str) -> list[str]:
+    """``argv`` run under frond's read-only sandbox (see _sandbox.py): it cannot change the filesystem."""
+    return [sys.executable, "-I", str(SANDBOX_HELPER), tmpdir, "--", *argv]
+
+
+def sandbox_status(cwd: Path) -> tuple[bool, str]:
+    """(available, the sandbox's name or why there is none), probed once per process."""
+    key = os.environ.get("FROND_SANDBOX", "")
+    with _sandbox_lock:
+        if key not in _sandbox_probes:
+            tmp = tempfile.mkdtemp(prefix="frond-sandbox-probe-")
+            try:
+                probe = subprocess.run(
+                    sandboxed_argv(["/bin/sh", "-c", 'printf %s "$FROND_SANDBOXED"'], tmp),
+                    cwd=cwd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    stdin=subprocess.DEVNULL,
+                )
+                ok = probe.returncode == 0 and bool(probe.stdout.strip())
+                why = probe.stdout.strip() if ok else (probe.stderr.strip() or f"exit {probe.returncode}")
+                _sandbox_probes[key] = (ok, why.removeprefix("frond-sandbox: "))
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                _sandbox_probes[key] = (False, str(exc))
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+        return _sandbox_probes[key]
 
 
 def kill_group(proc: subprocess.Popen[bytes], grace: float = 1.5) -> None:
@@ -129,14 +167,30 @@ class ShellRunner:
         for proc in procs:
             kill_group(proc, grace=0.5)
 
-    def run(self, command: str, *, cwd: Path, timeout: float, scope: str = "") -> CommandResult:
+    def run(
+        self, command: str, *, cwd: Path, timeout: float, scope: str = "", sandboxed: bool = False
+    ) -> CommandResult:
         cmd_id = next_command_id()
         log_path = self.log_dir / f"cmd-{cmd_id}.log"
         self.emit(CommandStarted(cmd_id, command, str(cwd), background=False, scope=scope))
         start = time.monotonic()
+        argv = shell_argv(command)
+        scratch = None
+        if sandboxed:
+            scratch = tempfile.mkdtemp(prefix="sandbox-", dir=self.log_dir)
+            argv = sandboxed_argv(argv, scratch)
+        try:
+            return self._run(command, argv, cmd_id, log_path, cwd, timeout, start)
+        finally:
+            if scratch is not None:
+                shutil.rmtree(scratch, ignore_errors=True)
+
+    def _run(
+        self, command: str, argv: list[str], cmd_id: int, log_path: Path, cwd: Path, timeout: float, start: float
+    ) -> CommandResult:
         try:
             proc = subprocess.Popen(
-                shell_argv(command),
+                argv,
                 cwd=cwd,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
