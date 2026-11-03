@@ -25,6 +25,7 @@ from typing import Any
 import anyio
 import dspy
 
+from frond.agent import compat
 from frond.agent.adapter import FrondAdapter, escape_marker, user_tag
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
@@ -445,6 +446,7 @@ class Agent:
         new_log: Callable[[], Path] | None = None,
         world_dir: Path | None = None,
     ) -> None:
+        compat.check()  # an incompatible DSPy fails here, not mid-turn, when frond is used as a library (R9, F44)
         self.config = config
         self.persist = persist
         self.new_log = new_log  # where a new conversation's step log goes (and, for the caller, its session file)
