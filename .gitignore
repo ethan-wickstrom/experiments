@@ -205,3 +205,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Harbor job output (benchmark runs); summaries go under frond/bench/results/
+jobs/
