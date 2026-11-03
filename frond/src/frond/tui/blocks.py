@@ -134,9 +134,13 @@ class WelcomeBlock(Block):
 
 
 class UserBlock(Block):
-    def __init__(self, text: str, attachments: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self, text: str, attachments: tuple[str, ...] = (), *, steer: Literal["", "sent", "read"] = ""
+    ) -> None:
         super().__init__()
         self.text, self.attachments = text, attachments
+        self.steer = steer  # a message sent into a running turn: "sent", then "read" once the model has it
+        self.step = 0
 
     def render(self, width: int, ctx: Ctx) -> list[Line]:
         t = ctx.theme
@@ -148,6 +152,10 @@ class UserBlock(Block):
             out += wrap(line, width, prefix=bar, continuation=bar)
         if self.attachments:
             out.append([*bar, *truncate(styled("⧉ " + "  ".join(self.attachments), t.muted), width - 2)])
+        if self.steer == "sent":
+            out.append([*bar, Span("↪ sent to the running turn · read before its next step", t.faint)])
+        elif self.steer == "read":
+            out.append([*bar, Span(f"↪ read before step {self.step}", t.faint)])
         return out
 
 

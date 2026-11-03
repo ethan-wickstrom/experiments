@@ -66,7 +66,8 @@ COMMANDS: tuple[tuple[str, str], ...] = (
 )
 HELP = """\
 Keys
-  enter          send (while the agent works: queue the message)
+  enter          send · while the agent works: steer it (it reads your message before its next step)
+  tab            while the agent works: queue the message for after the turn instead
   ctrl+j / alt+enter / shift+enter   new line   (or end a line with \\)
   esc            stop the agent · close a popup
   ctrl+c         clear the input · stop the agent · press twice to quit
@@ -84,6 +85,7 @@ class AgentLike(Protocol):
     """What the UI needs from the agent (the real Agent, or a stub in tests)."""
 
     def start_turn(self, request: str, attachments: dict[str, str] | None = None) -> None: ...
+    def steer(self, text: str) -> bool: ...
     def cancel(self) -> None: ...
     def undo(self) -> str: ...
     def reset_repl(self) -> None: ...
@@ -398,6 +400,22 @@ class App:
                 )
             case ev.Notice(level=level, text=text):
                 self.add(NoticeBlock(level, text))
+            case ev.SteerDelivered(text=text, step=step):
+                block = next(
+                    (b for b in self.blocks if isinstance(b, UserBlock) and b.steer == "sent" and b.text == text), None
+                )
+                if block is not None:
+                    block.steer, block.step = "read", step
+                    block.touch()
+            case ev.SteersReturned(texts=texts):
+                for text in texts:  # the turn ended first: they run next, in order, ahead of what was queued
+                    block = next(
+                        (b for b in self.blocks if isinstance(b, UserBlock) and b.steer == "sent" and b.text == text),
+                        None,
+                    )
+                    if block is not None:
+                        self.blocks.remove(block)
+                self.queue[:0] = list(texts)
             case ev.TurnFinished(response=response, status=status, error=error, duration=duration, steps=steps):
                 self._finish_turn(response, status, error, duration, steps)
             case _:
@@ -531,7 +549,7 @@ class App:
         self.approval = None
         self.pending_approvals.clear()
 
-    def submit(self) -> None:
+    def submit(self, *, queue: bool = False) -> None:
         text = self.editor.text
         if text.endswith("\\") and self.editor.cursor == len(text):
             self.editor.backspace()
@@ -549,6 +567,10 @@ class App:
         self.editor.remember(text)
         self.editor.clear()
         if self.running:
+            if not queue and self.agent is not None and not self.stopping and self.agent.steer(text):
+                self.add(UserBlock(text, steer="sent"))
+                self.flash("sent · frond reads it before its next step (tab queues instead)")
+                return
             self.queue.append(text)
             self.flash("queued · runs after the current turn")
             return
@@ -767,7 +789,8 @@ class App:
         if name in simple:
             simple[name]()
         elif name == "tab":
-            pass
+            if self.running and self.editor.text.strip():
+                self.submit(queue=True)
         elif name == "space":
             e.insert(" ")
         elif key.char is not None:
@@ -970,7 +993,7 @@ class App:
         if not self.editor.text:
             room = width - 13 - text_x
             options = (
-                ["type to queue a message · esc to stop", "type to queue · esc stops"]
+                ["type to steer the running turn · tab queues · esc stops", "type to steer · esc stops"]
                 if busy
                 else [
                     "Ask frond to build, fix or explain something…  @ attach · / commands",
@@ -1000,7 +1023,7 @@ class App:
                 Style(fg=t.error.fg, bg=blend(t.panel_alt, t.error.fg or (200, 80, 80), 0.18), bold=True),
             )
         elif busy:
-            label, style = " ⏎ queue ", Style(fg=t.info.fg, bg=t.panel_alt, bold=True)
+            label, style = " ⏎ steer ", Style(fg=t.info.fg, bg=t.panel_alt, bold=True)
         else:
             label, style = (
                 " ⏎ send ",

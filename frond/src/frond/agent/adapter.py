@@ -26,10 +26,21 @@ from dspy.primitives.repl_types import REPLEntry, REPLHistory
 
 VOLATILE = ("iteration", "repl_variables")  # change every step, so they go after the cached prefix
 NOTE_CODE = "# folded"  # frond.agent.rlm.NOTE_CODE (not imported: rlm imports this module's users)
+STEER_CODE = "# user message"  # frond.agent.rlm.STEER_CODE
 HISTORY_NOTE = (
     "Your earlier steps in this turn follow as conversation messages: each reply of yours, then the REPL's output "
     "for it."
 )
+NO_STEPS_YET = "You have not interacted with the REPL environment yet."
+
+
+def steering_text(text: str) -> str:
+    # Marked as newer than everything before it: models otherwise tend to act on the older, superseded value
+    # (arXiv 2609.38866).
+    return (
+        "Message from the user, sent while you were working. It is newer than everything above; where it "
+        f"conflicts with earlier instructions, it wins:\n{text}"
+    )
 
 
 def is_action(signature: type[dspy.Signature], inputs: dict[str, Any]) -> bool:
@@ -41,10 +52,12 @@ def is_action(signature: type[dspy.Signature], inputs: dict[str, Any]) -> bool:
     )
 
 
-def last_reply_index(demos: list[dict[str, Any]], history: REPLHistory) -> int:
-    """Index, among the messages after the system prompt, of the model's latest reply."""
-    # demos come in (user, assistant) pairs, then the first user message, then one (reply, output) pair per step
-    return 2 * len(demos) + 2 * len(history.entries) - 1
+def last_reply_index(demos: list[dict[str, Any]], history: REPLHistory) -> int | None:
+    """Index, among the messages after the system prompt, of the model's latest reply (None: no reply yet)."""
+    # demos come in (user, assistant) pairs, then the first user message, then one (reply, output) pair per step;
+    # the user's messages during the turn join the user message before them
+    replies = sum(1 for entry in history.entries if entry.code != STEER_CODE)
+    return 2 * len(demos) + 2 * replies - 1 if replies else None
 
 
 class FrondAdapter(dspy.ChatAdapter):
@@ -66,9 +79,9 @@ class FrondAdapter(dspy.ChatAdapter):
             and isinstance(history, REPLHistory)
             and history.entries
             and is_action(signature, inputs)
+            and (index := last_reply_index(demos, history)) is not None
         ):
-            cache = CacheConfig(prefix_until_index=last_reply_index(demos, history))
-            lm_kwargs = {**lm_kwargs, "prompt_cache": cache}
+            lm_kwargs = {**lm_kwargs, "prompt_cache": CacheConfig(prefix_until_index=index)}
         return super().__call__(lm, lm_kwargs, signature, demos, inputs)
 
     def format(
@@ -84,15 +97,21 @@ class FrondAdapter(dspy.ChatAdapter):
         first = self.format_user_message_content(signature, context)
         messages: list[dict[str, Any]] = [{"role": "system", "content": self.format_system_message(signature)}]
         messages.extend(self.format_demos(signature, demos))
-        messages.append({"role": "user", "content": f"{first}\n\n[[ ## repl_history ## ]]\n{HISTORY_NOTE}"})
-        last = len(history.entries) - 1
-        for i, entry in enumerate(history.entries):
+        note = HISTORY_NOTE if any(e.code != STEER_CODE for e in history.entries) else NO_STEPS_YET
+        messages.append({"role": "user", "content": f"{first}\n\n[[ ## repl_history ## ]]\n{note}"})
+        replies = 0
+        for entry in history.entries:
+            if entry.code == STEER_CODE:  # the user speaks in the user message that is current at that point
+                messages[-1]["content"] += "\n\n" + steering_text(entry.output)
+                continue
+            replies += 1
             reply = {"reasoning": entry.reasoning, "code": f"```python\n{entry.code}\n```"}
             messages.append({"role": "assistant", "content": self.format_assistant_message_content(signature, reply)})
-            title = "Folded steps" if entry.code == NOTE_CODE else f"Step {getattr(entry, 'step', 0) or i + 1} output"
+            step = getattr(entry, "step", 0) or replies
+            title = "Folded steps" if entry.code == NOTE_CODE else f"Step {step} output"
             output = f"=== {title} ===\n{REPLEntry.format_output(entry.output, history.max_output_chars)}"
-            if i == last:  # what changes every step goes after the cached prefix
-                current = {k: v for k, v in inputs.items() if k in VOLATILE}
-                output += "\n\n" + self.format_user_message_content(signature, current, main_request=True)
             messages.append({"role": "user", "content": output})
+        # what changes every step goes last, after the cached prefix
+        current = {k: v for k, v in inputs.items() if k in VOLATILE}
+        messages[-1]["content"] += "\n\n" + self.format_user_message_content(signature, current, main_request=True)
         return [_expand_legacy_custom_type_markers_in_chat_message(message) for message in messages]

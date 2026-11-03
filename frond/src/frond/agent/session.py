@@ -51,6 +51,8 @@ from frond.events import (
     Notice,
     ReasoningDelta,
     ResponseDelta,
+    SteerDelivered,
+    SteersReturned,
     StepPlanned,
     StepStarted,
     SubAgentFinished,
@@ -96,12 +98,14 @@ class TurnRecord:
     error: str | None = None
     first_seq: int = 0  # the turn's records in the step log: its message, steps and answer
     last_seq: int = 0
+    steers: list[str] = field(default_factory=list)  # messages the user sent while the turn ran
 
 
 def format_history(records: list[TurnRecord]) -> str:
     parts: list[str] = []
     for r in records:
         parts.append(f"### turn {r.index} · user\n{r.request}")
+        parts.extend(f"### turn {r.index} · user (while frond worked)\n{text}" for text in r.steers)
         meta = [r.status, f"{r.steps} step{'s' if r.steps != 1 else ''}"]
         if r.last_seq:
             meta.append(f"log seq {r.first_seq}-{r.last_seq}")
@@ -129,7 +133,10 @@ def history_preview(records: list[TurnRecord], formatted: str, limit: int) -> st
     """
     if not records:
         return None
-    requests = [f"[turn {r.index}] {r.request.strip()}" for r in records]
+    requests: list[str] = []
+    for r in records:
+        requests.append(f"[turn {r.index}] {r.request.strip()}")
+        requests.extend(f"[turn {r.index}, while frond worked] {text.strip()}" for text in r.steers)
     shown: list[str] = []
     used = 0
     for text in reversed(requests):
@@ -201,6 +208,9 @@ class _RootHooks(Hooks):
         return self.agent.steps.add(
             "step", turn=turn, step=step, reasoning=reasoning, code=code, output=output, error=error
         )
+
+    def take_messages(self, step: int) -> list[str]:
+        return self.agent._take_steers(step)
 
     def preview(self, name: str, value: Any) -> str | None:
         if name != "history" or not isinstance(value, str):
@@ -327,6 +337,9 @@ class Agent:
         self._stream_step: int | None = None
         self._thread: threading.Thread | None = None
         self._turn_over = threading.Event()  # set just before a turn emits TurnFinished
+        self._steers: list[str] = []  # messages sent while the turn runs, read at the next step boundary
+        self._steer_lock = threading.Lock()
+        self._accepting_steers = False
         self._closed = False
         if self.window is None:  # started last: the lookup thread reports through emit(), which needs the above
             threading.Thread(target=self._lookup_window, name="frond-window", daemon=True).start()
@@ -389,6 +402,26 @@ class Agent:
         )
         self._thread.start()
 
+    def steer(self, text: str) -> bool:
+        """Send a message into the running turn; the model reads it before its next step. False when no turn
+        is running (or it is finishing), so the caller should start a turn with it, or queue it."""
+        with self._steer_lock:
+            if not self._accepting_steers:
+                return False
+            self._steers.append(text)
+            return True
+
+    def _take_steers(self, step: int) -> list[str]:
+        with self._steer_lock:
+            texts, self._steers = self._steers, []
+        record = self._current
+        for text in texts:
+            if record is not None:
+                record.steers.append(text)
+                self.steps.add("user", turn=record.index, output=text)
+            self.emit(SteerDelivered(text, step))
+        return texts
+
     def cancel(self) -> None:
         if self.busy:
             self.control.cancel()
@@ -407,6 +440,8 @@ class Agent:
         record = TurnRecord(next(self._turns), request)
         record.first_seq = self.steps.add("user", turn=record.index, output=request)
         self._current, self._step, self._steps_taken = record, 0, 0
+        with self._steer_lock:
+            self._steers, self._accepting_steers = [], True
         self.checkpoints.begin(record.index)
         started = time.monotonic()
         self.emit(TurnStarted(record.index, request, tuple(attachments)))
@@ -428,6 +463,10 @@ class Agent:
                 self.emit(Notice("error", "".join(traceback.format_exception(exc, limit=-4)).rstrip()))
         finally:
             self._current = None
+        with self._steer_lock:  # from here on, a message starts the next turn instead
+            unread, self._steers, self._accepting_steers = self._steers, [], False
+        if unread:
+            self.emit(SteersReturned(tuple(unread)))
         record.steps = self._steps_taken
         record.duration = time.monotonic() - started
         answer = record.response or record.error or f"(turn {record.status})"

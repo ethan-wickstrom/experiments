@@ -33,6 +33,7 @@ from frond.agent.tools import display_signature
 
 ERROR_PREFIXES = ("[Error]", "[Type Error]")
 NOTE_CODE = "# folded"
+STEER_CODE = "# user message"  # a history entry carrying a message the user sent during the turn
 INDEX_MARK = "Index of the folded steps (oldest first):"
 FOLD_GUIDE = (
     "Earlier steps of this turn were folded to keep the prompt within budget. Nothing was lost: "
@@ -80,6 +81,10 @@ class Hooks:
     def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
         """Keep a step in the step log; returns its sequence number (None: no log)."""
         return None
+
+    def take_messages(self, step: int) -> list[str]:
+        """Messages the user sent while the turn ran, to show the model before ``step`` (and forget)."""
+        return []
 
     def preview(self, name: str, value: Any) -> str | None:
         """A custom preview for input variable ``name`` (None: the default)."""
@@ -222,8 +227,12 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
     ) -> Prediction | REPLHistory:
         hooks = self.hooks
         hooks.check()
-        history = self._fold(history)
         step = iteration + 1
+        steers = hooks.take_messages(step)
+        if steers:  # appended, so the cached prefix of the prompt survives
+            entries = [REPLEntry(reasoning="", code=STEER_CODE, output=text) for text in steers]
+            history = REPLHistory(entries=[*history.entries, *entries], max_output_chars=history.max_output_chars)
+        history = self._fold(history)
         hooks.step_started(step, self.max_iters)
         hooks.before_lm(step)
         names = getattr(repl, "names", None)
@@ -294,6 +303,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         for entry in old:
             if entry.code == NOTE_CODE:
                 lines.extend(entry.output.split(INDEX_MARK, 1)[-1].strip().splitlines())
+            elif entry.code == STEER_CODE:  # the user's own words are never shortened
+                lines.append("- the user wrote, during the turn: " + entry.output.replace("\n", "\n  "))
             else:
                 lines.append(_index_line(entry))
         note = REPLEntry(

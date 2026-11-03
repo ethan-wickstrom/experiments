@@ -101,6 +101,9 @@ class _StubAgent:
     """Just enough of the agent for the app to stop a turn."""
 
     def start_turn(self, request: str, attachments: dict[str, str] | None = None) -> None: ...
+    def steer(self, text: str) -> bool:
+        return False
+
     def cancel(self) -> None: ...
     def undo(self) -> str:
         return ""

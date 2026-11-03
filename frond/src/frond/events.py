@@ -211,6 +211,21 @@ class Compacted:
 
 
 @dataclass(frozen=True, slots=True)
+class SteerDelivered:
+    """A message the user sent during the turn reached the model, just before step ``step``."""
+
+    text: str
+    step: int
+
+
+@dataclass(frozen=True, slots=True)
+class SteersReturned:
+    """Messages sent during the turn that it ended before reading; they should run as the next turns."""
+
+    texts: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class TurnFinished:
     turn: int
     response: str
@@ -258,6 +273,8 @@ type Event = (
     | PlanUpdated
     | UsageUpdated
     | Compacted
+    | SteerDelivered
+    | SteersReturned
     | TurnFinished
     | Notice
     | ApprovalRequested
