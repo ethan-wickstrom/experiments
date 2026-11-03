@@ -125,7 +125,7 @@ class AgentTurnTest(WorkspaceCase):
         self.assertEqual(record.response, "recovered")
         first = self.of_type(ExecFinished)[0]
         self.assertIn("NameError", first.error or "")
-        second_prompt = engine.requests[1].messages[0].text or ""
+        second_prompt = "\n".join(m.text or "" for m in engine.requests[1].messages)
         self.assertIn("NameError: name 'undefined_name' is not defined", second_prompt)
 
     def test_cancel_during_streaming(self):

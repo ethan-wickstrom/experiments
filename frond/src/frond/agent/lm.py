@@ -18,6 +18,14 @@ PROVIDER_DEFAULTS: tuple[tuple[str, str, str], ...] = (
 )
 # Providers served by DSPy's native lm15 engine, where provider-side prompt caching is available.
 NATIVE_PREFIXES = ("anthropic/", "openai/", "gemini/", "xai/")
+
+
+def caches_by_marks(model: str) -> bool:
+    """True for providers that cache only up to blocks marked as breakpoints (Anthropic); the others cache any
+    repeated prefix on their own."""
+    return model.startswith("anthropic/")
+
+
 DEFAULT_CONTEXT_WINDOW = 200_000
 
 

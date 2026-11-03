@@ -1184,6 +1184,8 @@ class App:
         bar.append(Span("─" * rest, Style(fg=t.meter_track)))
         pct = f" {frac * 100:.0f}%"
         out = [*bar, Span(pct, Style(fg=color)), Span(f" of {_tokens(window)}", t.faint)]
+        if usage.cached_tokens and used:  # how much of the last prompt the provider served from its cache
+            out.append(Span(f" · {min(100, round(usage.cached_tokens * 100 / used))}% cached", t.faint))
         if usage.total_cost >= 0.0005:
             out.append(Span(f"  ${usage.total_cost:.2f}", t.faint))
         return out

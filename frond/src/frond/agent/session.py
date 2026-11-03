@@ -24,10 +24,11 @@ from typing import Any
 import anyio
 import dspy
 
+from frond.agent.adapter import FrondAdapter
 from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
-from frond.agent.lm import build_lm, context_window, last_usage, total_cost
+from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage, total_cost
 from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Investigation
 from frond.agent.repl import ReplPool
@@ -211,6 +212,14 @@ class Agent:
             else build_lm(config.sub_model, prompt_cache=config.prompt_cache)
         )
         self.window: int | None = config.context_window
+        # Each step's history is sent as conversation turns, with the latest reply marked for providers that
+        # cache only at marked blocks, so every step reads the earlier ones from the provider's cache.
+        self.adapter: dspy.ChatAdapter = FrondAdapter(
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.model)
+        )
+        self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model)
+        )
         self.policy = Policy(config.approval, approver)
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)
         self.jobs = JobManager(self.log_dir, self.emit)
@@ -249,6 +258,8 @@ class Agent:
             dspy.streaming.StreamListener("code", predict=self.rlm.generate_action, allow_reuse=True),
             dspy.streaming.StreamListener("response", predict=self.rlm.extract, allow_reuse=True),
         ]
+        for listener in self._listeners:  # listeners look adapters up by class name; ours speaks ChatAdapter's format
+            listener.adapter_identifiers[FrondAdapter.__name__] = listener.adapter_identifiers["ChatAdapter"]
         self.history: list[TurnRecord] = []
         self._turns = itertools.count(1)
         self._subagent_ids = itertools.count(1)
@@ -371,7 +382,9 @@ class Agent:
 
     def _forward(self, inputs: dict[str, Any]) -> dspy.Prediction:
         def work() -> dspy.Prediction:
-            with dspy.context(lm=self.lm, send_stream=self.sink, stream_listeners=self._listeners):
+            with dspy.context(
+                lm=self.lm, adapter=self.adapter, send_stream=self.sink, stream_listeners=self._listeners
+            ):
                 return self.rlm(**inputs)
 
         async def main() -> dspy.Prediction:
@@ -409,7 +422,7 @@ class Agent:
         ok = False
         report = ""
         try:
-            with dspy.context(lm=self.sub_lm, send_stream=None):
+            with dspy.context(lm=self.sub_lm, adapter=self.sub_adapter, send_stream=None):
                 prediction = rlm(task=task, context=context, workspace=self.workspace.snapshot())
             report = str(prediction.report or "").strip()
             ok = True
