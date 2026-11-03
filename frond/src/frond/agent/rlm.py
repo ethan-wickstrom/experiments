@@ -37,6 +37,7 @@ from dspy.signatures.signature import make_signature
 from dspy.utils.exceptions import AdapterParseError, format_error_for_lm
 
 from frond.agent.adapter import (
+    NO_CALL,
     NOTE,
     NOTE_CODE,
     NOTE_DESC,
@@ -45,6 +46,7 @@ from frond.agent.adapter import (
     UserEntry,
     empty_reply,
     escape_marker,
+    native_tool,
     user_tag,
     without_markers,
 )
@@ -309,6 +311,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             raise ValueError(f"action_space must be 'code' or 'tools', not {action_space!r}")
         self.action_space = action_space  # "code": Python in the REPL; "tools": one tool call per step (H1, B8)
         self._tools_signature: type[dspy.Signature] | None = None
+        self._native_tool_specs: list[dict[str, Any]] | None = None
         self.hooks = hooks or Hooks()
         self.freshness = freshness  # show the model which of its reads went stale (H3; hooks.stale_reads)
         self.max_branches = max_branches  # FORK is documented, and defined in the REPL, from 2 (H2, ledger B7)
@@ -380,6 +383,22 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             signature = signature.append("stale_reads", dspy.InputField(desc=STALE_READS_DESC), type_=str)
         return self._with_scopes(signature)
 
+    def _native_tools(self, submit_fields: list[str]) -> list[dict[str, Any]]:
+        """The tools as native tool calling takes them, on the json protocol (B19): frond's, and submit with the
+        turn's output fields."""
+        if self._native_tool_specs is None:
+
+            def submit(**fields: str) -> None: ...
+
+            submit.__signature__ = inspect.Signature(  # ty: ignore[unresolved-attribute]
+                [inspect.Parameter(n, inspect.Parameter.KEYWORD_ONLY, annotation=str) for n in submit_fields]
+            )
+            submit.__annotations__ = dict.fromkeys(submit_fields, str)
+            done = "End the turn with your reply to the user, in a step of its own."
+            specs = [native_tool(name, t.func, inspect.cleandoc(t.desc or "")) for name, t in self._user_tools.items()]
+            self._native_tool_specs = [*specs, native_tool("submit", submit, done)]
+        return self._native_tool_specs
+
     def _tool_context(self, input_args: dict[str, Any]) -> list[str]:
         """The inputs as text: without a REPL, the model reads them here, clipped like the REPL's previews."""
         out = []
@@ -409,12 +428,14 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         volatile: dict[str, str],
     ) -> Prediction | REPLHistory:
         hooks = self.hooks
+        config = {"tools": self._native_tools(output_field_names)} if self.protocol == "json" else {}
         try:
             action = self.generate_action(
                 signature=self._tool_signature(),
                 variables_info=self._tool_context(input_args),
                 repl_history=history,
                 iteration=f"{step}/{self.max_iters}",
+                config=config,
                 **volatile,
             )
         except AdapterParseError as exc:
@@ -659,7 +680,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         cut_off = finish == "length"
         hooks.reply_unparsed(step, cut_off)
         reply = _clip(without_markers(completion), 4_000) or "(an empty reply)"
-        if self.action_space == "tools":
+        native = self.action_space == "tools" and self.protocol == "json"
+        if native:
+            fields, empty = "", "{}"
+        elif self.action_space == "tools":
             fields, empty = "`[[ ## tool ## ]]` with the tool's name, then `[[ ## args ## ]]` with a JSON object", "{}"
         elif self.protocol == "json":
             fields, empty = "", ""
@@ -669,10 +693,14 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             "Your reply reached the output limit and was cut off before it ended, so nothing ran. Take a smaller "
             "step: write less code or reasoning at once."
             if cut_off
+            else NO_CALL
+            if native
             else "Your reply did not follow the step format, so nothing ran."
         )
         how = (
-            f"Reply with one JSON object with the string fields `{NOTE}` and `code`."
+            f"Reply with one call to one of the tools, with its `{NOTE}` argument."
+            if native
+            else f"Reply with one JSON object with the string fields `{NOTE}` and `code`."
             if not fields
             else f"Reply with `[[ ## {NOTE} ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put nothing "
             "before the first marker."

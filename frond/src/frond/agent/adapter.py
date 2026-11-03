@@ -17,8 +17,11 @@ and keeps tool output in messages of its own rather than in one string with the 
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
+import typing
+from collections.abc import Callable
 from typing import Any
 
 import dspy
@@ -26,6 +29,7 @@ import pydantic
 from dspy.adapters.base import Adapter, _expand_legacy_custom_type_markers_in_chat_message
 from dspy.adapters.chat_adapter import FieldInfoWithName, field_header_pattern
 from dspy.adapters.utils import translate_field_type
+from dspy.clients._deprecation import adapter_message_call
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
 from dspy.utils.exceptions import AdapterParseError
@@ -206,6 +210,25 @@ LAYOUTS = ("turns", "chat")
 # (G48, D53). "markers": DSPy's `[[ ## field ## ]]` text, kept as the control arm.
 PROTOCOLS = ("json", "markers")
 JSON_FIELDS = frozenset({NOTE, "code"})  # the steps that can have a JSON schema: every field a string
+TOOL_FIELDS = frozenset({NOTE, "tool", "args"})  # a tools-arm step: on the json protocol, a native tool call (B19)
+NO_CALL = "Your reply was not one tool call, so nothing ran."
+
+
+def native_tool(name: str, func: Callable[..., Any], desc: str) -> dict[str, Any]:
+    """A tool as the provider's native tool calling takes it (B19): its parameters, those without a default
+    required, and a `note` first, the step's narration for the user, as a code step's `note` field."""
+    target = getattr(func, "__wrapped__", func)
+    hints = typing.get_type_hints(target)
+    properties: dict[str, Any] = {NOTE: {"type": "string", "description": NOTE_DESC}}
+    required = [NOTE]
+    for param in inspect.signature(target).parameters.values():
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            continue
+        properties[param.name] = pydantic.TypeAdapter(hints.get(param.name, str)).json_schema()
+        if param.default is param.empty:
+            required.append(param.name)
+    parameters = {"type": "object", "properties": properties, "required": required, "additionalProperties": False}
+    return {"type": "function", "function": {"name": name, "description": desc, "parameters": parameters}}
 
 
 def step_schema(signature: type[dspy.Signature]) -> type[pydantic.BaseModel]:
@@ -251,7 +274,24 @@ class FrondAdapter(dspy.ChatAdapter):
         it keeps the markers until it has a schema per tool (B19)."""
         return self.protocol == "json" and set(signature.output_fields) == JSON_FIELDS
 
+    def native_tools(self, signature: type[dspy.Signature]) -> bool:
+        """True when a tools-arm step is a native tool call: the json protocol (B19). Its caller passes the tools
+        as ``tools`` in the call's settings."""
+        return self.protocol == "json" and set(signature.output_fields) == TOOL_FIELDS
+
     def format_field_structure(self, signature: type[dspy.Signature]) -> str:
+        if self.native_tools(signature):
+            inputs = self.format_field_with_value(
+                {
+                    FieldInfoWithName(name=n, info=f): translate_field_type(n, f)
+                    for n, f in signature.input_fields.items()
+                }
+            )
+            return (
+                "All interactions will be structured in the following way, with the appropriate values filled in."
+                f"\n\n{inputs}\n\nEach reply is one call to one of the tools, its `{NOTE}` argument a sentence or two "
+                "for the user."
+            )
         if not self.json_step(signature):
             return super().format_field_structure(signature)
         inputs = self.format_field_with_value(
@@ -264,6 +304,8 @@ class FrondAdapter(dspy.ChatAdapter):
         )
 
     def user_message_output_requirements(self, signature: type[dspy.Signature]) -> str:
+        if self.native_tools(signature):
+            return f"Reply with one call to one of the tools, with its `{NOTE}` argument."
         if not self.json_step(signature):
             return super().user_message_output_requirements(signature)
         return (
@@ -340,6 +382,8 @@ class FrondAdapter(dspy.ChatAdapter):
         ):
             lm_kwargs = {**lm_kwargs, "prompt_cache": CacheConfig(prefix_until_index=index)}
         try:
+            if self.native_tools(signature):
+                return self.call_native(lm, lm_kwargs, signature, demos, inputs)
             if self.json_step(signature):
                 # Not through ChatAdapter's fallback to DSPy's JSONAdapter: the reply was already held to the
                 # schema, so asking again in another format would be a second billed call for the same step.
@@ -352,6 +396,46 @@ class FrondAdapter(dspy.ChatAdapter):
             if self.metrics is not None and empty_reply(exc):
                 self.metrics.bump(f"{self.counters}parse_failures")
             raise
+
+    def call_native(
+        self,
+        lm: dspy.BaseLM,
+        lm_kwargs: dict[str, Any],
+        signature: type[dspy.Signature],
+        demos: list[dict[str, Any]],
+        inputs: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """A tools-arm step as a native tool call (B19): the reply must be one call, whose arguments become the
+        step's `note`, `tool` and `args`. A reply without one is off the protocol, as a code step's unreadable
+        reply is, and reaches the model as an error step (G34)."""
+        if not lm_kwargs.get("tools"):
+            raise ValueError("a tools-arm step on the json protocol needs its tools (B19)")
+        messages = self.format(signature, demos, inputs)
+        with adapter_message_call(lm, messages):
+            outputs = lm(messages=messages, **{**lm_kwargs, "tool_choice": "auto"})
+        return [self.parse_native(signature, output) for output in outputs]
+
+    def parse_native(self, signature: type[dspy.Signature], output: Any) -> dict[str, Any]:
+        text = output.get("text") if isinstance(output, dict) else output
+        calls = (output.get("tool_calls") if isinstance(output, dict) else None) or []
+        if len(calls) == 1:
+            function = calls[0].get("function", {})
+            try:
+                args = json.loads(function.get("arguments") or "{}")
+            except ValueError:
+                args = None
+            if isinstance(args, dict) and function.get("name"):
+                note = str(args.pop(NOTE, "") or "")
+                return {NOTE: note, "tool": str(function["name"]), "args": args}
+        if self.metrics is not None:
+            self.metrics.bump(f"{self.counters}parse_failures")
+        many = f"{len(calls)} tool calls" if len(calls) > 1 else ""
+        raise AdapterParseError(
+            adapter_name=type(self).__name__,
+            signature=signature,  # ty: ignore[invalid-argument-type]  (DSPy passes the class too)
+            lm_response=str(text or many),
+            message="The reply is not one tool call.",
+        )
 
     def format(
         self,
@@ -380,13 +464,44 @@ class FrondAdapter(dspy.ChatAdapter):
                 messages[-1]["content"] += "\n\n" + steering_text(entry.output, tag)
                 continue
             replies += 1
+            step = getattr(entry, "step", 0) or replies
+            call = tool_call(entry.code) if "tool" in signature.output_fields else {}
+            if self.native_tools(signature) and call.get("tool") and not isinstance(entry, FoldEntry):
+                # the step as the provider gave it: a call and its result, which the model reads as its own
+                call_id = f"step_{replies}"  # fixed by position, so the cached prefix stays byte for byte the same
+                arguments = json.dumps({NOTE: entry.reasoning, **call["args"]}, ensure_ascii=False)
+                function = {"name": call["tool"], "arguments": arguments}
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{"id": call_id, "type": "function", "function": function}],
+                    }
+                )
+                text = escape_marker(entry.output, self.marker)
+                hint = narrowing_hint(signature, getattr(entry, "seq", None), self.history_tools)
+                result = f"=== Step {step} output ===\n{format_output(text, history.max_output_chars, hint)}"
+                messages.append({"role": "tool", "tool_call_id": call_id, "content": result})
+                continue
+            if self.native_tools(signature):  # a reply with no call, or folded steps: text, as it was
+                messages.append({"role": "assistant", "content": entry.reasoning or "(no reply)"})
+                folded = isinstance(entry, FoldEntry)
+                title = "Folded steps" if folded else f"Step {step} output"
+                text = entry.output if folded else escape_marker(entry.output, self.marker)
+                hint = narrowing_hint(signature, getattr(entry, "seq", None), self.history_tools)
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"=== {title} ===\n{format_output(text, history.max_output_chars, hint)}",
+                    }
+                )
+                continue
             if "tool" in signature.output_fields:
-                reply = {NOTE: entry.reasoning, **tool_call(entry.code)}
+                reply = {NOTE: entry.reasoning, **call}
             else:
                 code = entry.code if self.json_step(signature) else f"```python\n{entry.code}\n```"
                 reply = {NOTE: entry.reasoning, "code": code}
             messages.append({"role": "assistant", "content": self.format_assistant_message_content(signature, reply)})
-            step = getattr(entry, "step", 0) or replies
             folded = isinstance(entry, FoldEntry)  # built by frond from escaped outputs, with the user's lines tagged
             title = "Folded steps" if folded else f"Step {step} output"
             text = entry.output if folded else escape_marker(entry.output, self.marker)

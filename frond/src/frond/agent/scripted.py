@@ -16,7 +16,14 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 import dspy
-from dspy._vendor.lm15.types import StreamDeltaEvent, StreamEndEvent, StreamStartEvent, TextDelta
+from dspy._vendor.lm15.types import (
+    StreamDeltaEvent,
+    StreamEndEvent,
+    StreamStartEvent,
+    TextDelta,
+    ToolCallDelta,
+    ToolCallPart,
+)
 from dspy.lm15 import Message, Request, Response, TextPart, Usage
 
 
@@ -47,6 +54,15 @@ class ToolStep:
             f"[[ ## note ## ]]\n{self.reasoning}\n\n[[ ## tool ## ]]\n{self.tool}\n\n"
             f"[[ ## args ## ]]\n{json.dumps(self.args)}\n\n[[ ## completed ## ]]\n"
         )
+
+
+@dataclass(frozen=True, slots=True)
+class NativeCall:
+    """A tools-arm step as a native tool call (B19): what the engine returns when the request carries tools."""
+
+    id: str
+    name: str
+    input: dict[str, Any]
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,16 +106,23 @@ class ScriptedEngine:
         with self._lock:
             self.steps.extend(steps)
 
-    def _reply(self, request: Request) -> tuple[str, Literal["stop", "length"]]:
+    def _reply(self, request: Request) -> tuple[str | NativeCall, Literal["stop", "length", "tool_call"]]:
         """The completion for ``request`` and its finish reason."""
         text = self._completion(request)
+        if isinstance(text, NativeCall):
+            return text, "tool_call"
         return (text.text, "length") if isinstance(text, CutOff) else (text, "stop")
 
-    def _completion(self, request: Request) -> str | CutOff:
+    def _completion(self, request: Request) -> str | CutOff | NativeCall:
         text = _request_text(request)
         json_reply = request.config.response_format is not None  # frond asks for JSON only of code steps
         with self._lock:
             self.requests.append(request)
+            if request.tools and "[[ ## repl_history ## ]]" in text:  # a tools-arm step as a native call (B19)
+                step = self.steps.pop(0) if self.steps else ToolStep("Done.", "submit", {"response": "(end of script)"})
+                if isinstance(step, ToolStep):
+                    return NativeCall(f"call_{len(self.requests)}", step.tool, {"note": step.reasoning, **step.args})
+                return step if isinstance(step, str | CutOff) else step.render()
             if "[[ ## repl_history ## ]]" in text and (
                 json_reply or "[[ ## code ## ]]" in text or "[[ ## tool ## ]]" in text
             ):
@@ -129,6 +152,15 @@ class ScriptedEngine:
 
     def complete(self, request: Request) -> Response:
         text, finish = self._reply(request)
+        if isinstance(text, NativeCall):
+            part = ToolCallPart(id=text.id, name=text.name, input=text.input)
+            return Response(
+                id="scripted",
+                model="frond-scripted",
+                message=Message.assistant([part]),
+                finish_reason=finish,
+                usage=self._usage(request, json.dumps(text.input)),
+            )
         return Response(
             id="scripted",
             model="frond-scripted",
@@ -140,6 +172,13 @@ class ScriptedEngine:
     def stream(self, request: Request) -> Iterator[object]:
         text, finish = self._reply(request)
         yield StreamStartEvent(id="scripted", model="frond-scripted")
+        if isinstance(text, NativeCall):
+            arguments = json.dumps(text.input)
+            yield StreamDeltaEvent(delta=ToolCallDelta(input="", id=text.id, name=text.name))
+            for i in range(0, len(arguments), self.chunk):
+                yield StreamDeltaEvent(delta=ToolCallDelta(input=arguments[i : i + self.chunk]))
+            yield StreamEndEvent(finish_reason=finish, usage=self._usage(request, arguments))
+            return
         for i in range(0, len(text), self.chunk):
             if self.delay:
                 time.sleep(self.delay)

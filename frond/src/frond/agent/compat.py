@@ -48,6 +48,10 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...] | str], ...] = (
     ("dspy.predict.rlm", "_strip_code_fences", CALLABLE),
     ("dspy.adapters.base", "_expand_legacy_custom_type_markers_in_chat_message", CALLABLE),
     ("dspy.adapters.chat_adapter", "field_header_pattern", PATTERN),  # recovering replies off the protocol (D46)
+    ("dspy.adapters.chat_adapter", "FieldInfoWithName", CALLABLE),  # the json protocol's field structure (D53)
+    ("dspy.adapters.utils", "translate_field_type", CALLABLE),
+    ("dspy.adapters.base", "Adapter.__call__", CALLABLE),  # a JSON step bypasses ChatAdapter's fallback (D53)
+    ("dspy.clients._deprecation", "adapter_message_call", CALLABLE),  # native tool calls (B19)
     ("dspy.clients.backend_selection", "select_backend", CALLABLE),
     ("dspy.lm15", "CacheConfig", CALLABLE),
     # the stream parser and the names the providers call it by, which frond widens (G36)

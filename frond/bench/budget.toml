@@ -64,3 +64,7 @@ why = "2026-11-03: E0's fourth start, on DSPy's field markers, stopped before Op
 [[spent]]
 usd = 0.02
 why = "2026-11-03: B19's schema probes for the tools arm, outside Harbor: Haiku and Sonnet 5.5, 2 calls answered ($0.01) and 4 refused by the API before running"
+
+[[spent]]
+usd = 0.12
+why = "2026-11-03: D55's native tool-call probes on Haiku, Sonnet and Opus 5.5 ($0.01) and the tools arm's smoke runs on the three ($0.10), outside Harbor"
