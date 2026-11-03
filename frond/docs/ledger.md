@@ -48,7 +48,7 @@ Only what the agent cannot get itself (D16).
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
 | E0 | Pilot (was P0): 10 TB 4.0 tasks × 3 trials on Opus 5.5, plus 10 × 1 on Sonnet 5.5 and Haiku 5.5 to pick the screening model | report in `bench/results/` with per-call cache reads, protocol violations, failed edits, per-task variance, and the trials H1–H6 need | blocked: REQ-1, B1, B2 | `research.md` |
-| E0a | Oracle sweep: Harbor's reference solutions on all 66 TB 4.0 tasks in this VM, so that infrastructure failures (TLS, resources, disk) are known before any model is blamed | pass list in `bench/results/` | in progress: third run, through `bench/matrix.py` (`bench/experiments/e0a-oracle.toml`), started 2026-11-03 09:25 UTC | needs no key. The first run's first 10 trials found G7 (2 TLS failures) and G8 (2 layer-extraction failures); the second found G20 (CPU requests above the VM's 4). Each was fixed or accepted, then the sweep restarted on the 56 tasks that fit |
+| E0a | Oracle sweep: Harbor's reference solutions on all 66 TB 4.0 tasks in this VM, so that infrastructure failures (TLS, resources, disk) are known before any model is blamed | pass list in `bench/results/` | in progress: third run, through `bench/matrix.py` (`bench/experiments/e0a-oracle.toml`), started 2026-11-03 09:00 UTC | needs no key. The first run's first 10 trials found G7 (2 TLS failures) and G8 (2 layer-extraction failures); the second found G20 (CPU requests above the VM's 4). Each was fixed or accepted, then the sweep restarted on the 56 tasks that fit |
 | E1 | H1: RLM against ReAct, same tools | paired test per `research.md` | blocked: E0, B3, B8 | `research.md` |
 | E2 | H2: fork k=3 with verifier selection | paired test; cost ratio | blocked: E0, B4, B6, B7 | `research.md` |
 | E3 | H3: freshness marks | failed edits per task, pass rate | blocked: E0, B5 | `research.md` |
@@ -78,7 +78,7 @@ Only what the agent cannot get itself (D16).
 | B9 | Scopes as savepoints (was P5), after N2 | collapse, rewind and cache-prefix tests | open | H5, D22 |
 | B10 | Summary-compaction arm, rebuilt from the removed `_compact` | runs; the context-policy flag picks it | open | H4 |
 | B11 | Pin DSPy and check at startup (was P6b) | a changed signature gives a clear startup error | open | R9 |
-| B12 | Redact secrets from exported records before results are committed (was I4) | exported records hold no credential values from the environment | next, before any results are committed | `research.md`, Running |
+| B12 | Redact secrets from exported records before results are committed (was I4) | exported records hold no credential values from the environment | closed (this commit) | `agent/redact.py`: the values of credential-named variables (by name), common API key shapes and URL passwords are replaced in every `--export` file and in `-p` output, which Harbor stores and may upload; `tests/test_redact.py` |
 | B13 | A TUI world view: branches as a live tree, with per-branch diffs and verifier status | headless render test | open | delight; follows B7 |
 | B14 | The truncation note suggests how to narrow (was I6) | test checks the hint | open | [TurnCost](https://arxiv.org/abs/2610.15093): 76.9% against 44% |
 | B15 | `scripts/dev-env.sh`: dockerd plus the Docker Hub mirror | runs and prints `docker info` | closed 362cc49 | D23; G10 fixed its handling of an existing `daemon.json` |

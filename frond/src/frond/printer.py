@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import sys
+from collections.abc import Callable
 from typing import TextIO
 
 from frond import events as ev
@@ -30,7 +31,9 @@ class Printer:
         color: bool | None = None,
         json_mode: bool = False,
         verbose: bool = False,
+        redact: Callable[[str], str] | None = None,
     ) -> None:
+        self.redact = redact or (lambda text: text)  # secrets out of what a harness may store (ledger B12)
         self.out = out or sys.stdout
         self.err = err or sys.stderr
         self.color = self.err.isatty() if color is None else color
@@ -43,12 +46,12 @@ class Printer:
         return f"{code}{text}{_RESET}" if self.color else text
 
     def log(self, text: str) -> None:
-        print(text, file=self.err, flush=True)
+        print(self.redact(text), file=self.err, flush=True)
 
     def __call__(self, event: ev.Event) -> None:
         if self.json_mode:
             payload = {"type": type(event).__name__, **dataclasses.asdict(event)}
-            print(json.dumps(payload, default=str), file=self.out, flush=True)
+            print(self.redact(json.dumps(payload, default=str)), file=self.out, flush=True)
             if isinstance(event, ev.TurnFinished):
                 self.final = event
             return
@@ -92,6 +95,6 @@ class Printer:
                 if error:
                     self.log(self.c(_RED, error))
                 if response:
-                    print(response, file=self.out, flush=True)
+                    print(self.redact(response), file=self.out, flush=True)
             case _:
                 pass

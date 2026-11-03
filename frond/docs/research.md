@@ -78,4 +78,4 @@ uv run python -m bench.analyze bench/experiments/<spec>.toml --out bench/results
 
 The runner adds the egress-CA overlay, without which every task whose agent, solution or tests reach the internet fails in this VM (G7). It retries only failures before the agent starts, because Harbor reruns a retried trial under the same name and would otherwise keep the better of two attempts. Jobs go to `jobs/<id>/` (ignored by git).
 
-Results, as summaries rather than raw trajectories, go under `frond/bench/results/<date>-<experiment>/`, with secrets redacted (ledger B12).
+Results, as summaries rather than raw trajectories, go under `frond/bench/results/<date>-<experiment>/`. frond redacts credential values, key-shaped strings and URL passwords from its exports and headless output before they reach Harbor (ledger B12).
