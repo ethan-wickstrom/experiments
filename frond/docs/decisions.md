@@ -254,3 +254,19 @@ Each stays closed unless new evidence reopens it:
   - attributing each change to a step ("changed at step 7 by your sed"): needs a world lookup per stale path per step; deferred until E3 shows whether the bare mark helps.
 - Evidence: `tests/test_freshness.py` (a read going stale and cleared by a new read in the prompt; refusal and recovery; a stale edit's note; a patch refused before writing anything; the off arm's counts).
 
+## D31 · The REPL forks by os.fork in the worker, with its channel passed over SCM_RIGHTS (2026-11-03, active)
+- Decision:
+  - each worker starts with one end of a UNIX socketpair (FROND_FORK_FD). To fork, the host sends `fork` on the protocol and a fresh socket over that pair (`socket.send_fds`); the idle worker calls `os.fork()`;
+  - the copy calls `setsid`, so the host can interrupt and kill it alone. It swaps its inherited stdin and protocol descriptors for /dev/null at the OS level, takes a scratch directory under the shared one, starts its own reader thread, and says `ready` on the new socket;
+  - the original reaps its copies (SIGCHLD); user code cannot start processes in the worker, so every child is a copy. Only originals fork;
+  - host side, `ReplSession.fork()` returns a session over a Popen look-alike (`_Forked`); the copy calls the same tools unless it is given others.
+- Why: H2's branches must start from the same REPL state at the cost of a fork, not a replay. `os.fork` copies the namespace by copy-on-write in milliseconds, whatever it holds: imports, loaded data, closures. Passing the channel as a descriptor lets the copy talk to the host directly. The sandbox (user, mount and network namespaces, or Landlock) is inherited by construction, and there is no PID namespace, so the copy's pid is valid on the host.
+- Rejected:
+  - replaying the steps' code into a fresh worker: re-runs side effects and costs the steps' time again;
+  - pickling the namespace (`dill`): fails on modules, sockets, generators, locks and C objects, and is not standard library;
+  - CRIU or another checkpoint/restore tool: privileges and an external dependency;
+  - letting the copy keep the original's stdin and stdout: the host would see the original's stream stay open after it died, and the two could interleave writes;
+  - closing the inherited Python file objects in the copy: the reader thread that did not survive the fork may hold their buffer locks, so the copy replaces the descriptors under them instead.
+- Caveat: forking a process with threads is only safe when no other thread holds a lock the copy needs. The worker forks only between steps, when user threads should have ended (it warns when they have not), and the copy touches none of the objects the reader thread held.
+- Evidence: `tests/test_fork.py`: namespace kept, then independent; tools reach the host; scratch of its own; interrupt and shutdown affect only the copy, which is reaped; copies do not fork again; the containment checks (no write, no connection) pass inside a copy under namespaces and Landlock.
+
