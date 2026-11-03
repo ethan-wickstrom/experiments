@@ -120,6 +120,9 @@ class BenchCase(unittest.TestCase):
     def setUp(self) -> None:
         self.dir = Path(tempfile.mkdtemp(prefix="frond-bench-"))
         self.addCleanup(shutil.rmtree, self.dir, True)
+        jobs = mock.patch.object(matrix, "JOBS", self.dir / "checkout-jobs")  # never the checkout's real trials
+        jobs.start()
+        self.addCleanup(jobs.stop)
 
     def write_spec(self, body: str) -> Path:
         path = self.dir / "spec.toml"
@@ -451,6 +454,20 @@ class BudgetTest(BenchCase):
         self.assertAlmostEqual(spent.total, 4.0 + 2.0 + 1.0 + 7.0)
         self.assertAlmostEqual(spent.worst["anthropic/claude-opus-5-5"], 7.0)  # the reference agent's trial too
         self.assertEqual(spent.unknown, [])
+
+    def test_recorded_spending_counts_and_stands_in_for_its_jobs(self):  # G37: what jobs/ cannot show
+        lost = budget_mod.Spent(3.0, "jobs lost with an earlier VM")
+        killed = budget_mod.Spent(1.5, "trials killed before writing their cost", jobs="E0-aborted")
+        fake_trial(self.dir / "jobs" / "E0-aborted" / "E0-a-b01", "t0", 0, reward=1.0, cost_tokens=1_000_000)
+        broken = self.dir / "jobs" / "E0-aborted" / "E0-a-b01" / "t1__0"  # killed: a result, no cost
+        (broken / "agent").mkdir(parents=True)
+        (broken / "result.json").write_text(json.dumps({"config": {"agent": {"model_name": "anthropic/x"}}}))
+        fake_trial(self.dir / "jobs" / "E1" / "E1-a-b01", "t0", 0, reward=1.0, cost_tokens=500_000)
+        spent = budget_mod.spending([self.dir / "jobs"], analyze.load_prices(), (lost, killed))
+        self.assertAlmostEqual(spent.total, 3.0 + 1.5 + 2.0)  # E0-aborted's trials are replaced by its entry
+        self.assertEqual(spent.unknown, [])
+        recorded = budget_mod.load_budget().spent
+        self.assertTrue(recorded and all(s.usd > 0 and s.why for s in recorded))
 
     def test_a_trial_whose_cost_cannot_be_told_stops_the_run(self):  # fail closed (Codex, #23)
         path = self.write_spec(SPEC.format(tasks='"t0"'))

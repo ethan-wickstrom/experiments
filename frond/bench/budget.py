@@ -20,15 +20,29 @@ BUDGET = BENCH / "budget.toml"
 
 
 @dataclass(frozen=True)
+class Spent:
+    """Spending that the trials under ``jobs/`` cannot show, recorded in ``budget.toml`` (G37): jobs lost with an
+    earlier VM, trials killed before they wrote their cost, or calls made outside Harbor."""
+
+    usd: float
+    why: str
+    jobs: str = ""  # the jobs directory under jobs/ it stands for, which is then not scanned ("" for none)
+
+
+@dataclass(frozen=True)
 class Budget:
     usd: float
     margin: float
     guess: dict[str, float]  # prices.toml-style model key -> USD per trial at 40 steps, before one is measured
+    spent: tuple[Spent, ...] = ()
 
 
 def load_budget(path: Path = BUDGET) -> Budget:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    return Budget(float(data["usd"]), float(data.get("margin", 1.5)), {k: float(v) for k, v in data["guess"].items()})
+    spent = tuple(Spent(float(s["usd"]), str(s["why"]), str(s.get("jobs", ""))) for s in data.get("spent", []))
+    return Budget(
+        float(data["usd"]), float(data.get("margin", 1.5)), {k: float(v) for k, v in data["guess"].items()}, spent
+    )
 
 
 def _key(model: str, keys: list[str]) -> str | None:
@@ -45,14 +59,18 @@ class Spending:
     unknown: list[str]  # trials of a model whose cost cannot be told: a call with no price, or none reported
 
 
-def spending(roots: list[Path], prices: dict[str, dict[str, float]]) -> Spending:
+def spending(roots: list[Path], prices: dict[str, dict[str, float]], recorded: tuple[Spent, ...] = ()) -> Spending:
     """What every trial anywhere under ``roots`` cost (a trial is a directory with ``result.json`` and ``agent/``),
-    each counted once, and the most one trial of each model cost, by the model Harbor gave its agent, frond or not."""
-    out = Spending(0.0, {}, [])
+    each counted once, and the most one trial of each model cost, by the model Harbor gave its agent, frond or not.
+    Each recorded entry is added, and stands in for the jobs directory it names, which is then not scanned (G37)."""
+    out = Spending(sum(s.usd for s in recorded), {}, [])
+    replaced = {s.jobs for s in recorded if s.jobs}
     results = sorted({r.resolve() for root in roots if root.is_dir() for r in root.rglob("result.json")})
     for result in results:
         if not (result.parent / "agent").is_dir():
             continue  # a job's result, not a trial's
+        if replaced.intersection(result.parts):
+            continue  # its jobs directory's spending is recorded in budget.toml
         trial = load_trial(result.parent, "", prices)
         if trial is None:
             continue

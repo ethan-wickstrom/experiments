@@ -42,6 +42,7 @@ from .prune import prune_while
 from .spec import BENCH, Arm, Spec, load
 
 FROND = BENCH.parent
+JOBS = FROND / "jobs"  # every run's jobs, wherever its --jobs points, count against the cap from here too (D43)
 # The dspy extra and pin serve Harbor's own dspy-rlm agent (E11), which runs in Harbor's process and still passes
 # max_iterations, which DSPy renamed in 3.3. frond installs its own pinned DSPy in the task container.
 HARBOR = ("uvx", "--from", "harbor[dspy]==0.25.0", "--with", "dspy>=3.1.3,<3.3", "harbor")
@@ -287,7 +288,7 @@ def affordable(spec: Spec, cell: Cell, jobs: Path, budget: Budget) -> tuple[bool
     """Whether the program's cap allows starting this cell's job, and the spending it was judged on. Every trial
     under ``jobs/`` and under this run's jobs directory counts, wherever it is nested; a trial whose cost cannot be
     told stops the run, since the cap could not be kept."""
-    spent = spending([FROND / "jobs", jobs], load_prices())
+    spent = spending([JOBS, jobs], load_prices(), budget.spent)
     if spent.unknown:
         return False, f"cannot count the cost of {len(spent.unknown)} trials ({', '.join(spent.unknown[:3])})"
     trials = remaining(jobs / cell.name(spec), cell.tasks, spec.trials_of(cell.arm))
@@ -342,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     spec = load(args.spec.resolve())
-    jobs = (args.jobs or FROND / "jobs" / spec.id).resolve()
+    jobs = (args.jobs or JOBS / spec.id).resolve()
     arms = set(args.arms.split(",")) if args.arms else {a.name for a in spec.arms}
     batches = {int(b) for b in args.batches.split(",")} if args.batches else None
     ca = egress_ca()
