@@ -139,6 +139,10 @@ class FrondOptions(InstalledAgentOptions):
         default=None,
         description="rlm: Python in a persistent REPL (frond's default); react: one tool call per step; H1",
     )
+    context: Annotated[str | None, Cli("--context")] = Field(
+        default=None,
+        description="fold: early steps folded into a searchable index (default); summary: an LLM summary; H4",
+    )
     fork: Annotated[int | None, Cli("--fork")] = Field(
         default=None, description="most branches a FORK may explore; 1 turns FORK off (frond's default); H2"
     )

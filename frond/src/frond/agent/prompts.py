@@ -165,3 +165,14 @@ the workspace and this REPL once per option (at most {branches}), lets a branch 
 - The step's output then reports each branch's result. The workspace holds the kept branch's changes; the REPL is \
 as it was at FORK. If no branch passed, the workspace is as it was at FORK.
 - Branches cost a step each per option: fork only for decisions that reasoning or one quick experiment cannot settle."""
+
+
+class Compaction(dspy.Signature):
+    """Summarise the earlier steps of a coding agent's session so the work can continue without them: they will not \
+be available again. Keep the user's requests and constraints (verbatim when short); every file read or changed, \
+with the facts learned there (paths, names, line numbers, error messages); the commands run and their results; \
+what was tried and did not work; and what remains to be done. Be specific and complete; leave out nothing that \
+the next step could need."""
+
+    transcript: str = dspy.InputField(desc="The steps to summarise, oldest first")
+    summary: str = dspy.OutputField(desc="The summary, in plain text or Markdown")

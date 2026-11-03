@@ -162,6 +162,10 @@ class Hooks:
 
     def compacted(self, steps: int, before: int, after: int) -> None: ...
 
+    def summarize(self, transcript: str) -> str | None:
+        """An LLM summary of earlier steps, for the summary context policy (H4); None when it cannot be made."""
+        return None
+
     def code_rejected(self, step: int) -> None:
         """The step's code did not compile."""
 
@@ -186,8 +190,12 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         freshness: bool = False,
         max_branches: int = 1,
         action_space: str = "code",
+        context: str = "fold",
         **kwargs: Any,
     ) -> None:
+        if context not in ("fold", "summary"):
+            raise ValueError(f"context must be 'fold' or 'summary', not {context!r}")
+        self.context = context  # past the budget: fold early steps into an index, or summarise them (H4, B10)
         if action_space not in ("code", "tools"):
             raise ValueError(f"action_space must be 'code' or 'tools', not {action_space!r}")
         self.action_space = action_space  # "code": Python in the REPL; "tools": one tool call per step (H1, B8)
@@ -497,6 +505,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         if before <= budget or len(history.entries) <= self.keep_recent:
             return history
         old, recent = list(history.entries[: -self.keep_recent]), list(history.entries[-self.keep_recent :])
+        if self.context == "summary":
+            return self._summarize(old, recent, history, before)
         tag = user_tag(self.marker)
         who = f"the user {tag}" if tag else "the user"
         lines: list[str] = []
@@ -515,6 +525,32 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         folded = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
         self.hooks.compacted(len(old), before, len(folded.format()))
         return folded
+
+    def _summarize(
+        self, old: list[REPLEntry], recent: list[REPLEntry], history: REPLHistory, before: int
+    ) -> REPLHistory:
+        """H4's control arm: replace the early steps, any earlier summary and the user's messages among them,
+        with an LLM-written summary, as products compact a long session. Unlike the fold, nothing points back to
+        the steps, and the summary, written from tool output, cannot carry the user's mark."""
+        parts = []
+        for i, entry in enumerate(old, start=1):
+            if isinstance(entry, FoldEntry):
+                parts.append(f"Summary of even earlier steps:\n{entry.output}")
+            elif isinstance(entry, UserEntry):
+                parts.append(f"The user wrote, during the turn:\n{entry.output}")
+            else:
+                parts.append(entry.format(index=i, max_output_chars=4000))
+        summary = self.hooks.summarize("\n\n".join(parts))
+        if not summary:  # the summary call failed: keep a clipped trace rather than nothing
+            summary = "\n".join(_index_line(e) for e in old if not isinstance(e, (FoldEntry, UserEntry)))
+        note = FoldEntry(
+            reasoning=f"({len(old)} earlier steps of this turn were summarised to save context)",
+            code=NOTE_CODE,
+            output="Summary of the earlier steps of this turn:\n" + escape_marker(summary, self.marker),
+        )
+        compacted = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
+        self.hooks.compacted(len(old), before, len(compacted.format()))
+        return compacted
 
 
 def _did_not_compile(result: Any) -> bool:

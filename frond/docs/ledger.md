@@ -52,7 +52,7 @@ Only what the agent cannot get itself (D16).
 | E1 | H1: RLM against ReAct, same tools | paired test per `research.md` | blocked: E0 | `research.md`; arms `--arm rlm` (40 steps) and `--arm react` (100 steps), D33 |
 | E2 | H2: fork k=3 with verifier selection | paired test; cost ratio | blocked: E0 | `research.md`; arms `--fork 1` and `--fork 3` (B7) |
 | E3 | H3: freshness marks | failed edits and stale actions per task, pass rate | blocked: E0 | `research.md`; the arms are `--freshness on` and `off` (B5) |
-| E4 | H4: fold against summary on LHTB 2.0 | paired test | blocked: E0, B10 | `research.md` |
+| E4 | H4: fold against summary on LHTB 2.0 | paired test | blocked: E0 | `research.md`; arms `--context fold` and `--context summary` (B10) |
 | E5 | H5: scopes as savepoints on LHTB 2.0 | paired test; tests A1–A4 and A10 | blocked: E0, B9 | `research.md` |
 | E6 | H6: cache layout | cost and pass rate; tests A9 | blocked: E0, B3 | `research.md` |
 | E7 | Offline prompt optimization (GEPA) with a regression gate (was I11) | gains hold on held-out tasks (A11) | blocked: E1–E6 infrastructure; a reward that does not reward shortcuts | [2607.14004](https://arxiv.org/abs/2607.14004) |
@@ -76,7 +76,7 @@ Only what the agent cannot get itself (D16).
 | B7 | Fork, select, merge: a `fork(options)` REPL function, a branch runner, verifier hooks, selection, merge | a scripted three-branch test that keeps the branch whose tests pass | closed (this commit) | D32. `FORK(options, check, steps)` ends the step; each branch runs in a fork of the REPL, from the world at FORK, continuing the main history (shared cache prefix); the check scores it; the passing branch with the fewest steps is kept, or the world at FORK when none passes. `--fork K` (default 1, off). Branch calls are tagged in `calls.jsonl`, and each FORK's outcomes are in `metrics.json`. `tests/test_branches.py` |
 | B8 | ReAct arm: `dspy.ReAct` with frond's tools | runs the demo task headless | closed (this commit) | D33: not `dspy.ReAct` but a tools action space in frond's own loop (`--arm react`): each step is `tool` plus JSON `args`, called host-side, with the same tools, documentation, turns layout, cache marks, freshness and step log as the RLM arm. `tests/test_tools_arm.py` |
 | B9 | Scopes as savepoints (was P5), after N2 | collapse, rewind and cache-prefix tests | open | H5, D22 |
-| B10 | Summary-compaction arm, rebuilt from the removed `_compact` | runs; the context-policy flag picks it | open | H4 |
+| B10 | Summary-compaction arm, rebuilt from the removed `_compact` | runs; the context-policy flag picks it | closed (this commit) | D34. `--context summary`: past the budget, the main model summarises the early steps (and any earlier summary, and the user's mid-turn messages); no index points back, and `history_search`/`history_step` are not offered. Both arms count compactions (`metrics.json`), which also tests A5. `tests/test_summary_arm.py` |
 | B11 | Pin DSPy and check at startup (was P6b) | a changed signature gives a clear startup error | open | R9 |
 | B12 | Redact secrets from exported records before results are committed (was I4) | exported records hold no credential values from the environment | closed (this commit) | `agent/redact.py`: the values of credential-named variables (by name), common API key shapes and URL passwords are replaced in every `--export` file and in `-p` output, which Harbor stores and may upload; `tests/test_redact.py` |
 | B13 | A TUI world view: branches as a live tree, with per-branch diffs and verifier status | headless render test | open | delight; follows B7 |
@@ -162,7 +162,7 @@ Only what the agent cannot get itself (D16).
 | A2 | Collapsing a closed scope hides nothing needed later | E5: `history_step` calls on collapsed steps | blocked |
 | A3 | Listing stale names after an abandon keeps the model off discarded values | E5, B9 tests | blocked |
 | A4 | Rewinds need a verifier signal | E5: split by whether the task has tests | blocked |
-| A5 | TB turns rarely reach the fold budget, so long-horizon sets are needed for H4 and H5 | E0 | blocked |
+| A5 | TB turns rarely reach the fold budget, so long-horizon sets are needed for H4 and H5 | E0: `compactions` per run in `metrics.json` | blocked |
 | A6 | Editing through string literals costs extra tokens and failed edits | E0: failed edits per edit, output tokens per changed line | blocked |
 | A7 | A 1-hour cache TTL pays when more than about 0.65·T/H of gaps between turns last 5–60 min | — | deferred: no human pauses in research runs |
 | A8 | The need behind "Enter→stop" was halting promptly | — | closed: D09 |

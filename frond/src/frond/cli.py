@@ -87,6 +87,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "tools, prompt layout and harness (an experiment arm, H1)",
     )
     p.add_argument(
+        "--context",
+        choices=["fold", "summary"],
+        default="fold",
+        help="past the context budget: fold early steps into an index the model can search (frond), or replace "
+        "them with a summary the main model writes (an experiment arm, H4)",
+    )
+    p.add_argument(
         "--fork",
         type=int,
         default=1,
@@ -196,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         freshness=args.freshness == "on",
         fork=max(1, args.fork),
         arm=args.arm,
+        context=args.context,
     )
     prompt = " ".join(args.prompt).strip()
 

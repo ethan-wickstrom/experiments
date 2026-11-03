@@ -298,3 +298,16 @@ Each stays closed unless new evidence reopens it:
   - equal step caps: they would test a budget, not the action space; the step caps are pre-registered in E1's spec, and cost is measured either way.
 - Evidence: `tests/test_tools_arm.py`: a turn of single calls edits, checks and answers; past calls appear as turns in the call format; no code field or REPL variables reach the prompt; unknown tools and bad arguments come back as errors; the cache mark lands on the latest call.
 
+## D34 · H4's control arm summarises with the main model and offers no way back (2026-11-03, active)
+- Decision:
+  - `--context summary` keeps the fold's trigger and budget, so compaction happens at the same points in both arms. It replaces the early steps, any earlier summary and the user's mid-turn messages among them with a summary the main model writes (`prompts.Compaction`), escaped like any tool-derived text;
+  - in that arm `history_search` and `history_step` are not offered, and no index points back to the steps. The step log still records everything for the export;
+  - if the summary call fails, a clipped trace of the steps stands in, so a turn never loses its context entirely;
+  - both arms count compactions, and the summary arm counts its summary calls (`metrics.json`).
+- Why: H4 compares frond's lossless fold with what products ship: summarise and continue (Claude Code's compaction, Codex's). The comparison is fair only if the summary arm gets the best version of that: the main model, a prompt that asks to keep the user's constraints and every concrete fact, and compaction at the same moments.
+- Rejected:
+  - summarising with the sub-model: cheaper, but it would handicap the control arm;
+  - keeping the history tools in the summary arm: that would be the fold with a summary added, not the conventional baseline;
+  - keeping the user's mid-turn messages verbatim outside the summary: frond's provenance design, not the products', and the known failure the fold exists to fix (`steplog.py`, arXiv 2610.31778).
+- Evidence: `tests/test_summary_arm.py`: past the budget the summary replaces early steps, with no index and no history tools, and the summary call is counted; the fold arm keeps the index and the tools.
+

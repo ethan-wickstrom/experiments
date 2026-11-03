@@ -32,7 +32,7 @@ from frond.agent.freshness import Observations
 from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage, total_cost
 from frond.agent.metrics import RunMetrics
 from frond.agent.policy import Approver, Mode, Policy
-from frond.agent.prompts import CodingTurn, Investigation
+from frond.agent.prompts import CodingTurn, Compaction, Investigation
 from frond.agent.repl import ForkRequest, ReplPool
 from frond.agent.rlm import Branching, FrondRLM, Hooks
 from frond.agent.shell import JobManager, ShellRunner
@@ -94,6 +94,7 @@ class AgentConfig:
     freshness: bool = True  # mark stale reads and refuse overwriting what changed since a read (H3); off: count only
     fork: int = 1  # most branches a FORK may explore (H2); 1 leaves FORK out of the REPL and the prompt
     arm: str = "rlm"  # "rlm": Python in a persistent REPL; "react": one tool call per step, same tools (H1)
+    context: str = "fold"  # past the budget: "fold" early steps into a searchable index, or "summary" (H4)
 
 
 @dataclass
@@ -249,7 +250,11 @@ class _RootHooks(Hooks):
         limit = self.agent.rlm.preview_limits.get("history", 12_000)
         return history_preview(self.agent.history, value, limit, self.agent.marker)
 
+    def summarize(self, transcript: str) -> str | None:
+        return self.agent._summarize(transcript)
+
     def compacted(self, steps: int, before: int, after: int) -> None:
+        self.agent.metrics.compactions += 1
         self.agent.emit(Compacted(steps, before, after))
 
     def code_rejected(self, step: int) -> None:
@@ -447,7 +452,7 @@ class Agent:
             jobs=self.jobs,
             policy=self.policy,
             delegate=Delegate(self._run_subagent, self._run_subagents),
-            memory=self.steps,
+            memory=self.steps if config.context == "fold" else None,  # a summary cannot be searched back (H4)
             timeline=self.timeline,
             metrics=self.metrics,
             observations=self.observations,
@@ -478,6 +483,7 @@ class Agent:
             freshness=config.freshness,
             max_branches=config.fork if config.arm == "rlm" else 1,
             action_space="tools" if config.arm == "react" else "code",
+            context=config.context,
         )
         self.pool.root.max_branches = config.fork
         self._listeners = [
@@ -677,6 +683,19 @@ class Agent:
         """Characters of REPL history kept in the prompt before early steps fold (K7, K8)."""
         window = self.window or 200_000
         return int(min(window * 0.45, 150_000) * 3.6)
+
+    def _summarize(self, transcript: str) -> str | None:
+        """The summary context policy's call (H4): the main model condenses the early steps of a long turn."""
+        try:
+            with dspy.context(lm=self.lm, adapter=dspy.ChatAdapter(), send_stream=None):
+                prediction = dspy.Predict(Compaction)(transcript=transcript)
+        except TurnCancelled:
+            raise
+        except Exception as exc:
+            self.emit(Notice("warn", f"could not summarise earlier steps: {describe_error(exc)}"))
+            return None
+        self.metrics.summaries += 1
+        return str(prediction.summary or "").strip() or None
 
     # ── branches (FORK) ──────────────────────────────────────────────────────
 
