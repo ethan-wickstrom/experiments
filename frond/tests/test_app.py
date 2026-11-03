@@ -213,3 +213,13 @@ class AppTest(WorkspaceCase):
         self.assertIn("↶ Reverted the file changes of turn 1: src/app.py", screen)
         self.assertIn("✎ src/app.py", screen)
         self.assertIn("return 1", (self.root / "src/app.py").read_text())
+
+    def test_diff_command_shows_the_turns_net_change(self):
+        h = self.make([Step("Edit.", "edit('src/app.py', 'return 1', 'return 5')\nSUBMIT(response='ok')")])
+        h.type("edit it\n")
+        self.assertTrue(h.wait())
+        h.type("/diff\n")
+        h.pump()
+        screen = h.text()
+        self.assertIn("Δ The last turn's net change: 1 path", screen)
+        self.assertIn("✎ src/app.py", screen)

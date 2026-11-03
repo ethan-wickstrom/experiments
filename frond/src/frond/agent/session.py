@@ -26,7 +26,6 @@ import anyio
 import dspy
 
 from frond.agent.adapter import FrondAdapter, escape_marker, user_tag
-from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
 from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage, total_cost
@@ -36,7 +35,6 @@ from frond.agent.prompts import CodingTurn, Investigation
 from frond.agent.repl import ReplPool
 from frond.agent.rlm import FrondRLM, Hooks
 from frond.agent.shell import JobManager, ShellRunner
-from frond.agent.snapshots import GitSnapshots
 from frond.agent.steplog import StepLog
 from frond.agent.streaming import StreamSink, SubmitStreamer
 from frond.agent.tools import Delegate, Toolbox
@@ -69,6 +67,7 @@ from frond.events import (
     UsageUpdated,
 )
 from frond.workspace import Workspace
+from frond.world import Change, Timeline
 
 MAX_ATTACHMENT_CHARS = 120_000
 
@@ -88,7 +87,7 @@ class AgentConfig:
     prompt_cache: bool = True
     effort: str | None = "high"  # the main model's reasoning effort (decision D26); None: the model's default
     sub_effort: str | None = None  # for llm_query sub-calls and sub-agents
-    track_commands: bool = True  # snapshot a git workspace around shell commands, so /undo covers their changes
+    worlds: bool = True  # snapshot the workspace at every step (frond.world): /undo, turn diffs, command diffs
     repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
     layout: str = "turns"  # how each step sees the history: "turns" (frond) or "chat" (DSPy's stock layout; H6)
 
@@ -106,7 +105,15 @@ class TurnRecord:
     error: str | None = None
     first_seq: int = 0  # the turn's records in the step log: its message, steps and answer
     last_seq: int = 0
+    world_before: str = ""  # the workspace when the turn started and when it ended, as world tree ids
+    world_after: str = ""
+    head_moved: bool = False  # the turn moved git's HEAD (a commit, a checkout): /undo leaves it to git
+    undone: bool = False  # /undo reverted this turn's changes
     steers: list[str] = field(default_factory=list)  # messages the user sent while the turn ran
+
+
+def _changed(record: TurnRecord) -> bool:
+    return bool(record.world_before and record.world_after and record.world_before != record.world_after)
 
 
 def format_history(records: list[TurnRecord]) -> str:
@@ -204,6 +211,8 @@ class _RootHooks(Hooks):
         self.agent.emit(ExecStarted(step))
 
     def exec_finished(self, step: int, output: str, error: str | None, duration: float, final: bool) -> None:
+        timeline = self.agent.timeline
+        self.agent._world = timeline.snapshot() if timeline is not None else ""
         self.agent.emit(ExecFinished(step, output, error, duration, final))
         self.agent.report_confinement()
 
@@ -216,8 +225,9 @@ class _RootHooks(Hooks):
 
     def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
         turn = self.agent._current.index if self.agent._current else 0
+        world, self.agent._world = self.agent._world, ""
         return self.agent.steps.add(
-            "step", turn=turn, step=step, reasoning=reasoning, code=code, output=output, error=error
+            "step", turn=turn, step=step, reasoning=reasoning, code=code, output=output, error=error, world=world
         )
 
     def take_messages(self, step: int) -> list[str]:
@@ -279,6 +289,7 @@ class Agent:
         sub_lm: dspy.LM | None = None,
         persist: Callable[[list[TurnRecord]], None] | None = None,
         new_log: Callable[[], Path] | None = None,
+        world_dir: Path | None = None,
     ) -> None:
         self.config = config
         self.persist = persist
@@ -313,10 +324,12 @@ class Agent:
         self.policy = Policy(config.approval, approver)
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)
         self.jobs = JobManager(self.log_dir, self.emit)
-        self.checkpoints = Checkpoints()
         self.steps = StepLog()  # every message, step and answer; attach_log() keeps it on disk
-        # In a git workspace, what shell commands change goes into the undo journal too (see snapshots.py).
-        self.snapshots = GitSnapshots(workspace.root, self.log_dir / "snapshots") if config.track_commands else None
+        # The workspace as a world after every step: whatever changed it is in the difference (frond.world).
+        self.timeline = Timeline(workspace.root, world_dir or self.log_dir / "world") if config.worlds else None
+        if self.timeline is not None:
+            self.timeline.warm()
+        self._world = ""  # the world after the latest step, for its step-log record
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -324,9 +337,8 @@ class Agent:
             jobs=self.jobs,
             policy=self.policy,
             delegate=Delegate(self._run_subagent, self._run_subagents),
-            checkpoints=self.checkpoints,
             memory=self.steps,
-            snapshots=self.snapshots,
+            timeline=self.timeline,
             metrics=self.metrics,
         )
         self.pool = ReplPool(
@@ -472,7 +484,9 @@ class Agent:
         self._current, self._step, self._steps_taken = record, 0, 0
         with self._steer_lock:
             self._steers, self._accepting_steers = [], True
-        self.checkpoints.begin(record.index)
+        head = ""
+        if self.timeline is not None:
+            record.world_before, head = self.timeline.begin_turn()
         started = time.monotonic()
         self.emit(TurnStarted(record.index, request, tuple(attachments)))
         inputs = {
@@ -499,6 +513,11 @@ class Agent:
             self.emit(SteersReturned(tuple(unread)))
         record.steps = self._steps_taken
         record.duration = time.monotonic() - started
+        if self.timeline is not None and record.world_before:
+            record.world_after = self.timeline.snapshot()
+            record.head_moved = self.timeline.head() != head
+            # the turn's net change, whoever made it: tools, commands, background jobs (requirement R2)
+            record.files = sorted({c.path for c in self.timeline.diff(record.world_before, record.world_after)})
         answer = record.response or record.error or f"(turn {record.status})"
         record.last_seq = self.steps.add("answer", turn=record.index, output=answer, error=record.status == "error")
         self.history.append(record)
@@ -600,33 +619,58 @@ class Agent:
     # ── housekeeping ─────────────────────────────────────────────────────────
 
     def undo(self) -> str:
-        """Restore the files changed by the most recent turn that changed any. Returns a summary."""
+        """Revert the most recent turn that changed files and is not undone yet. Changes made since by anyone else
+        stay: undo is a three-way merge of the turn's change against the directory as it is now (requirement R3)."""
         if self.busy:
             raise RuntimeError("stop the current turn before undoing")
-        result = self.checkpoints.undo()
-        if result is None:
-            return "nothing to undo: no turn has changed files through frond's tools"
-        checkpoint, restored = result
-        for item in restored:
-            display = self.workspace.rel(item.path)
-            if item.moved_from is not None:
-                self._emit(
-                    FileChanged(display, "move", "", 0, 0, old_path=self.workspace.rel(item.moved_from), scope="undo")
-                )
-                continue
-            old = (item.before or b"").decode("utf-8", errors="replace")
-            new = (item.after or b"").decode("utf-8", errors="replace")
-            kind: ChangeKind = "delete" if item.after is None else "create" if item.before is None else "edit"
-            diff = make_diff(old, new, display, created=item.before is None, deleted=item.after is None)
-            self._emit(FileChanged(display, kind, diff.text, diff.added, diff.removed, scope="undo"))
+        timeline = self.timeline
+        if timeline is None or not timeline.enabled:
+            reason = timeline.reason if timeline is not None else "worlds are switched off"
+            return f"nothing to undo: workspace snapshots are off ({reason})"
+        target = next((r for r in reversed(self.history) if _changed(r) and not r.undone), None)
+        if target is None:
+            return "nothing to undo: no turn has changed files"
+        if target.head_moved:
+            return (
+                f"turn {target.index} moved git's HEAD (a commit or a checkout), so its file changes are not undone "
+                "here: undo the commit with git"
+            )
+        current = timeline.snapshot()
+        result = timeline.revert(target.world_before, target.world_after)
+        for change in timeline.diff(current, timeline.snapshot()):
+            self._emit(self._change_event(change, scope="undo"))
+        target.undone = True
         self.workspace.invalidate()
-        paths = ", ".join(self.workspace.rel(r.path) for r in restored) or "no files"
-        summary = f"reverted the file changes of turn {checkpoint.turn}: {paths}"
-        if checkpoint.lost:
-            summary += f" (could not restore: {', '.join(checkpoint.lost)})"
+        summary = f"reverted the file changes of turn {target.index}: {', '.join(result.restored) or 'no files'}"
+        if result.conflicts:
+            summary += f"; kept {', '.join(result.conflicts)} as they are, since they changed again in the same places"
+        if result.unrestorable:
+            summary += f"; could not restore {', '.join(result.unrestorable)} (too large to have been kept)"
         self.history.append(TurnRecord(next(self._turns), "/undo", f"(the user {summary})", "done"))
         self._save()
         return summary
+
+    def turn_diff(self, index: int | None = None) -> list[FileChanged]:
+        """A turn's net change as diffs, the latest turn that changed files when ``index`` is None (R2)."""
+        turns = [r for r in self.history if _changed(r) and (index is None or r.index == index)]
+        if self.timeline is None or not turns:
+            return []
+        changes = self.timeline.diff(turns[-1].world_before, turns[-1].world_after)
+        return [self._change_event(c, scope="diff") for c in changes]
+
+    def _change_event(self, change: Change, *, scope: str) -> FileChanged:
+        timeline = self.timeline
+        assert timeline is not None
+        kind: ChangeKind = "create" if change.before is None else "delete" if change.after is None else "edit"
+        if any(e is not None and e.kind != "file" for e in (change.before, change.after)):
+            kinds = " → ".join(e.kind if e is not None else "absent" for e in (change.before, change.after))
+            return FileChanged(change.path, kind, f"({kinds})", 0, 0, scope=scope)
+        old_bytes, new_bytes = timeline.content(change.before) or b"", timeline.content(change.after) or b""
+        if b"\0" in old_bytes or b"\0" in new_bytes:
+            return FileChanged(change.path, kind, "(binary file)", 0, 0, scope=scope)
+        old, new = old_bytes.decode("utf-8", errors="replace"), new_bytes.decode("utf-8", errors="replace")
+        diff = make_diff(old, new, change.path, created=kind == "create", deleted=kind == "delete")
+        return FileChanged(change.path, kind, diff.text, diff.added, diff.removed, scope=scope)
 
     def attach_log(self, path: Path) -> None:
         """Keep the step log in ``path`` (beside the session file), loading what an earlier session recorded."""

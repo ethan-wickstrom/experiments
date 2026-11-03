@@ -38,6 +38,12 @@ EXCLUDED = frozenset(
     }
 )
 MAX_BLOB = 64 * 1024 * 1024  # larger files are tracked by a stat signature: changes are seen, contents not kept
+
+
+class TooLarge(Exception):
+    """The directory holds more files than a snapshot may visit (``Worktree.max_files``)."""
+
+
 RACY_NS = 2_000_000_000  # a file modified this close to a snapshot is re-hashed even if its stat is unchanged
 
 
@@ -68,7 +74,8 @@ class Store:
 
     def __init__(self, root: Path) -> None:
         self.root = root
-        (root / "objects").mkdir(parents=True, exist_ok=True)
+        root.mkdir(mode=0o700, parents=True, exist_ok=True)  # it holds the workspace's contents: private
+        (root / "objects").mkdir(mode=0o700, exist_ok=True)
 
     def _path(self, oid: str) -> Path:
         return self.root / "objects" / oid[:2] / oid[2:]
@@ -150,15 +157,27 @@ class Store:
 class Worktree:
     """A directory and the snapshots taken of it, with a stat cache so only changed files are read again."""
 
-    def __init__(self, store: Store, root: Path, *, exclude: frozenset[str] = EXCLUDED, max_blob: int = MAX_BLOB):
+    def __init__(
+        self,
+        store: Store,
+        root: Path,
+        *,
+        exclude: frozenset[str] = EXCLUDED,
+        max_blob: int = MAX_BLOB,
+        max_files: int | None = None,
+    ):
         self.store = store
         self.root = root
         self.exclude = exclude
         self.max_blob = max_blob
+        self.max_files = max_files  # past this many files a snapshot raises TooLarge (frond started in $HOME, say)
+        self._visited = 0
+        self.ignored: frozenset[str] = frozenset()  # relative paths left out, directories with a trailing "/"
         self._cache: dict[str, tuple[tuple[int, int, int, int], Entry]] = {}
 
     def snapshot(self) -> str:
         """The directory's current state, as a tree id."""
+        self._visited = 0
         return self._snapshot_dir(self.root, "", time.time_ns())
 
     def _snapshot_dir(self, path: Path | str, rel: str, started: int) -> str:
@@ -169,6 +188,8 @@ class Worktree:
             scan = []
         for item in scan:
             name, key = item.name, f"{rel}{item.name}"
+            if key in self.ignored or f"{key}/" in self.ignored:
+                continue
             try:
                 if item.is_symlink():
                     target = os.fsencode(os.readlink(item.path))
@@ -183,6 +204,9 @@ class Worktree:
         return self.store.put_tree(entries)
 
     def _file_entry(self, item: os.DirEntry[str], key: str, started: int) -> Entry:
+        self._visited += 1
+        if self.max_files is not None and self._visited > self.max_files:
+            raise TooLarge(f"{self.root} holds more than {self.max_files:,} files")
         st = item.stat(follow_symlinks=False)
         mode = stat.S_IMODE(st.st_mode)
         signature = (st.st_size, st.st_mtime_ns, st.st_ino, mode)

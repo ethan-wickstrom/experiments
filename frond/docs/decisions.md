@@ -220,3 +220,20 @@ Each stays closed unless new evidence reopens it:
   - Harbor's own `cost_usd` for frond: it is not filled for installed agents, and one price per run cannot separate main and sub-model calls.
 - Evidence: `tests/test_bench.py` checks the Wilcoxon p-values against enumeration of every sign assignment, the confidence sequence's coverage by simulation, the ABBA plan, the retry list, and an analysis of synthetic Harbor jobs.
 
+## D29 · Undo, diffs and command tracking all come from worlds; the tools keep no journal (2026-11-03, active)
+- Decision:
+  - frond snapshots the workspace when a turn starts and after every step (`world/timeline.py`); each step-log record names its world, and each turn record its first and last;
+  - `/undo` reverts the latest turn that changed files and is not yet undone, by three-way merge against the directory as it is now. Later edits by anyone survive; same-line conflicts are kept as they are and reported;
+  - a turn's net change is the difference between its first and last worlds (`/diff`, `TurnRecord.files`). A command's diffs come from snapshots around it, in any directory;
+  - in a git work tree, untracked paths git ignores are left out. Within a turn the ignored set only takes in paths that did not exist at the previous snapshot. A turn that moved HEAD is left to git;
+  - the store lives beside the workspace's sessions (private, 0700), so `/undo` works after `--continue`. Files over 16 MB are tracked by signature only; a workspace past 200,000 files is not snapshotted, and undo says so;
+  - `agent/checkpoints.py` and `agent/snapshots.py` are deleted.
+- Why: a journal kept by each tool misses whatever does not go through a tool: shell commands outside git, background jobs, formatters. It also needs one code path per mutation kind (moves, links, deleted trees), each a source of bugs; PR #3 found three in `GitSnapshots`. A snapshot sees every change, whatever made it. The revert gives R3, which the journal's restore could not. Every step having a world is the substrate for rewind (R7, B9) and fork (B7).
+- Rejected:
+  - keeping the journal and adding snapshots only for commands: two mechanisms, and still no R3;
+  - git-based snapshots (`GitSnapshots`): need git, write a private index, and mishandled nested workspaces, CRLF filters and file-to-directory changes (G19);
+  - snapshotting only at turn boundaries: cheaper, but no world per step for rewind and fork. A warm snapshot costs 0.16 s on 12k files (K16), small beside a model call;
+  - a Python `.gitignore` matcher: a second implementation of git's rules (nesting, negation, anchoring); asking git is exact;
+  - undoing a turn that committed, file by file: it would leave HEAD at a commit whose content the working tree no longer holds.
+- Evidence: `tests/test_command_undo.py` (commands with and without git, ignored paths, un-ignoring mid-turn, a commit left to git, a background job, a concurrent edit kept, same-line conflicts reported, the net diff, a world per step, the file limit) and the undo tests in `test_regressions` and `test_agent` pass on worlds.
+

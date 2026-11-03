@@ -17,7 +17,6 @@ from unittest import mock
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
 
 from frond import cli
-from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnControl
 from frond.agent.patch import apply_chunks, parse_patch
 from frond.agent.prompts import CodingTurn
@@ -28,7 +27,7 @@ from frond.agent.tools import ToolError
 from frond.events import TurnFinished
 from frond.sessions import SessionStore
 from frond.tui.app import App, ApprovalRequest
-from tests.helpers import WorkspaceCase, scripted_agent
+from tests.helpers import TurnUndo, WorkspaceCase, scripted_agent
 
 
 class PatchFidelityTest(WorkspaceCase):
@@ -72,27 +71,24 @@ class UndoOrderingAndSymlinkTest(WorkspaceCase):
 
     def test_undo_after_moving_a_directory_then_editing_inside_it(self):
         tools = self.toolbox()
-        tools.checkpoints = checkpoints = Checkpoints()
-        checkpoints.begin(1)
+        turn = TurnUndo(self, tools)
         tools.move("a", "b")
         tools.edit("b/x.py", "orig", "edited")
-        result = checkpoints.undo()
-        assert result is not None
+        result = turn.undo()
         self.assertEqual((self.root / "a/x.py").read_text(), "orig\n")
         self.assertFalse((self.root / "b").exists())
-        self.assertEqual([r.moved_from.name for r in result[1] if r.moved_from], ["b"])
+        self.assertEqual(sorted(result.restored), ["a/x.py", "b/x.py"])
 
     def test_delete_removes_symlinks_not_their_targets_and_undo_restores_them(self):
         os.symlink("target", self.root / "dir_link")
         os.symlink("nowhere", self.root / "dangling")
         tools = self.toolbox()
-        tools.checkpoints = checkpoints = Checkpoints()
-        checkpoints.begin(1)
+        turn = TurnUndo(self, tools)
         self.assertIn("symbolic link", tools.delete("dir_link"))
         self.assertIn("symbolic link", tools.delete("dangling"))
         self.assertTrue((self.root / "target/inside.txt").exists())
         self.assertFalse(os.path.lexists(self.root / "dangling"))
-        checkpoints.undo()
+        turn.undo()
         self.assertEqual(os.readlink(self.root / "dir_link"), "target")
         self.assertEqual(os.readlink(self.root / "dangling"), "nowhere")
 
@@ -107,6 +103,9 @@ class _StubAgent:
     def cancel(self) -> None: ...
     def undo(self) -> str:
         return ""
+
+    def turn_diff(self, index: int | None = None) -> list:
+        return []
 
     def reset_repl(self) -> None: ...
     def clear(self) -> None: ...
@@ -202,20 +201,18 @@ class UndoFidelityTest(WorkspaceCase):
         "src/m.py": "x = 1\n",
     }
 
-    def checkpointed(self, **kwargs):
+    def undoable(self, **kwargs):
         tools = self.toolbox(**kwargs)
-        tools.checkpoints = checkpoints = Checkpoints()
-        checkpoints.begin(1)
-        return tools, checkpoints
+        return tools, TurnUndo(self, tools)
 
     def test_undo_of_a_recursive_delete_brings_back_links_empty_folders_and_modes(self):
         (self.root / "assets/empty").mkdir()
         os.symlink("a.txt", self.root / "assets/latest")
         (self.root / "scripts/build.sh").chmod(0o755)
-        tools, checkpoints = self.checkpointed(mode="yolo")
+        tools, turn = self.undoable(mode="yolo")
         tools.delete("assets", recursive=True)
         tools.delete("scripts/build.sh")
-        checkpoints.undo()
+        turn.undo()
         self.assertTrue((self.root / "assets/empty").is_dir())
         self.assertEqual(os.readlink(self.root / "assets/latest"), "a.txt")
         self.assertEqual((self.root / "assets/a.txt").read_text(), "a\n")
@@ -223,25 +220,25 @@ class UndoFidelityTest(WorkspaceCase):
 
     def test_a_deleted_tree_without_regular_files_can_be_undone(self):
         (self.root / "hollow/inner").mkdir(parents=True)
-        tools, checkpoints = self.checkpointed(mode="yolo")
+        tools, turn = self.undoable(mode="yolo")
         tools.delete("hollow", recursive=True)
-        self.assertIsNotNone(checkpoints.undo())
+        self.assertEqual(turn.undo().restored, ["hollow/inner"])
         self.assertTrue((self.root / "hollow/inner").is_dir())
 
     def test_undoing_a_directory_move_removes_the_folders_it_created(self):
-        tools, checkpoints = self.checkpointed()
+        tools, turn = self.undoable()
         tools.move("src", "generated/deep/src")
-        checkpoints.undo()
+        turn.undo()
         self.assertEqual((self.root / "src/m.py").read_text(), "x = 1\n")
         self.assertFalse((self.root / "generated").exists())
 
     def test_patches_and_moves_journal_the_symlink_not_its_target(self):
         os.symlink("src/m.py", self.root / "link.py")
         os.symlink("src/m.py", self.root / "other.py")
-        tools, checkpoints = self.checkpointed()
+        tools, turn = self.undoable()
         tools.patch("*** Begin Patch\n*** Delete File: link.py\n*** End Patch")
         tools.move("other.py", "renamed.py")
-        checkpoints.undo()
+        turn.undo()
         self.assertEqual(os.readlink(self.root / "link.py"), "src/m.py")
         self.assertEqual(os.readlink(self.root / "other.py"), "src/m.py")
         self.assertFalse(os.path.lexists(self.root / "renamed.py"))
@@ -249,11 +246,11 @@ class UndoFidelityTest(WorkspaceCase):
 
     def test_undoing_a_move_removes_the_moved_link_even_where_it_dangles(self):
         os.symlink("src/m.py", self.root / "shortcut")  # relative: it points nowhere once moved into sub/
-        tools, checkpoints = self.checkpointed()
+        tools, turn = self.undoable()
         tools.move("shortcut", "sub/shortcut")
         self.assertTrue(os.path.lexists(self.root / "sub/shortcut"))
         self.assertFalse((self.root / "sub/shortcut").exists())
-        checkpoints.undo()
+        turn.undo()
         self.assertEqual(os.readlink(self.root / "shortcut"), "src/m.py")
         self.assertFalse(os.path.lexists(self.root / "sub"))
 
