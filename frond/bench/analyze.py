@@ -72,6 +72,7 @@ COUNTERS = (
     "compactions",
     "summaries",
     "steps",
+    "branch_steps",  # FORK branches' steps, whose replies the protocol counters include (Codex, #36)
     "provider_errors",  # failed model calls inside sub-agents and llm_query, which the turn survived (F47)
 )
 # How frond records each arm option in its metrics.json config, so the analysis can check every trial's setup (F9)
@@ -431,6 +432,7 @@ def report(summary: dict[str, Any]) -> str:
             f"{_fmt(arm['cost_per_solved'], 2)} | {_fmt(arm['cache_read_share'], 2)} | "
             f"{_fmt(arm['failed_edits_per_trial'], 2)} |"
         )
+    lines += protocol_table(summary["arms"])
     if summary["claims"]:
         lines += ["", "| Claim | Kind | Tasks | Estimate (95% CI) | p | Rule | Adjusted p | Holds | Sequence |"]
         lines.append("|---|---|---|---|---|---|---|---|---|")
@@ -460,6 +462,33 @@ def report(summary: dict[str, Any]) -> str:
         if arm["never_passed"]:
             lines += ["", f"Never passed in {name}: {', '.join(arm['never_passed'])}."]
     return "\n".join(lines) + "\n"
+
+
+def protocol_table(arms: dict[str, Any]) -> list[str]:
+    """How each arm's replies kept to the step protocol (D46): per step, the share off it, recovered, unparsed (a
+    step spent on an error), cut off at the output limit, and code that did not compile."""
+    lines = [
+        "",
+        "| Arm | Steps/trial (with branches) | Off protocol | Recovered | Unparsed | Cut off | Syntax errors "
+        "| Sub-agents |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for name, arm in arms.items():
+        steps = arm.get("steps_per_trial")
+        if not steps:
+            continue
+        steps += arm.get("branch_steps_per_trial") or 0.0  # every reply the counters cover: main line and branches
+
+        def per_step(key: str, arm: dict[str, Any] = arm, steps: float = steps) -> str:
+            value = arm.get(f"{key}_per_trial")
+            return "–" if value is None else _fmt(value / steps, 3)
+
+        lines.append(
+            f"| {name} | {_fmt(steps, 1)} | {per_step('parse_failures')} | {per_step('parse_recovered')} | "
+            f"{per_step('unparsed_steps')} | {per_step('cut_off_replies')} | {per_step('syntax_errors')} | "
+            f"{_fmt(arm.get('sub_parse_failures_per_trial'), 2)}/trial |"
+        )
+    return lines if len(lines) > 3 else []
 
 
 def job_dirs(spec: Spec, root: Path) -> dict[str, list[Path]]:
