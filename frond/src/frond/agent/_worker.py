@@ -344,8 +344,7 @@ class Session:
             return {"type": "fork_failed", "error": "no channel arrived"}
         # Threads the agent's code left running would not come along, and a lock one of them holds at the fork
         # would stay held in every copy, which then hangs on it (F24): refuse, and say which threads.
-        threads = [t.name for t in threading.enumerate() if t not in self.own_threads and t.is_alive()]
-        threads = [name for name in threads if not name.startswith("frond-")]
+        threads = [t.name for t in threading.enumerate() if t not in self.own_threads and t.is_alive()]  # by identity
         if threads:
             os.close(fds[0])
             return {

@@ -111,10 +111,10 @@ class ForkTest(test_containment.WorkerCase):
         session = self.start()
         session.execute(
             "import threading, time\n"
-            "t = threading.Thread(target=time.sleep, args=(30,), name='poller', daemon=True)\n"
+            "t = threading.Thread(target=time.sleep, args=(30,), name='frond-poller', daemon=True)\n"  # F60: any name
             "t.start()"
         )
-        with self.assertRaisesRegex(Exception, "threads your code started are still running \\(poller\\)"):
+        with self.assertRaisesRegex(Exception, "threads your code started are still running \\(frond-poller\\)"):
             session.fork()
         self.assertEqual(session.execute("print(t.is_alive())"), "True\n")  # the original is untouched
 

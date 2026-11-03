@@ -352,6 +352,9 @@ class ReplSession:
             self._exec_lock.release()
 
     def restart(self) -> None:
+        for copy in self._copies:  # the copies' parent-death signal covers this on Linux; elsewhere nothing would
+            copy.shutdown()
+        self._copies = []
         self._kill()
         self.restarts += 1
         self.start()
