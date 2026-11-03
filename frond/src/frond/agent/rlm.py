@@ -14,7 +14,9 @@ interactive coding agent needs around each iteration:
 """
 
 from __future__ import annotations
+import __future__
 
+import ast
 import contextvars
 import copy
 import inspect
@@ -46,7 +48,7 @@ from frond.agent.adapter import (
 from frond.agent.control import TurnCancelled
 from frond.agent.lm import PROVIDER_ERRORS
 from frond.agent.prompts import FORK_GUIDE, SCOPES_GUIDE, TOOL_AGENT_INSTRUCTIONS
-from frond.agent.repl import ForkRequest
+from frond.agent.repl import WORKER, ForkRequest
 from frond.agent.scopes import ScopeOp
 from frond.agent.tools import display_signature
 
@@ -76,17 +78,34 @@ class LoggedEntry(REPLEntry):
     step: int = 0
 
 
+def _repl_renderers() -> dict[str, Any]:
+    """The REPL worker's result classes (commands, jobs, grep matches) and its ``rehydrate``, compiled from
+    ``_worker.py`` without running that module, which takes over stdout when imported. The worker runs isolated
+    (``python -I``) and cannot import a shared module, so its source stays the one definition of how results print."""
+    tree = ast.parse(WORKER.read_text(encoding="utf-8"))
+    wanted = {"AttrDict", "CommandResult", "JobHandle", "Matches", "rehydrate"}
+    body: list[ast.stmt] = [n for n in tree.body if isinstance(n, ast.ClassDef | ast.FunctionDef) and n.name in wanted]
+    namespace: dict[str, Any] = {"Any": Any}
+    code = compile(
+        ast.Module(body=body, type_ignores=[]), str(WORKER), "exec", flags=__future__.annotations.compiler_flag
+    )
+    exec(code, namespace)
+    return namespace
+
+
+REHYDRATE = _repl_renderers()["rehydrate"]
+
+
 def _render_tool_result(value: Any) -> str:
-    """A tool's result as the tools arm shows it: what printing it in the REPL would show."""
+    """A tool's result as the tools arm shows it: what printing it in the REPL would show. Commands, background jobs
+    (with the id job_output and job_kill take, F33) and grep matches (grouped by file, F36) print as the REPL prints
+    them; other values as JSON."""
     if isinstance(value, str):
         return value or "(empty)"
-    if isinstance(value, dict) and value.get("__frond__") in ("command", "job"):
-        head = f"exit code {value.get('exit_code')}" + (
-            f" ({value['status']})" if value.get("status") not in (None, "ok") else ""
-        )
-        return f"{head}\n{value.get('output', '')}".rstrip()
     if value is None:
         return "(done)"
+    if isinstance(value, dict) and value.get("__frond__") in ("command", "job", "matches"):
+        return str(REHYDRATE(value))
     return json.dumps(value, indent=1, ensure_ascii=False, default=str)
 
 
@@ -316,6 +335,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         """The inputs as text: without a REPL, the model reads them here, clipped like the REPL's previews."""
         out = []
         for name, value in input_args.items():
+            custom = self.hooks.preview(name, value)  # the RLM arm's own previews: every user message kept (F32)
+            if custom is not None:
+                out.append(f"`{name}`:\n{custom}")
+                continue
             text = value if isinstance(value, str) else json.dumps(value, indent=1, ensure_ascii=False, default=str)
             limit = self.preview_limits.get(name, 20_000)
             if len(text) > limit:
@@ -360,8 +383,11 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         hooks.exec_started(step)
         started = time.monotonic()
         result: Any
-        if name == "submit":
-            result = FinalOutput({field: args.get(field, "") for field in output_field_names})
+        if name == "submit" and set(args) != set(output_field_names):  # SUBMIT in the REPL refuses these too (F34)
+            wanted = ", ".join(output_field_names)
+            result = f"[Error] submit takes exactly these arguments: {wanted}; it got: {', '.join(args) or 'none'}."
+        elif name == "submit":
+            result = FinalOutput({field: args[field] for field in output_field_names})
         elif (tool := self._user_tools.get(name)) is None:
             known = ", ".join([*sorted(self._user_tools), "submit"])
             result = f"[Error] There is no tool named {name!r}. The tools are: {known}."
@@ -376,7 +402,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         output = "" if isinstance(outcome, Prediction) else outcome.entries[-1].output
         error = output if output.startswith(ERROR_PREFIXES) else None
         hooks.exec_finished(step, output, error, time.monotonic() - started, isinstance(outcome, Prediction))
-        return self._logged(outcome, step, reasoning, shown)
+        return self._logged(outcome, step, reasoning, call)  # the call as JSON: tool and args, for exports (F35)
 
     def _action_signature_for_current_factory(self, factory: Any, sub_agent_rules: str) -> type[dspy.Signature]:
         signature = super()._action_signature_for_current_factory(factory, sub_agent_rules)
