@@ -68,3 +68,7 @@ why = "2026-11-03: B19's schema probes for the tools arm, outside Harbor: Haiku 
 [[spent]]
 usd = 0.12
 why = "2026-11-03: D55's native tool-call probes on Haiku, Sonnet and Opus 5.5 ($0.01) and the tools arm's smoke runs on the three ($0.10), outside Harbor"
+
+[[spent]]
+usd = 3.00
+why = "2026-11-03: two Opus 5.5 trials of E0's json run (layout-config-recreation2, mvcc-lsm-compaction) killed by a VM restart at about 22:54, about 15 minutes in, before they wrote a cost; the arm's two finished trials cost $1.18 and $0.57, so $1.50 each bounds them. The runner resumed at 22:56 and reruns them"
