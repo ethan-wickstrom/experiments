@@ -40,9 +40,11 @@ class Refused(Exception):
     """The provider's classifier declined the request (``stop_reason: refusal``): no output, and often billed. The
     same request would be declined again, so the turn ends here as the provider's failure (G43)."""
 
-    def __init__(self, category: str) -> None:
-        super().__init__(f"the model provider refused the request ({category or 'no category given'})")
+    def __init__(self, category: str, explanation: str = "") -> None:
+        said = f": {explanation}" if explanation else ""
+        super().__init__(f"the model provider refused the request ({category or 'no category given'}){said}")
         self.category = category
+        self.explanation = explanation
 
 
 # Failures of the model provider, not of the agent: a run that ends on one says nothing about the harness, so research

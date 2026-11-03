@@ -705,7 +705,8 @@ class Agent:
             record.status, record.error = "error", describe_error(exc)
             record.error_kind = "provider" if isinstance(exc, PROVIDER_ERRORS) else type(exc).__name__
             if isinstance(exc, Refused):
-                self.metrics.refusal = exc.category
+                self.metrics.refusal = exc.category or "uncategorized"
+                self.metrics.refusal_explanation = exc.explanation
             if not isinstance(exc, (dspy.LMError, ValueError)):
                 self.emit(Notice("error", "".join(traceback.format_exception(exc, limit=-4)).rstrip()))
         finally:
