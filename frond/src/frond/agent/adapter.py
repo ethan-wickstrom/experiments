@@ -105,9 +105,12 @@ def format_output(output: str, limit: int, hint: str) -> str:
 def narrowing_hint(signature: type[dspy.Signature], seq: int | None, history_tools: bool) -> str:
     """What to do about an output too long to show, for the action space at hand."""
     if "tool" in signature.output_fields:
-        hint = "view a narrower range, or grep for what you need"
-    else:
-        hint = "next time print a slice, a count or the matching lines, or keep the value in a variable"
+        # one call per step and no slicing: history_step's record would be cut by this same limit (F48)
+        return (  # F56: not every result is a file: a command can print less, a sub-agent or fetch be asked for less
+            "view a narrower range or grep a file, rerun a command so it prints less, or ask a sub-agent or fetch() "
+            "for less"
+        )
+    hint = "next time print a slice, a count or the matching lines, or keep the value in a variable"
     if history_tools and seq:
         hint = f"history_step({seq}) shows all of it; {hint}"
     return hint
