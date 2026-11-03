@@ -7,8 +7,8 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 from typing import ClassVar
+from unittest import mock
 
 from frond.agent.scripted import Step
 from frond.cli import export_run
