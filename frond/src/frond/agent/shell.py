@@ -338,6 +338,23 @@ class JobManager:
         with self._lock:
             return list(self._jobs.values())
 
+    def pause_all(self) -> list[Job]:
+        """Stop every running job's process group (SIGSTOP) and return them, for ``resume``: FORK resets the
+        workspace between branches, and a job writing meanwhile would have its writes erased (F28)."""
+        paused = []
+        for job in self.snapshot():
+            if job.proc.poll() is None:
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.killpg(job.proc.pid, signal.SIGSTOP)
+                    paused.append(job)
+        return paused
+
+    @staticmethod
+    def resume(jobs: list[Job]) -> None:
+        for job in jobs:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(job.proc.pid, signal.SIGCONT)
+
     def get(self, job_id: int) -> Job:
         with self._lock:
             job = self._jobs.get(job_id)

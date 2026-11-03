@@ -15,6 +15,7 @@ import contextlib
 import hashlib
 import json
 import os
+import shutil
 import stat
 import tempfile
 import time
@@ -250,6 +251,45 @@ class Worktree:
         self._visited = 0
         self.ignored: frozenset[str] = frozenset()  # relative paths left out, directories with a trailing "/"
         self._cache: dict[str, tuple[tuple[int, int, int, int], Entry]] = {}
+        self.kept_large: dict[str, Path] = {}  # a large entry's id -> a copy of its content, while one is kept (F27)
+
+    def keep_large(self, world: str, into: Path, limit: int) -> None:
+        """Copy every large file of ``world`` not kept yet into ``into``, so ``checkout`` can restore it (F27): its
+        store keeps only a signature. A file that changed since ``world`` was taken, or cannot be read, is not
+        copied, and stays unrestorable. Raises TooLarge, copying nothing, when the copies would pass ``limit`` bytes."""
+        todo: list[tuple[Path, Entry]] = []
+        for rel, entry in self.store.files(world):
+            if entry.kind != "large" or entry.oid in self.kept_large:
+                continue
+            path = self.root / rel
+            try:
+                st = path.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            signature = (st.st_size, st.st_mtime_ns, st.st_ino, stat.S_IMODE(st.st_mode))
+            if object_id("large", repr(signature).encode()) == entry.oid:
+                todo.append((path, entry))
+        kept = sum(p.stat().st_size for p in self.kept_large.values() if p.exists())
+        wanted = sum(path.stat().st_size for path, _ in todo)
+        if kept + wanted > limit:
+            raise TooLarge(
+                f"the workspace's files over {self.max_blob // 2**20} MB come to {(kept + wanted) / 2**30:.1f} GB, "
+                f"more than the {limit / 2**30:.0f} GB frond copies so it can restore them between branches"
+            )
+        into.mkdir(parents=True, exist_ok=True)
+        for path, entry in todo:
+            copy = into / entry.oid
+            try:
+                shutil.copyfile(path, copy)
+            except OSError:
+                continue
+            self.kept_large[entry.oid] = copy
+
+    def release_large(self) -> None:
+        """Delete the copies ``keep_large`` made."""
+        for copy in self.kept_large.values():
+            copy.unlink(missing_ok=True)
+        self.kept_large.clear()
 
     def snapshot(self) -> str:
         """The directory's current state, as a tree id."""
@@ -332,7 +372,18 @@ class Worktree:
             self._prune(target.parent)
             return
         if entry.kind == "large":
-            raise ValueError(f"{path} is too large to have been kept, so it cannot be restored")
+            copy = self.kept_large.get(entry.oid)
+            if copy is None:
+                raise ValueError(f"{path} is too large to have been kept, so it cannot be restored")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_symlink():
+                target.unlink()
+            fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.frond-")
+            os.close(fd)
+            shutil.copyfile(copy, tmp)
+            os.chmod(tmp, entry.mode or 0o644)
+            os.replace(tmp, target)
+            return
         target.parent.mkdir(parents=True, exist_ok=True)
         if entry.kind == "tree":
             target.mkdir(exist_ok=True)
