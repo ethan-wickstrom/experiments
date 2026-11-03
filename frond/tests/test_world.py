@@ -351,5 +351,26 @@ class EntryTest(unittest.TestCase):
         self.assertEqual(Entry("file", "ab", 0o644), Entry("file", "ab", 0o644))
 
 
+class KeptLargeFileTest(unittest.TestCase):
+    """Files the store keeps only a signature of, copied aside for FORK (F27)."""
+
+    def test_a_restored_file_reuses_its_copy(self):  # Codex, #33 (F67): resets must not spend the budget again
+        base = Path(tempfile.mkdtemp(prefix="frond-large-"))
+        self.addCleanup(shutil.rmtree, base, True)
+        root, kept = base / "ws", base / "kept"
+        root.mkdir()
+        (root / "data.bin").write_bytes(b"0" * 4000)
+        work = Worktree(Store(base / "store"), root, max_blob=1000)
+        start = work.snapshot()
+        work.keep_large(start, kept, limit=6000)
+        (root / "data.bin").write_bytes(b"changed")
+        work.checkout(start)
+        self.assertEqual((root / "data.bin").read_bytes(), b"0" * 4000)
+        work.keep_large(work.snapshot(), kept, limit=6000)  # 8000 bytes if it copied the restored file again
+        self.assertEqual(len(set(work.kept_large.values())), 1)
+        work.release_large()
+        self.assertEqual(list(kept.iterdir()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

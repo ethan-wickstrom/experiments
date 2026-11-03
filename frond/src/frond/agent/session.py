@@ -72,7 +72,7 @@ from frond.events import (
 )
 from frond.workspace import Workspace, find_git_root
 from frond.world import Change, Timeline, gitstate
-from frond.world.gitstate import GitState, git_dir
+from frond.world.gitstate import GitDirs, GitState, git_dir
 from frond.world.store import TooLarge
 
 MAX_ATTACHMENT_CHARS = 120_000
@@ -514,6 +514,7 @@ class Agent:
         self.observations = Observations(workspace.root)  # what the model read this turn (freshness, H3)
         self.scopes = Scopes()  # the open scopes of this turn (H5)
         self._in_branch = False  # a FORK branch runs: scopes belong to the main line
+        self._settle_branch: Callable[[str], tuple[bool, GitState | None]] | None = None  # set during FORK
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -836,51 +837,57 @@ class Agent:
         timeline = self.timeline
         if timeline is None or not timeline.enabled:
             return "FORK needs workspace snapshots, which are off here: choose one option and go on with it."
-        start = timeline.snapshot()
-        if not start:  # snapshots stopped just now: never check out what they could not capture (review of #25)
-            return f"FORK needs workspace snapshots, which stopped ({timeline.reason}): choose one option and go on."
+        paused = self.jobs.pause_all()  # first: a job writing before the snapshot below would be erased (F64)
         work = timeline.work
         kept_dir = Path(tempfile.mkdtemp(prefix="fork-large-", dir=self.log_dir))
-        try:
-            work.keep_large(start, kept_dir, FORK_LARGE_BYTES)
-        except TooLarge as exc:
-            shutil.rmtree(kept_dir, ignore_errors=True)
-            return f"FORK is unavailable here: {exc}. Choose one option and go on with it."
         git = git_dir(find_git_root(self.workspace.root))  # now: the agent may have run `git init` since it started
-        git_start = gitstate.capture(git) if git is not None else None
-        paused = self.jobs.pause_all()
         outcomes: list[BranchOutcome] = []
         best: BranchOutcome | None = None
-        self._in_branch = True
         try:
-            for index, option in enumerate(request.options, start=1):
-                self.control.check()
-                self._reset(start, git, git_start)
-                outcome = self._run_branch(index, len(request.options), option, request, branching)
-                if outcome.world:
-                    try:
-                        work.keep_large(outcome.world, kept_dir, FORK_LARGE_BYTES)
-                    except TooLarge:
-                        outcome.restorable = False
-                if git is not None:
-                    outcome.git = gitstate.capture(git)
-                outcomes.append(outcome)
-            best = _best(outcomes)
-            if best is not None:
-                self._reset(best.world, git, best.git)
-            else:
-                self._reset(start, git, git_start)
-        except TurnCancelled:
-            with contextlib.suppress(ValueError, OSError):
-                self._reset(start, git, git_start)
-            raise
-        except (ValueError, OSError) as exc:  # a reset failed: say so, never claim a rollback that did not happen
-            return (
-                f"FORK stopped: the workspace could not be reset ({exc}). It holds what the last branch left "
-                f"({len(outcomes)} of {len(request.options)} options ran); check it before going on."
-            )
+            start = timeline.snapshot()
+            if not start:  # snapshots stopped just now: never check out what they could not capture (review of #25)
+                return (
+                    f"FORK needs workspace snapshots, which stopped ({timeline.reason}): choose one option and go on."
+                )
+            try:
+                work.keep_large(start, kept_dir, FORK_LARGE_BYTES)
+            except TooLarge as exc:
+                return f"FORK is unavailable here: {exc}. Choose one option and go on with it."
+            git_start = gitstate.capture(git) if git is not None else None
+
+            def settle(world: str) -> tuple[bool, GitState | None]:
+                """What a branch left that a later checkout needs, taken before its check can change it (F66)."""
+                try:
+                    work.keep_large(world, kept_dir, FORK_LARGE_BYTES)
+                    restorable = True
+                except TooLarge:
+                    restorable = False
+                return restorable, gitstate.capture(git) if git is not None else None
+
+            self._settle_branch = settle
+            self._in_branch = True
+            try:
+                for index, option in enumerate(request.options, start=1):
+                    self.control.check()
+                    self._reset(start, git, git_start)
+                    outcomes.append(self._run_branch(index, len(request.options), option, request, branching))
+                best = _best(outcomes)
+                if best is not None:
+                    self._reset(best.world, git, best.git)
+                else:
+                    self._reset(start, git, git_start)
+            except TurnCancelled:
+                with contextlib.suppress(ValueError, OSError):
+                    self._reset(start, git, git_start)
+                raise
+            except (ValueError, OSError) as exc:  # a reset failed: say so, never claim a rollback that did not happen
+                return (
+                    f"FORK stopped: the workspace could not be reset ({exc}). It holds what the last branch left "
+                    f"({len(outcomes)} of {len(request.options)} options ran); check it before going on."
+                )
         finally:
             self._in_branch = False
+            self._settle_branch = None
             JobManager.resume(paused)
             work.release_large()
             shutil.rmtree(kept_dir, ignore_errors=True)
@@ -903,7 +910,7 @@ class Agent:
             report += f"\n{len(paused)} background job(s) of yours were paused while the branches ran, and resumed."
         return report
 
-    def _reset(self, world: str, git: Path | None, state: GitState | None) -> None:
+    def _reset(self, world: str, git: GitDirs | None, state: GitState | None) -> None:
         """Check out ``world`` and git's ``state`` (F26)."""
         assert self.timeline is not None
         self.timeline.work.checkout(world)
@@ -969,12 +976,15 @@ class Agent:
             if repl is not None:
                 repl.shutdown()
         world = self.timeline.snapshot()
+        settled = self._settle_branch(world) if world and self._settle_branch is not None else (True, None)
         passed, check_output = submitted and not error, ""
         if request.check:
             run = self.shell.run(request.check, cwd=self.workspace.root, timeout=self.config.step_timeout, scope=scope)
             passed, check_output = run.ok, run.output
         self.emit(SubAgentFinished(branch_id, _clip(report or error or "(no report)", 400), hooks.steps, passed))
-        return BranchOutcome(index, option, world, hooks.steps, submitted, passed, report, error, check_output)
+        return BranchOutcome(
+            index, option, world, hooks.steps, submitted, passed, report, error, check_output, settled[1], settled[0]
+        )
 
     # ── sub-agents ───────────────────────────────────────────────────────────
 

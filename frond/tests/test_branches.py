@@ -162,6 +162,39 @@ class ForkTest(WorkspaceCase):
         self.assertEqual((self.root / "answer.txt").read_text(), "b")
         self.assertEqual(agent.timeline.work.kept_large, {})  # the copies are gone
 
+    def test_a_check_cannot_spoil_the_large_files_a_branch_is_kept_with(self):  # Devin, #33 (F66)
+        steps = [
+            Step("Branch.", "FORK(['a', 'b'], check='python3 check.py && printf more >> big.bin', steps=1)"),
+            Step("A.", "write('answer.txt', 'a')\nSUBMIT(response='a')"),
+            Step("B.", "write('answer.txt', 'b')\nsh('head -c 5000 /dev/zero > big.bin')\nSUBMIT(response='b')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = self.agent(steps)
+        assert agent.timeline is not None
+        agent.timeline.work.max_blob = 1000
+        agent.run_turn("go")
+        last = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("Kept option 2", last)
+        self.assertEqual((self.root / "big.bin").stat().st_size, 5000)  # as the branch left it, before its check
+
+    def test_a_job_whose_shell_left_its_child_running_is_paused_too(self):  # Devin, #33 (F63)
+        steps = [
+            Step("Start.", "print(sh('(while true; do echo x >> ticks.log; sleep 0.05; done) &', background=True))"),
+            Step("Branch.", "import time\ntime.sleep(0.5)\nFORK(['a', 'b'], steps=1)"),
+            Step(
+                "A.",
+                "import os, time\nn = os.path.getsize('ticks.log')\ntime.sleep(0.5)\n"
+                "SUBMIT(response=str(os.path.getsize('ticks.log') - n))",
+            ),
+            Step("B.", "SUBMIT(response='b')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = self.agent(steps)
+        agent.run_turn("go")
+        last = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("Its report: 0", last)
+        agent.jobs.kill_all()
+
     def test_the_main_lines_jobs_are_paused_while_branches_run(self):  # Devin, #15 (F28)
         steps = [
             Step("Start a job.", "print(sh('while true; do echo x >> ticks.log; sleep 0.05; done', background=True))"),

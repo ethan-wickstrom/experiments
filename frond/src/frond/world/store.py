@@ -269,7 +269,7 @@ class Worktree:
             signature = (st.st_size, st.st_mtime_ns, st.st_ino, stat.S_IMODE(st.st_mode))
             if object_id("large", repr(signature).encode()) == entry.oid:
                 todo.append((path, entry))
-        kept = sum(p.stat().st_size for p in self.kept_large.values() if p.exists())
+        kept = sum(p.stat().st_size for p in set(self.kept_large.values()) if p.exists())
         wanted = sum(path.stat().st_size for path, _ in todo)
         if kept + wanted > limit:
             raise TooLarge(
@@ -287,7 +287,7 @@ class Worktree:
 
     def release_large(self) -> None:
         """Delete the copies ``keep_large`` made."""
-        for copy in self.kept_large.values():
+        for copy in set(self.kept_large.values()):
             copy.unlink(missing_ok=True)
         self.kept_large.clear()
 
@@ -383,6 +383,9 @@ class Worktree:
             shutil.copyfile(copy, tmp)
             os.chmod(tmp, entry.mode or 0o644)
             os.replace(tmp, target)
+            st = target.stat(follow_symlinks=False)  # the restored file is the same content under a new signature:
+            restored = (st.st_size, st.st_mtime_ns, st.st_ino, stat.S_IMODE(st.st_mode))  # its copy serves it too
+            self.kept_large[object_id("large", repr(restored).encode())] = copy  # (Codex, #33)
             return
         target.parent.mkdir(parents=True, exist_ok=True)
         if entry.kind == "tree":

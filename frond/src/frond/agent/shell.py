@@ -343,11 +343,10 @@ class JobManager:
         """Stop every running job's process group (SIGSTOP) and return them, for ``resume``: FORK resets the
         workspace between branches, and a job writing meanwhile would have its writes erased (F28)."""
         paused = []
-        for job in self.snapshot():
-            if job.proc.poll() is None:
-                with contextlib.suppress(ProcessLookupError, PermissionError):
-                    os.killpg(job.proc.pid, signal.SIGSTOP)
-                    paused.append(job)
+        for job in self.snapshot():  # a group can outlive its leader: a shell that left a child running (F63)
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(job.proc.pid, signal.SIGSTOP)
+                paused.append(job)
         return paused
 
     @staticmethod
