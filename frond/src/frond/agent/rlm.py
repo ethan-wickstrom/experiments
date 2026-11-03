@@ -261,17 +261,18 @@ def _finish_reason(response: Any, index: int) -> Any:
 PYTHON_FENCES = frozenset({"", "python", "py", "python3"})
 
 
-def strip_fences(text: str) -> str:
-    """The code in a step's code field. The field is one fenced block, so its fence is the field's first and last
-    lines: code whose strings hold a fence of their own (an answer with a markdown code block, say) keeps them. DSPy's
-    stripper ended the block at the first inner fence, which cut such code mid-string (G42). Any other shape goes to
-    DSPy's, which also refuses a fence for another language."""
+def strip_fences(text: str, *, raw: bool = False) -> str:
+    """The code in a step's code field. Under the markers the field is one fenced block, so its fence is the field's
+    first and last lines: code whose strings hold a fence of their own (an answer with a markdown code block, say)
+    keeps them. DSPy's stripper ended the block at the first inner fence, which cut such code mid-string (G42). Any
+    other shape goes to DSPy's, which also refuses a fence for another language. ``raw``: the field holds the code
+    itself (the json protocol, D53), so only a fence around all of it is removed, and none inside it is looked for."""
     lines = text.strip().splitlines()
     if len(lines) >= 2 and lines[0].startswith("```") and lines[-1].strip() == "```":
         tag = lines[0][3:].strip()
         if (tag.split(maxsplit=1)[0].lower() if tag else "") in PYTHON_FENCES:
             return "\n".join(lines[1:-1]).strip("\n")
-    return _strip_code_fences(text)
+    return text if raw else _strip_code_fences(text)
 
 
 def _clip(text: str, limit: int) -> str:
@@ -296,8 +297,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         action_space: str = "code",
         context: str = "fold",
         scopes: bool = False,
+        protocol: str = "json",
         **kwargs: Any,
     ) -> None:
+        self.protocol = protocol  # how code steps reply: one JSON object (D53), or DSPy's field markers
         self.scopes = scopes  # scopes as savepoints: the tools, the open_scopes field and the guide (H5, B9)
         if context not in ("fold", "summary"):
             raise ValueError(f"context must be 'fold' or 'summary', not {context!r}")
@@ -455,6 +458,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         signature = super()._action_signature_for_current_factory(factory, sub_agent_rules)
         if "reasoning" in signature.output_fields:  # DSPy asks for step-by-step reasoning in the reply: a note instead
             signature = signature.delete("reasoning").insert(0, NOTE, dspy.OutputField(desc=NOTE_DESC), type_=str)
+        if self.protocol == "json" and "code" in signature.output_fields:  # DSPy's desc asks for a fenced block
+            signature = signature.with_updated_fields("code", desc="The Python code to run in this step.")
         if "repl_variables" not in signature.input_fields:
             signature = signature.append("repl_variables", dspy.InputField(desc=REPL_VARIABLES_DESC), type_=str)
         if self.freshness and "stale_reads" not in signature.input_fields:
@@ -609,7 +614,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         reasoning = str(getattr(action, NOTE, "") or "")
         action["reasoning"] = reasoning  # what DSPy's loop records each step's narration as
         try:
-            code = strip_fences(str(action.code or ""))
+            code = strip_fences(str(action.code or ""), raw=self.protocol == "json")
         except SyntaxError as exc:
             code = str(action.code or "")
             hooks.step_planned(step, reasoning, code)
@@ -656,6 +661,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         reply = _clip(without_markers(completion), 4_000) or "(an empty reply)"
         if self.action_space == "tools":
             fields, empty = "`[[ ## tool ## ]]` with the tool's name, then `[[ ## args ## ]]` with a JSON object", "{}"
+        elif self.protocol == "json":
+            fields, empty = "", ""
         else:
             fields, empty = "`[[ ## code ## ]]` with one ```python block", ""
         why = (  # G38: a reply cut off at the output limit is no format error, and needs a shorter step, not markers
@@ -664,10 +671,13 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             if cut_off
             else "Your reply did not follow the step format, so nothing ran."
         )
-        error = (
-            f"[Error] {why} Reply with `[[ ## {NOTE} ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put "
-            "nothing before the first marker."
+        how = (
+            f"Reply with one JSON object with the string fields `{NOTE}` and `code`."
+            if not fields
+            else f"Reply with `[[ ## {NOTE} ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put nothing "
+            "before the first marker."
         )
+        error = f"[Error] {why} {how}"
         hooks.step_planned(step, reply, empty)
         hooks.exec_finished(step, error, error, 0.0, False)
         action = Prediction(reasoning=reply, code=empty)

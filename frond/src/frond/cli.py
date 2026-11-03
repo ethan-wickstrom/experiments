@@ -74,6 +74,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "an experiment arm (H6)",
     )
     p.add_argument(
+        "--protocol",
+        choices=["json", "markers"],
+        default="json",
+        help="each step's reply: json (one JSON object the provider's structured output holds to the step's "
+        "schema) or markers (DSPy's [[ ## field ## ]] text); an experiment arm (D53)",
+    )
+    p.add_argument(
         "--freshness",
         choices=["on", "off"],
         default="on",
@@ -225,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
         prompt_cache=not args.no_prompt_cache,
         effort=None if args.effort == "default" else args.effort,
         layout=args.layout,
+        protocol=args.protocol,
         freshness=args.freshness == "on",
         fork=max(1, args.fork),
         arm=args.arm,

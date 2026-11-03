@@ -88,7 +88,7 @@ class SteeringLayoutTest(WorkspaceCase):
         self.assertIn("use tabs", messages[3]["content"])
         self.assertIn("What the user has said during this turn, oldest first", messages[-1]["content"])
         self.assertIn("- use tabs", messages[-1]["content"])
-        self.assertTrue(messages[-1]["content"].rstrip().endswith("`[[ ## completed ## ]]`."))
+        self.assertTrue(messages[-1]["content"].rstrip().endswith(adapter.user_message_output_requirements(signature)))
         self.assertEqual(last_reply_index([], later), 3)
 
     def test_folding_keeps_the_users_words_verbatim(self):

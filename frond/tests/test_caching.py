@@ -20,6 +20,7 @@ import dspy
 from dspy._vendor.lm15.providers.anthropic import AnthropicLM
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
+from dspy.utils.exceptions import AdapterParseError
 
 from frond.agent.adapter import FrondAdapter, last_reply_index
 from frond.agent.scripted import Step
@@ -120,9 +121,10 @@ class CacheLayoutTest(WorkspaceCase):
         self.assertLess(self.cost(after), 0.6 * self.cost(before), (self.cost(before), self.cost(after)))
 
     def test_the_chat_layout_is_dspys_own(self):
-        """H6's control arm: the history inside one user message, cached as DSPy alone would cache it."""
+        """H6's control arm: the history inside one user message, cached as DSPy alone would cache it (with
+        DSPy's own field markers; the json protocol changes the reply format, not the layout)."""
         stock = self.run_turn(dspy.ChatAdapter(), steps=4)
-        chat = self.run_turn(FrondAdapter(cache_breakpoints=True, layout="chat"), steps=4)
+        chat = self.run_turn(FrondAdapter(cache_breakpoints=True, layout="chat", protocol="markers"), steps=4)
         self.assertEqual(chat, stock)
         with self.assertRaises(ValueError):
             FrondAdapter(layout="scroll")
@@ -153,7 +155,7 @@ class AdapterFormatTest(unittest.TestCase):
             ]
         )
         inputs = {"variables_info": ["Variable: `request`"], "repl_history": history, "iteration": "3/10"}
-        adapter = FrondAdapter()
+        adapter = FrondAdapter(protocol="markers")
         messages = adapter.format(signature, [], inputs)
         self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant", "user", "assistant", "user"])
         self.assertIn("[[ ## variables_info ## ]]", messages[1]["content"])
@@ -163,6 +165,29 @@ class AdapterFormatTest(unittest.TestCase):
         self.assertIn("[[ ## iteration ## ]]\n3/10", messages[-1]["content"])
         self.assertNotIn("[[ ## iteration ## ]]", messages[3]["content"])
         self.assertEqual(last_reply_index([], history), 3)  # user, reply, output, reply (system excluded)
+
+    def test_json_steps_are_json_turns_held_to_a_schema(self):  # D53
+        from frond.agent.adapter import step_schema
+        from frond.agent.prompts import CodingTurn
+        from frond.agent.rlm import FrondRLM
+
+        signature = FrondRLM(CodingTurn)._action_signature_for_current_factory(None, "")
+        history = REPLHistory(entries=[REPLEntry(reasoning="r1", code="print(1)", output="1\n")])
+        inputs = {"variables_info": ["Variable: `request`"], "repl_history": history, "iteration": "2/10"}
+        adapter = FrondAdapter()
+        messages = adapter.format(signature, [], inputs)
+        self.assertEqual(json.loads(messages[2]["content"]), {"note": "r1", "code": "print(1)"})
+        self.assertNotIn("[[ ## completed ## ]]", messages[0]["content"])
+        self.assertNotIn("```python", messages[0]["content"])  # DSPy's desc of `code` asks for a fenced block
+        self.assertTrue(
+            messages[-1]["content"].endswith("Respond with one JSON object with the fields `note`, then `code`.")
+        )
+        schema = step_schema(signature).model_json_schema()
+        self.assertEqual((set(schema["properties"]), schema["additionalProperties"]), ({"note", "code"}, False))
+        self.assertEqual(adapter.parse(signature, '{"note": "n", "code": "x = 1"}'), {"note": "n", "code": "x = 1"})
+        for bad in ('{"note": "n", "code": "x = ', '{"note": "n"}', "[[ ## note ## ]]\nn"):
+            with self.subTest(bad=bad), self.assertRaises(AdapterParseError):
+                adapter.parse(signature, bad)
         # Before any step there is nothing to lay out as turns: the ChatAdapter's own format is used.
         empty = adapter.format(signature, [], {**inputs, "repl_history": REPLHistory()})
         self.assertEqual([m["role"] for m in empty], ["system", "user"])

@@ -6,6 +6,8 @@
 # Order: cheapest first, so each model's cost is measured before the next, costlier arm starts (D43, D48).
 # Budget: the second paid smoke cost $0.23 per Opus step at high effort (D48), so about $5 per 40-step Opus trial;
 # on the guesses in bench/budget.toml this spec plans $76.50 against the $100 grant.
+# Protocol: each step replies with one JSON object under structured output (D53). The fourth start, on DSPy's
+# field markers, ran its Haiku and Sonnet arms and was stopped before Opus; it is kept as jobs/E0-markers.
 id = "E0"
 title = "Pilot: protocol adherence, cache reads, cost, and the screening model"
 dataset = "terminal-bench/terminal-bench@4.0.0"
@@ -24,16 +26,16 @@ concurrency = 2
 name = "haiku"
 agent = "frond_harbor:Frond"
 model = "anthropic/claude-haiku-5-5"
-options = { effort = "default" }  # effort is not assumed supported on Haiku 5.5
+options = { effort = "default", protocol = "json" }  # effort is not assumed supported on Haiku 5.5
 
 [[arms]]
 name = "sonnet"
 agent = "frond_harbor:Frond"
 model = "anthropic/claude-sonnet-5-5"
-options = { effort = "high" }
+options = { effort = "high", protocol = "json" }
 
 [[arms]]
 name = "opus"
 agent = "frond_harbor:Frond"
 model = "anthropic/claude-opus-5-5"
-options = { effort = "high" }
+options = { effort = "high", protocol = "json" }

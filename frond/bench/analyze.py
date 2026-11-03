@@ -81,6 +81,7 @@ CONFIG_OPTIONS: dict[str, Any] = {
     "fork": int,
     "effort": lambda value: None if value == "default" else value,
     "layout": str,
+    "protocol": str,
     "arm": str,
     "context": str,
     "sub_model": str,

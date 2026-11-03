@@ -1,9 +1,9 @@
 """Token streaming from DSPy into frond events.
 
 DSPy streams LM output by handing chunks to ``settings.send_stream`` from inside an AnyIO worker thread.
-:class:`StreamSink` is that object. It parses ChatAdapter's ``[[ ## field ## ]]`` framing incrementally,
-so reasoning and code appear on screen as the model writes them, and it is also where a cancelled turn
-aborts an in-flight LM call (by raising :class:`TurnCancelled` into DSPy's stream loop).
+:class:`StreamSink` is that object. It parses each reply's fields incrementally, as JSON (D53) or in ChatAdapter's
+``[[ ## field ## ]]`` framing, so reasoning and code appear on screen as the model writes them, and it is also where
+a cancelled turn aborts an in-flight LM call (by raising :class:`TurnCancelled` into DSPy's stream loop).
 """
 
 from __future__ import annotations
@@ -170,6 +170,119 @@ def _could_start_submit(text: str) -> bool:
     return target.startswith(text[: len(target)]) if len(text) < len(target) else text.startswith(target)
 
 
+_JSON_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", "b": "\b", "f": "\f", '"': '"', "\\": "\\", "/": "/"}
+
+
+def _unit(buf: str, i: int) -> int | None:
+    """The code unit of the ``\\uXXXX`` escape at ``buf[i]``, or None while it is incomplete or not one."""
+    text = buf[i + 2 : i + 6]
+    if buf[i : i + 2] != "\\u" or len(text) < 4:
+        return None
+    try:
+        return int(text, 16)
+    except ValueError:
+        return None
+
+
+class JsonFieldStreamParser:
+    """Splits a JSON reply of string fields (the json protocol, D53) into per-field text deltas as it streams in:
+    each value's decoded characters are emitted as they arrive, an escape only once it is whole."""
+
+    def __init__(self, on_delta: Callable[[str, str], None]) -> None:
+        self.on_delta = on_delta
+        self.reset()
+
+    def reset(self) -> None:
+        self.buf = ""
+        self.state = "between"  # between | key | colon | value | string | skip
+        self.key = ""
+        self.field: str | None = None
+
+    def feed(self, text: str) -> None:
+        self.buf += text
+        i = 0
+        out: list[str] = []
+        while i < len(self.buf):
+            c = self.buf[i]
+            if self.state in ("key", "string"):
+                if c == '"':
+                    if self.state == "key":
+                        self.field, self.state = self.key, "colon"
+                    else:
+                        self.state = "between"
+                    i += 1
+                    continue
+                if c == "\\":
+                    if i + 1 >= len(self.buf):
+                        break
+                    e = self.buf[i + 1]
+                    if e == "u":
+                        unit = _unit(self.buf, i)
+                        if unit is None:
+                            break
+                        char, i = chr(unit), i + 6
+                        if 0xD800 <= unit < 0xDC00:  # a surrogate pair is one character: wait for its low half
+                            low = _unit(self.buf, i)
+                            if low is None:
+                                if len(self.buf) - i < 6:
+                                    i -= 6
+                                    break
+                            elif 0xDC00 <= low < 0xE000:
+                                char, i = chr(0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00)), i + 6
+                    else:
+                        char, i = _JSON_ESCAPES.get(e, e), i + 2
+                else:
+                    char, i = c, i + 1
+                if self.state == "key":
+                    self.key += char
+                else:
+                    out.append(char)
+                continue
+            self._flush(out)
+            if self.state == "between" and c == '"':
+                self.key, self.state = "", "key"
+            elif self.state == "colon" and c == ":":
+                self.state = "value"
+            elif self.state == "value" and not c.isspace():
+                self.state = "string" if c == '"' else "skip"
+            elif self.state == "skip" and c in ",}":
+                self.state = "between"
+            i += 1
+        self._flush(out)
+        self.buf = self.buf[i:]
+
+    def _flush(self, out: list[str]) -> None:
+        if out and self.field is not None:
+            self.on_delta(self.field, "".join(out))
+        out.clear()
+
+
+class ReplyStreamParser:
+    """Per-field deltas of a reply in either protocol: JSON when its first visible character opens an object,
+    DSPy's field markers otherwise (D53)."""
+
+    def __init__(self, on_delta: Callable[[str, str], None]) -> None:
+        self.markers = FieldStreamParser(on_delta)
+        self.json = JsonFieldStreamParser(on_delta)
+        self.reset()
+
+    def reset(self) -> None:
+        self.markers.reset()
+        self.json.reset()
+        self.chosen: FieldStreamParser | JsonFieldStreamParser | None = None
+        self.held = ""
+
+    def feed(self, text: str) -> None:
+        if self.chosen is None:
+            self.held += text
+            visible = self.held.lstrip()
+            if not visible:
+                return
+            self.chosen = self.json if visible.startswith("{") else self.markers
+            text, self.held = self.held, ""
+        self.chosen.feed(text)
+
+
 class StreamSink:
     """The ``send_stream`` object DSPy writes chunks to. One per agent; re-armed before each LM call."""
 
@@ -180,7 +293,7 @@ class StreamSink:
         on_thinking: Callable[[str], None] | None = None,
     ) -> None:
         self.control = control
-        self.parser = FieldStreamParser(on_field)
+        self.parser = ReplyStreamParser(on_field)
         self.on_thinking = on_thinking
         self.active = True
 

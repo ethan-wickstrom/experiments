@@ -25,7 +25,9 @@ class Step:
     reasoning: str
     code: str
 
-    def render(self) -> str:
+    def render(self, json_reply: bool = False) -> str:
+        if json_reply:  # the json protocol: one object, as structured output holds the model to (D53)
+            return json.dumps({"note": self.reasoning, "code": self.code.strip()})
         return (
             f"[[ ## note ## ]]\n{self.reasoning}\n\n[[ ## code ## ]]\n```python\n{self.code.strip()}\n```"
             "\n\n[[ ## completed ## ]]\n"
@@ -40,7 +42,7 @@ class ToolStep:
     tool: str
     args: dict[str, Any]
 
-    def render(self) -> str:
+    def render(self, json_reply: bool = False) -> str:
         return (
             f"[[ ## note ## ]]\n{self.reasoning}\n\n[[ ## tool ## ]]\n{self.tool}\n\n"
             f"[[ ## args ## ]]\n{json.dumps(self.args)}\n\n[[ ## completed ## ]]\n"
@@ -95,16 +97,19 @@ class ScriptedEngine:
 
     def _completion(self, request: Request) -> str | CutOff:
         text = _request_text(request)
+        json_reply = request.config.response_format is not None  # frond asks for JSON only of code steps
         with self._lock:
             self.requests.append(request)
-            if "[[ ## repl_history ## ]]" in text and ("[[ ## code ## ]]" in text or "[[ ## tool ## ]]" in text):
+            if "[[ ## repl_history ## ]]" in text and (
+                json_reply or "[[ ## code ## ]]" in text or "[[ ## tool ## ]]" in text
+            ):
                 if self.steps:
                     step = self.steps.pop(0)
                 elif self.after_script is not None:
                     step = self.after_script(text)
                 else:
                     step = Step("The script is finished.", "SUBMIT(response='(end of script)')")
-                return step if isinstance(step, str | CutOff) else step.render()
+                return step if isinstance(step, str | CutOff) else step.render(json_reply)
             if "[[ ## repl_history ## ]]" in text:  # the extract fallback: answer its output fields directly
                 block = re.search(r"Your output fields are:\n((?:\d+\. `\w+`[^\n]*\n?)+)", text)
                 names = re.findall(r"`(\w+)`", block.group(1)) if block else ["response"]
