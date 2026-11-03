@@ -398,6 +398,9 @@ class _SubHooks(Hooks):
         self.agent_id = agent_id
         self.steps = 0
 
+    def reply_unparsed(self, step: int) -> None:
+        self.agent.metrics.bump("sub_unparsed_steps")  # F51
+
     def check(self) -> None:
         self.agent.control.check()
 
@@ -477,6 +480,8 @@ class Agent:
         )
         self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
             cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model),
+            metrics=self.metrics,
+            counters="sub_",  # the sub-model's protocol adherence, apart from the main model's (F51)
             layout=config.layout,
             history_tools=config.context == "fold",
         )

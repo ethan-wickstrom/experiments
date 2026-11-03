@@ -157,7 +157,11 @@ def recover_action(signature: type[dspy.Signature], completion: str) -> dict[str
         call = calls[0]
         if FENCE.search(completion[: call.start()] + completion[call.end() :]):
             return None  # a fenced block besides the call is a second action
-        params = {name: value.strip("\n") for name, value in PARAMETER.findall(call.group(2))}
+        found = PARAMETER.findall(call.group(2))
+        names = [name for name, _ in found]
+        if len(names) != len(set(names)) or PARAMETER.sub("", call.group(2)).strip():
+            return None  # a repeated parameter, or text that is no parameter, could hide a second action (F50)
+        params = {name: value.strip("\n") for name, value in found}
         reasoning = without_markers(completion[: call.start()])
         if fields == {"reasoning", "code"} and set(params) == {"code"}:
             return {"reasoning": reasoning, "code": f"```python\n{params['code']}\n```"}
@@ -196,9 +200,11 @@ class FrondAdapter(dspy.ChatAdapter):
         metrics: Any = None,
         layout: str = "turns",
         history_tools: bool = False,
+        counters: str = "",
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        self.counters = counters  # prefix of the metrics this adapter's replies count under: "sub_" for sub-agents
         self.history_tools = history_tools  # history_step exists, so a truncation note can point at it
         if layout not in LAYOUTS:
             raise ValueError(f"layout must be one of {LAYOUTS}, not {layout!r}")
@@ -212,12 +218,12 @@ class FrondAdapter(dspy.ChatAdapter):
             return super().parse(signature, completion)
         except Exception:
             if self.metrics is not None:
-                self.metrics.bump("parse_failures")
+                self.metrics.bump(f"{self.counters}parse_failures")
             recovered = recover_action(signature, completion)
             if recovered is None:
                 raise
             if self.metrics is not None:
-                self.metrics.bump("parse_recovered")
+                self.metrics.bump(f"{self.counters}parse_recovered")
             return recovered
 
     def format_system_message(self, signature: type[dspy.Signature]) -> str:

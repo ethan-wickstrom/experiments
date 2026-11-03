@@ -63,6 +63,9 @@ COUNTERS = (
     "parse_failures",
     "parse_recovered",  # replies off the protocol whose action was recovered (G34)
     "unparsed_steps",  # replies that were not, each shown to the model as an error step (G34)
+    "sub_parse_failures",  # the same for sub-agents, whose replies come from the sub-model (F51)
+    "sub_parse_recovered",
+    "sub_unparsed_steps",
     "syntax_errors",
     "compactions",
     "summaries",
