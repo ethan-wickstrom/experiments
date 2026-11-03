@@ -351,7 +351,7 @@ class BranchOutcome:
 
 
 def _best(outcomes: list[BranchOutcome]) -> BranchOutcome | None:
-    passing = [o for o in outcomes if o.passed]
+    passing = [o for o in outcomes if o.passed and o.world]  # a branch whose world was not captured cannot be kept
     return min(passing, key=lambda o: (not o.submitted, o.steps, o.index)) if passing else None
 
 
@@ -774,8 +774,11 @@ class Agent:
             if scope is None:
                 raise ValueError("there is no open scope to abandon")
             parts = []
-            if self.timeline is not None and scope.world:
-                undone = self.timeline.revert(scope.world, self.timeline.snapshot())
+            now = self.timeline.snapshot() if self.timeline is not None and scope.world else ""
+            if self.timeline is not None and scope.world and not now:
+                parts.append(f"Nothing was reverted: workspace snapshots stopped ({self.timeline.reason}).")
+            elif self.timeline is not None and scope.world:
+                undone = self.timeline.revert(scope.world, now)
                 self.workspace.invalidate()
                 parts.append(f"Reverted: {', '.join(undone.restored) or 'no files'}.")
                 if undone.conflicts:
@@ -806,6 +809,8 @@ class Agent:
         if timeline is None or not timeline.enabled:
             return "FORK needs workspace snapshots, which are off here: choose one option and go on with it."
         start = timeline.snapshot()
+        if not start:  # snapshots stopped just now: never check out what they could not capture (review of #25)
+            return f"FORK needs workspace snapshots, which stopped ({timeline.reason}): choose one option and go on."
         outcomes: list[BranchOutcome] = []
         self._in_branch = True
         try:
@@ -983,8 +988,11 @@ class Agent:
                 "here: undo the commit with git"
             )
         current = timeline.snapshot()
+        if not current:
+            return f"nothing undone: workspace snapshots stopped ({timeline.reason})"
         result = timeline.revert(target.world_before, target.world_after)
-        for change in timeline.diff(current, timeline.snapshot()):
+        after = timeline.snapshot()
+        for change in timeline.diff(current, after) if after else []:
             self._emit(self._change_event(change, scope="undo"))
         target.undone = True
         self.workspace.invalidate()

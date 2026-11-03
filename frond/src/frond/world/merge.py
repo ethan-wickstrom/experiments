@@ -102,6 +102,8 @@ def revert(work: Worktree, before: str, after: str) -> Revert:
 
     Only paths that the step changed are touched. Each is merged so that later edits by anyone else survive.
     """
+    if not before or not after:  # "" is a snapshot that failed, never a world
+        raise ValueError("no world to revert to: a snapshot that failed names none")
     result = Revert()
     current_tree = work.snapshot()
     current = dict(work.store.files(current_tree))

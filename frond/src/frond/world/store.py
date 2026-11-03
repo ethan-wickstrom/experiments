@@ -132,8 +132,7 @@ class Store:
             if not directory.is_dir():
                 continue
             for aside in directory.glob(".gone-*"):
-                with contextlib.suppress(OSError):
-                    os.replace(aside, aside.with_name(aside.name.removeprefix(".gone-")))
+                _restore(aside)
             for path in directory.iterdir():
                 if path.name.startswith((".tmp-", ".gone-")) or directory.name + path.name in keep:
                     continue
@@ -144,7 +143,7 @@ class Store:
                     os.rename(path, aside)
                     st = aside.stat()
                     if st.st_mtime >= older_than:  # put marked it before the rename: in use again
-                        os.replace(aside, path)
+                        _restore(aside)
                         continue
                     aside.unlink()
                     freed += st.st_size
@@ -213,6 +212,22 @@ class Store:
     def _leaves(self, oid: str, path: str) -> list[tuple[str, Entry]]:
         leaves = list(self.files(oid, f"{path}/"))
         return leaves or [(path, Entry("tree", oid))]  # an empty directory is a leaf of its own
+
+
+def _restore(aside: Path) -> None:
+    """Put an object set aside by a sweep back under its name, unless a ``put`` wrote it there anew meanwhile: that copy
+    stays, with its newer time, and the aside goes (review of #25)."""
+    target = aside.with_name(aside.name.removeprefix(".gone-"))
+    try:
+        os.link(aside, target)  # never replaces an existing file
+    except FileExistsError:
+        pass
+    except OSError:  # no hard links here: the check and the rename are not one step, but nearly
+        if not target.exists():
+            with contextlib.suppress(OSError):
+                os.rename(aside, target)
+    with contextlib.suppress(OSError):
+        aside.unlink()
 
 
 class Worktree:
@@ -294,6 +309,8 @@ class Worktree:
 
     def checkout(self, target: str, current: str | None = None) -> list[Change]:
         """Make the directory hold ``target``, touching only paths that differ; returns what changed."""
+        if not target:  # "" is what a failed or switched-off snapshot returns, never a world: it would empty the tree
+            raise ValueError("no world to check out: a snapshot that failed names none")
         current = current if current is not None else self.snapshot()
         changes = self.store.diff(current, target)
         for change in sorted(changes, key=lambda c: c.after is not None):  # removals first

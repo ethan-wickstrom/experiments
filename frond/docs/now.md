@@ -25,7 +25,7 @@ E0a's fourth run (under G26's fix) had finished 38 of 56 tasks when the session 
 ## Waiting on the owner
 
 - REQ-1: the key is in the environment as `CLAUDE_API_KEY`, for sessions started after it was added; it closes with the smoke run.
-- REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12), visible only in the owner's Devin account. Low priority.
+- REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12, one on #23), visible only in the owner's Devin account. Low priority.
 
 ## Facts a fresh session needs
 

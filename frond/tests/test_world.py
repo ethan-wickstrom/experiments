@@ -247,6 +247,15 @@ class UnreadableTest(WorldCase):
         self.assertEqual(entries["secret.txt"].kind, "large")
         self.assertEqual(entries["ok.txt"].kind, "file")
 
+    def test_an_empty_world_id_is_never_checked_out_or_reverted(self):  # review of #25
+        self.write("kept.txt", "kept\n")
+        tree = self.work.snapshot()
+        with self.assertRaisesRegex(ValueError, "no world to check out"):
+            self.work.checkout("")
+        with self.assertRaisesRegex(ValueError, "no world to revert to"):
+            revert(self.work, tree, "")
+        self.assertEqual((self.root / "kept.txt").read_text(), "kept\n")
+
     def test_a_failing_snapshot_turns_snapshots_off_with_the_reason(self):
         from frond.world import Timeline
 
@@ -298,6 +307,20 @@ class CollectionTest(WorldCase):
         os.rename(path, path.with_name(f".gone-{path.name}"))  # as a sweep killed between rename and unlink leaves it
         self.store.sweep(set(), older_than=0)  # nothing is old enough to go
         self.assertEqual(self.store.blob(oid), b"set aside")
+
+    def test_a_fresh_copy_written_while_set_aside_is_kept(self):  # review of #25
+        oid = self.store.put("blob", b"rewritten meanwhile")
+        path = self.store._path(oid)
+        os.rename(path, path.with_name(f".gone-{path.name}"))  # an interrupted sweep's leftover, old
+        self.age_path(path.with_name(f".gone-{path.name}"), 7200)
+        self.store.put("blob", b"rewritten meanwhile")  # a new snapshot writes it anew: fresh
+        self.store.sweep(set(), older_than=time.time() - 3600)
+        self.assertEqual(self.store.blob(oid), b"rewritten meanwhile")  # the fresh copy, not the old one, survived
+        self.assertFalse(path.with_name(f".gone-{path.name}").exists())
+
+    def age_path(self, path: Path, seconds: float) -> None:
+        then = time.time() - seconds
+        os.utime(path, (then, then))
 
     def test_storing_an_object_again_marks_it_in_use(self):
         oid = self.store.put("blob", b"x")

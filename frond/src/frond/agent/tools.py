@@ -868,8 +868,9 @@ class Toolbox:
         before = timeline.snapshot() if timeline is not None else ""
         result = self.shell.run(command, cwd=workdir, timeout=timeout, scope=self.scope)
         self.ws.invalidate()
-        if timeline is not None and before:
-            self._show_command_changes(timeline, before, timeline.snapshot(new_ignored=True))
+        after = timeline.snapshot(new_ignored=True) if timeline is not None and before else ""
+        if timeline is not None and before and after:  # "" after: snapshots stopped, and nothing can be told
+            self._show_command_changes(timeline, before, after)
         output = truncate_middle(
             result.output,
             MAX_OUTPUT_CHARS,
