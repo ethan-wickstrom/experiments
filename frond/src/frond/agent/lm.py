@@ -10,6 +10,8 @@ from typing import Any
 import dspy
 from dspy.lm15 import CacheConfig
 
+from frond.agent.metrics import normalize_usage
+
 # (environment variable, main model, sub model): the first key present picks the defaults.
 PROVIDER_DEFAULTS: tuple[tuple[str, str, str], ...] = (
     ("ANTHROPIC_API_KEY", "anthropic/claude-opus-5-5", "anthropic/claude-haiku-5-5"),  # decision D24
@@ -173,8 +175,10 @@ def last_usage(lm: dspy.LM) -> tuple[int, int, int]:
 
 
 def usage_totals(*lms: dspy.LM) -> dict[str, float | int]:
-    """Tokens and cost over every call the given LMs made (each LM counted once)."""
-    totals: dict[str, float | int] = {"calls": 0, "input_tokens": 0, "cache_read_tokens": 0, "output_tokens": 0}
+    """Tokens and cost over every call the given LMs made (each LM counted once), whatever shape the provider's
+    usage takes (metrics.normalize_usage). Input tokens include cached ones."""
+    keys = ("input", "cache_read", "cache_write", "output", "reasoning")
+    totals: dict[str, float | int] = {"calls": 0, **{f"{key}_tokens": 0 for key in keys}}
     seen: set[int] = set()
     for lm in lms:
         if id(lm) in seen:
@@ -182,11 +186,10 @@ def usage_totals(*lms: dspy.LM) -> dict[str, float | int]:
         seen.add(id(lm))
         for entry in getattr(lm, "history", []) or []:
             usage = entry.get("usage") or {}
-            details = usage.get("prompt_tokens_details") or {}
+            counts = normalize_usage(usage if isinstance(usage, dict) else {})
             totals["calls"] += 1
-            totals["input_tokens"] += int(usage.get("prompt_tokens") or 0)  # includes cached tokens
-            totals["cache_read_tokens"] += int((details.get("cached_tokens") if isinstance(details, dict) else 0) or 0)
-            totals["output_tokens"] += int(usage.get("completion_tokens") or 0)
+            for key in keys:
+                totals[f"{key}_tokens"] += counts[key]
     totals["cost_usd"] = round(total_cost(*lms), 6)
     return totals
 

@@ -43,7 +43,7 @@ Each run records, in `frond -p --export` and on to Harbor:
 - The task is the pairing unit. Each arm runs k trials per task, giving a per-task pass fraction.
 - The comparison is the paired Wilcoxon signed-rank test on per-task differences, as in [AgentRewind](https://arxiv.org/abs/2608.14380), with bootstrap 95% intervals on the mean difference. Holm correction applies across H1–H6.
 - Non-inferiority margin: 5 points. Superiority means the interval excludes 0.
-- Sample size comes from P0's per-task variance. Before P0, the estimate at 66 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
+- Sample size comes from E0's per-task variance. Before E0, the estimate at 66 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
 - Runs go in batches of 22 tasks, so the program can stop early on clear success or futility, at the cost of the error control a single fixed-size test would give.
 
 ## Cost model and screening
@@ -56,16 +56,22 @@ List prices per million tokens (D24):
 | Sonnet 5.5 | $2 | $10 | $0.20 | $2.50 |
 | Haiku 5.5 | $0.10 | $0.50 | about $0.01 | about $0.13 |
 
-An estimated TB 4.0 run takes 25 steps. Each step reads about 30k cached tokens, writes about 1.5k and outputs about 2k. That is about $1.50 per run on Opus 5.5, $0.80 on Sonnet 5.5 and under $0.05 on Haiku 5.5. P0 replaces these estimates with measurements.
+An estimated TB 4.0 run takes 25 steps. Each step reads about 30k cached tokens, writes about 1.5k and outputs about 2k. That is about $1.50 per run on Opus 5.5, $0.80 on Sonnet 5.5 and under $0.05 on Haiku 5.5. E0 replaces these estimates with measurements.
 
-Screening protocol: run each hypothesis first on the cheapest model whose TB 4.0 pass rate sits between 20% and 80%, where differences are visible. Confirm the winners on Opus 5.5. P0 measures pass rates for all three models on a 10-task subset to choose the screening model.
+Screening protocol: run each hypothesis first on the cheapest model whose TB 4.0 pass rate sits between 20% and 80%, where differences are visible. Confirm the winners on Opus 5.5. E0 measures pass rates for all three models on a 10-task subset to choose the screening model.
 
 ## Running
 
+From `frond/`, like the checks:
+
 ```sh
-frond/scripts/dev-env.sh                    # dockerd + the Docker Hub mirror (D23)
-cd frond && PYTHONPATH=bench uvx --from harbor harbor run -d terminal-bench/terminal-bench@4.0.0 \
-  -a frond_harbor:Frond -m anthropic/claude-opus-5-5 -e docker -n 1 -k 3 -o jobs
+scripts/dev-env.sh    # dockerd, the Docker Hub mirror (D23), and the egress CA to trust (D27)
+FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt PYTHONPATH=bench uvx --from harbor==0.25.0 harbor run \
+  -d terminal-bench/terminal-bench@4.0.0 -a frond_harbor:Frond -m anthropic/claude-opus-5-5 -e docker -n 1 -k 3 \
+  --extra-docker-compose bench/compose/egress-ca.yaml -o jobs
+python bench/prune.py --while-pid <harbor's pid>    # frees disk between tasks without racing pulls (G8)
 ```
+
+Without the overlay, every task whose agent, solution or tests reach the internet fails in this VM, whatever the agent does (G7).
 
 Results, as summaries rather than raw trajectories, go under `frond/bench/results/<date>-<experiment>/`, with secrets redacted (ledger B12).

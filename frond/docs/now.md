@@ -1,10 +1,10 @@
 # Now
 
-Updated 2026-11-03, at the end of the first session, after the owner's standing orders.
+Updated 2026-11-03, first session, after fixing the infrastructure faults E0a found (G7, G8).
 
 ## In flight
 
-E0a, the oracle sweep over all 66 TB 4.0 tasks, is running in the session VM. Its results go to `bench/results/` when it finishes; a fresh session reruns it with `harbor run -d terminal-bench/terminal-bench@4.0.0 -a oracle -e docker -n 2 --delete`.
+E0a, the oracle sweep over all 66 TB 4.0 tasks, is running again in the session VM, now with the egress-CA overlay, the safe pruner and retries for failed environment starts. Its summary goes to `bench/results/` when it finishes. A fresh session reruns it from `frond/` with the command in `research.md` ("Running"), using `-a oracle -n 2 --max-retries 2` and no model; `harbor job resume -p <job dir>` continues a stopped one.
 
 ## Next, in order (research-first, D16)
 
@@ -22,6 +22,8 @@ E0a, the oracle sweep over all 66 TB 4.0 tasks, is running in the session VM. It
 ## Facts a fresh session needs
 
 - Docker: `frond/scripts/dev-env.sh` starts dockerd and serves Docker Hub pulls from mirror.gcr.io, because Docker Hub rate-limits this VM's IP.
-- Harbor: `uvx --from harbor harbor …` (0.25.0). The oracle agent passes a TB 4.0.0 task in this VM.
+- TLS: this VM re-terminates outbound TLS. Every Harbor run here needs `--extra-docker-compose bench/compose/egress-ca.yaml` with `FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt`, or tasks that reach the internet fail for every agent (D27).
+- Disk: task images reach 15 GB and Harbor keeps pulled ones. Run `bench/prune.py --while-pid <harbor pid>` beside a sweep; never `docker image prune` during one (G8).
+- Harbor: `uvx --from harbor==0.25.0 harbor …`. The oracle agent passes TB 4.0.0 tasks in this VM.
 - In default Docker, frond's sandbox runs under Landlock: user namespaces are refused there.
 - VM limits: 4 CPUs, 15 GB RAM, 29 GB of disk.

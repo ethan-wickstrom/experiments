@@ -48,7 +48,7 @@ Only what the agent cannot get itself (D16).
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
 | E0 | Pilot (was P0): 10 TB 4.0 tasks × 3 trials on Opus 5.5, plus 10 × 1 on Sonnet 5.5 and Haiku 5.5 to pick the screening model | report in `bench/results/` with per-call cache reads, protocol violations, failed edits, per-task variance, and the trials H1–H6 need | blocked: REQ-1, B1, B2 | `research.md` |
-| E0a | Oracle sweep: Harbor's reference solutions on all 66 TB 4.0 tasks in this VM, so that infrastructure failures (TLS, resources, disk) are known before any model is blamed | pass list in `bench/results/` | in progress (started 2026-11-03) | needs no key |
+| E0a | Oracle sweep: Harbor's reference solutions on all 66 TB 4.0 tasks in this VM, so that infrastructure failures (TLS, resources, disk) are known before any model is blamed | pass list in `bench/results/` | in progress: rerun started 2026-11-03 08:50 UTC | needs no key. The first run's first 10 trials found G7 (2 TLS failures) and G8 (2 layer-extraction failures); 6 passed. It was stopped and restarted with both fixed |
 | E1 | H1: RLM against ReAct, same tools | paired test per `research.md` | blocked: E0, B3, B8 | `research.md` |
 | E2 | H2: fork k=3 with verifier selection | paired test; cost ratio | blocked: E0, B4, B6, B7 | `research.md` |
 | E3 | H3: freshness marks | failed edits per task, pass rate | blocked: E0, B5 | `research.md` |
@@ -67,7 +67,7 @@ Only what the agent cannot get itself (D16).
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
 | B1 | Claude 5.5 compatibility and effort: send no sampling parameters, set `output_config.effort` from `--effort` (default high) | a payload test on `claude-opus-5-5` shows no temperature, no disabled thinking, and the chosen effort | closed 2605fb3 | `build_lm(effort=…)`, `tests/test_lm.py`; D26 |
-| B2 | Measurement: per-call input, cache read, cache write and output tokens; protocol violations; failed edits; stale actions | `--export` writes them; tests cover each counter | closed (this commit) | `--export` now also writes `calls.jsonl` (raw and normalized usage per model call) and `metrics.json` (parse failures, code that did not compile, tool calls and failures, failed edits); `tests/test_metrics.py`. Stale actions move to B5, which defines staleness |
+| B2 | Measurement: per-call input, cache read, cache write and output tokens; protocol violations; failed edits; stale actions | `--export` writes them; tests cover each counter | closed 63d52f8 | `--export` now also writes `calls.jsonl` (raw and normalized usage per model call) and `metrics.json` (parse failures, code that did not compile, tool calls and failures, failed edits); `tests/test_metrics.py`. Stale actions move to B5, which defines staleness |
 | B3 | Arms and runner: `--arm`, `--layout`, `--context`, `--fork`, `--freshness` and `--scopes` flags passed through Harbor options; `bench/matrix.py` (tasks × arms × trials, resumable); `bench/analyze.py` (Wilcoxon, bootstrap, Holm, cost per solved) | a dry run of the matrix, and analysis on synthetic results | next | `research.md` |
 | B4a | Worlds core: a content-addressed store with nested Merkle trees, incremental snapshots (stat cache, racy-edit rehash), checkout, diff, line-level merge3, and revert | `tests/test_world.py`: exact round trips (modes, links, type changes, empty directories), excluded caches untouched, racy edits seen, and a later edit by someone else surviving a revert | closed 72818da | `src/frond/world/`; D22 |
 | B4b | Wire worlds into frond: a snapshot around each action, undo as a revert of the turn's steps, a net turn diff, non-git workspaces; delete `Checkpoints` and `GitSnapshots` | the undo tests (`test_command_undo`, `UndoFidelity`) pass on worlds, plus a concurrent-edit test through `/undo` | next | B4a; closes P2, R2 and R3 |
@@ -81,8 +81,8 @@ Only what the agent cannot get itself (D16).
 | B12 | Redact secrets from exported records before results are committed (was I4) | exported records hold no credential values from the environment | next, before any results are committed | `research.md`, Running |
 | B13 | A TUI world view: branches as a live tree, with per-branch diffs and verifier status | headless render test | open | delight; follows B7 |
 | B14 | The truncation note suggests how to narrow (was I6) | test checks the hint | open | [TurnCost](https://arxiv.org/abs/2610.15093): 76.9% against 44% |
-| B15 | `scripts/dev-env.sh`: dockerd plus the Docker Hub mirror | runs and prints `docker info` | closed (this commit) | D23 |
-| B16 | Stop hook: committed, pushed and on `origin/main` before a turn ends | a dirty tree blocks once | closed (this commit) | D19 |
+| B15 | `scripts/dev-env.sh`: dockerd plus the Docker Hub mirror | runs and prints `docker info` | closed 362cc49 | D23; G10 fixed its handling of an existing `daemon.json` |
+| B16 | Stop hook: committed, pushed and on `origin/main` before a turn ends | a dirty tree blocks once | closed 362cc49 | D19; G9 made it fail closed |
 | B17 | Stop latency measured in the scripted harness (R4) | P95 ≤ 1 s, and no tool runs after the stop | open, low | R4 |
 
 ## Renames
@@ -110,6 +110,8 @@ Only what the agent cannot get itself (D16).
 | V2 | frond has never run a real Terminal-Bench task | E0 | blocked: REQ-1 | Harbor plus Docker verified with the oracle agent, and frond installs in a TB 4.0 container (install-only), 2026-11-03 |
 | V3 | The macOS Seatbelt profile has never run | — | closed: won't do | D25 (the program is Linux-only) |
 | V4 | The cache savings are simulated | E0 measures `cache_read_input_tokens` | blocked: REQ-1 | — |
+| V5 | Devin (PR #3): the latest-step cache breakpoint never matches, because the volatile fields change the last user message | the cache simulator | closed: refuted | the breakpoint sits on the latest assistant reply, before the volatile fields, which go last; `tests/test_caching.py` shows every step after the first reads its predecessor's prefix (reads grow with history, above 70% of input). Real reads: V4 |
+| V6 | Devin (PR #5): the Stop hook does not check that work reached `main` through a merge commit | — | closed: declined | D15 is applied at merge time (the merge call names the method); a hook check would add a failure mode without a failure seen |
 
 ## Requirements not met (`design.md` has every requirement's status)
 
@@ -135,7 +137,20 @@ Only what the agent cannot get itself (D16).
 | G3 | frond never sets reasoning effort, so Opus 5.5 would run at `medium` | B1 | closed 2605fb3 | D26 |
 | G4 | DSPy sends any provider whose `<PREFIX>_BASE_URL` is set through LiteLLM, which cannot carry `prompt_cache`. Hosted sessions set `ANTHROPIC_BASE_URL` to the public endpoint, so every frond call from such a VM failed | payload test | closed 2605fb3 | D26 |
 | G5 | Harbor may forward `ANTHROPIC_BASE_URL` into task containers | E0's first run shows the container environment | open, low | frond handles the variable either way (D26) |
-| G6 | This VM's egress re-terminates TLS, so task containers must trust its CA, or installs and API calls fail | an install-only run in a TB 4.0 container | closed (this commit) | the Harbor adapter carries the host's CA bundle into the container and points curl, uv and Python at it. Verified 2026-11-03: frond 0.1.0 installed in `layout-config-recreation2`. Task verifiers that need the internet are measured by E0a |
+| G6 | This VM's egress re-terminates TLS, so task containers must trust its CA, or installs and API calls fail | an install-only run in a TB 4.0 container | closed 63d52f8, superseded by G7 | the Harbor adapter carried the host's CA bundle into the container for frond's own processes. Verified 2026-11-03: frond 0.1.0 installed in `layout-config-recreation2`. G7 moved the fix to the environment layer and removed the adapter's copy |
+| G7 | The CA fix reached only frond's processes. The oracle agent's solutions, any other agent, and the task's own commands still failed TLS: E0a's oracle failed `fin-saccr-rwa` and `satb-audio-transcription` on `pip install` | both pass with the oracle | closed (this commit) | `bench/compose/egress-ca.yaml` mounts the CA into every task's `main` service and sets the CA variables (D27). Both tasks scored 1.0 with it (2026-11-03). TB 4.0's separate verifier containers do not get the overlay (Harbor warns); their dependencies are baked in, and E0a shows whether any verifier needs the network |
+| G8 | `docker image prune -af` beside a sweep removed layers that concurrent pulls were extracting: E0a lost `formal-crypto` and `lake-temp-glm` before their agents started | the E0a rerun has no layer-extraction failures | fixed (this commit), checked by E0a | `bench/prune.py` removes only images unused at two passes in a row, one `docker rmi` at a time; the sweep also retries failed environment starts (`--max-retries 2`) |
+| G9 | The Stop hook let a turn end when `origin/main` could not be resolved (Devin, PR #5) | `tests/test_stop_guard.py` | closed (this commit) | it now blocks once with the reason; `stop_hook_active` still lets the next stop through |
+| G10 | `dev-env.sh` left an existing `daemon.json` without the mirror, did not report a running daemon without it, and could not start `dockerd` as a non-root user (Devin, PR #5) | runs in this VM | closed (this commit) | it merges the mirror into the file, warns when the running daemon lacks it, and uses `sudo` when not root |
+| G11 | `research.md` and `design.md` cited P0 for the pilot that the ledger calls E0 (Devin, PR #5) | — | closed (this commit) | renamed; `research.md`'s run command now starts from `frond/`, like the checks (the other PR #5 note) |
+| G12 | A crash mid-write left a partial last line in the step log, and the next record was appended to it, losing both (PR #3) | `test_a_line_cut_short_by_a_crash_does_not_swallow_the_next_record` | closed (this commit) | `StepLog.attach` ends a cut-short line before appending |
+| G13 | `--export` after `--continue` wrote every earlier session's steps but only this process's token usage (PR #3) | `test_a_continued_run_exports_only_what_it_did` | closed (this commit) | the export covers this process: its calls, and the steps after those it loaded (`continued_after_seq` in `metrics.json`) |
+| G14 | `usage_totals` read only OpenAI-style keys, so Anthropic-native usage counted zero tokens in `usage.json` (PR #3) | `UsageTotalsTest` | closed (this commit) | it sums `metrics.normalize_usage`, one normalizer for every export |
+| G15 | `/new` left the old conversation searchable through `history_search`, and the next save overwrote the old conversation's session file, so `--continue` could not reach it (PR #3; the overwrite was found while fixing it) | `test_a_new_conversation_cannot_search_the_old_one` | closed (this commit) | `/new` starts a new session file and step log (`Agent.new_log`, `StepLog.restart`); the old files stay |
+| G16 | Code that did not compile cleared the names digest, so the next step showed no variables (PR #3) | `test_code_that_does_not_compile_leaves_the_names_as_they_were` | closed (this commit) | the digest changes only when the worker reports one |
+| G17 | The step log is described as lossless but cuts outputs over 200,000 characters (PR #3) | — | closed (this commit) | documented in `steplog.py` |
+| G18 | File changes made by background jobs are not covered by `/undo` (PR #3) | B4b: a background job's write is reverted by `/undo` | next, with B4b | worlds snapshot the directory, whoever wrote to it |
+| G19 | `GitSnapshots`: a nested workspace's objects path, CRLF and filter conversions, and file-to-directory changes in undo (PR #3) | — | next: removed by B4b | B4b deletes `GitSnapshots` in favour of worlds, which store raw bytes and handle kind changes (`test_world`) |
 
 ## Assumptions to test
 

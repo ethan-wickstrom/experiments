@@ -178,8 +178,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             session_file, restored = latest, store.load(latest)
 
+    current = [session_file]  # /new moves the conversation to a new session file
+
     def persist(records: list) -> None:
-        store.save(session_file, records, model)
+        store.save(current[0], records, model)
+
+    def new_log() -> Path:
+        current[0] = store.new_path()
+        return store.steps_path(current[0])
 
     if not interactive:
         return run_headless(args, config, workspace, prompt, lm, persist, restored, store.steps_path(session_file))
@@ -188,7 +194,9 @@ def main(argv: list[str] | None = None) -> int:
     from frond.tui.style import detect_color_mode
 
     app = App(workspace, model=model, sub_model=sub_model, color_mode=detect_color_mode(), note=note)
-    agent = Agent(config, workspace, app.emit, approver=app.approver, lm=lm, sub_lm=lm, persist=persist)
+    agent = Agent(
+        config, workspace, app.emit, approver=app.approver, lm=lm, sub_lm=lm, persist=persist, new_log=new_log
+    )
     agent.attach_log(store.steps_path(session_file))
     app.attach(agent)
     if restored:
@@ -266,8 +274,9 @@ def export_run(agent: Agent, directory: Path) -> None:
     from frond.agent.metrics import call_records
 
     directory.mkdir(parents=True, exist_ok=True)
+    # Everything here covers this process: its LM calls, and the steps it added after any it loaded (--continue).
     with open(directory / "steps.jsonl", "w", encoding="utf-8") as f:
-        for record in agent.steps.records():
+        for record in agent.steps.records()[agent.steps.loaded :]:
             f.write(json.dumps(dataclasses.asdict(record), ensure_ascii=False) + "\n")
     usage = {"model": agent.config.model, "sub_model": agent.config.sub_model, **usage_totals(agent.lm, agent.sub_lm)}
     (directory / "usage.json").write_text(json.dumps(usage, indent=1))
@@ -276,7 +285,13 @@ def export_run(agent: Agent, directory: Path) -> None:
         for role, lm in roles:
             for record in call_records(lm, role):
                 f.write(json.dumps(record, default=str) + "\n")
-    metrics = {"turns": len(agent.history), "steps": sum(r.steps for r in agent.history), **agent.metrics.as_dict()}
+    this_run = [r for r in agent.history if r.first_seq > agent.steps.loaded]
+    metrics = {
+        "turns": len(this_run),
+        "steps": sum(r.steps for r in this_run),
+        "continued_after_seq": agent.steps.loaded,
+        **agent.metrics.as_dict(),
+    }
     (directory / "metrics.json").write_text(json.dumps(metrics, indent=1))
     last = agent.history[-1] if agent.history else None
     (directory / "answer.md").write_text((last.response or last.error or "") if last else "", encoding="utf-8")

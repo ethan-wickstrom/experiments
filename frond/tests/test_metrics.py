@@ -7,10 +7,13 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 
 from dspy.utils.exceptions import AdapterParseError
 
 from frond.agent.adapter import FrondAdapter
+from frond.agent.lm import usage_totals
 from frond.agent.metrics import RunMetrics, normalize_usage
 from frond.agent.prompts import CodingTurn
 from frond.agent.rlm import FrondRLM
@@ -52,6 +55,49 @@ class ParseFailureTest(unittest.TestCase):
         with self.assertRaises(AdapterParseError):
             FrondAdapter(metrics=metrics).parse(signature, "no field markers at all")
         self.assertEqual(metrics.parse_failures, 1)
+
+
+class UsageTotalsTest(unittest.TestCase):
+    def test_every_provider_shape_is_counted(self):
+        anthropic = SimpleNamespace(
+            history=[
+                {
+                    "usage": {
+                        "input_tokens": 200,
+                        "cache_read_input_tokens": 9000,
+                        "cache_creation_input_tokens": 800,
+                        "output_tokens": 300,
+                    },
+                    "cost": 0.01,
+                }
+            ]
+        )
+        openai = SimpleNamespace(
+            history=[
+                {
+                    "usage": {
+                        "prompt_tokens": 1000,
+                        "prompt_tokens_details": {"cached_tokens": 600},
+                        "completion_tokens": 50,
+                        "completion_tokens_details": {"reasoning_tokens": 20},
+                    },
+                    "cost": 0.002,
+                }
+            ]
+        )
+        totals = usage_totals(cast(Any, anthropic), cast(Any, openai), cast(Any, anthropic))  # each LM counted once
+        self.assertEqual(
+            totals,
+            {
+                "calls": 2,
+                "input_tokens": 11_000,
+                "cache_read_tokens": 9_600,
+                "cache_write_tokens": 800,
+                "output_tokens": 350,
+                "reasoning_tokens": 20,
+                "cost_usd": 0.012,
+            },
+        )
 
 
 class ExportTest(WorkspaceCase):

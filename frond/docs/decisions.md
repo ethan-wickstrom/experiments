@@ -192,3 +192,13 @@ Each stays closed unless new evidence reopens it:
   - unsetting every base URL: breaks real gateways;
   - declaring a provider through `dspy.lm15.register_provider`: more DSPy-internal surface for the same effect.
 - Evidence: without the fix, every call from this VM fails with "requires LiteLLM, which has no prompt_cache bridge" (ledger G4). `tests/test_lm.py` captures the exact payload.
+
+## D27 · Trust the egress CA at the environment layer, for every container process (2026-11-03, active)
+- Decision: a Docker Compose overlay (`bench/compose/egress-ca.yaml`) mounts the host's CA bundle read-only into each task's `main` service and points `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`, `PIP_CERT`, `NODE_EXTRA_CA_CERTS`, `GIT_SSL_CAINFO` and `CARGO_HTTP_CAINFO` at it. Every run in this VM uses it; the Harbor adapter's own CA upload (G6) is removed.
+- Why: the VM re-terminates outbound TLS. The adapter's fix covered frond's processes only, so the oracle, other agents (the Claude Code and Terminus 2 references of D21) and the task's own commands still failed. A fault that depends on the host belongs in the host's environment layer, where it is fixed once for every agent; in the adapter it would have to be repeated per agent, and the arms would differ in network access.
+- Rejected:
+  - installing the CA into each image's system store (`update-ca-certificates`): needs a command per image and per distribution, and changes the image the task ships;
+  - keeping the adapter's copy as well: two mechanisms for one fault;
+  - an unintercepted network for the VM: not available to this session.
+- Effect on measurement: all arms see the same environment, so paired comparisons are unaffected. Absolute pass rates in this VM now match a normal network for tasks whose `main` container reaches the internet. TB 4.0's separate verifier containers do not get the overlay; E0a shows whether any of them needs the network.
+- Evidence: with the overlay, the oracle passed `fin-saccr-rwa` (24/24 tests) and `satb-audio-transcription` (40/40), which it failed without it (ledger G7).

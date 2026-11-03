@@ -27,10 +27,11 @@ def problems(root: str) -> list[str]:
         more = f"\n… and {len(lines) - 12} more" if len(lines) > 12 else ""
         found.append("uncommitted changes:\n" + "\n".join(lines[:12]) + more)
     git(root, "fetch", "-q", "origin", "main")  # best effort: offline, the last known origin/main is used
-    if git(root, "rev-parse", "--verify", "-q", "origin/main").returncode == 0:
-        if git(root, "merge-base", "--is-ancestor", "HEAD", "origin/main").returncode != 0:
-            head = git(root, "rev-parse", "--short", "HEAD").stdout.strip()
-            found.append(f"HEAD {head} is not on origin/main: push the branch, open a PR and merge it (merge commit)")
+    if git(root, "rev-parse", "--verify", "-q", "origin/main").returncode != 0:
+        found.append("origin/main cannot be resolved, so nothing shows the work reached it: fetch origin main")
+    elif git(root, "merge-base", "--is-ancestor", "HEAD", "origin/main").returncode != 0:
+        head = git(root, "rev-parse", "--short", "HEAD").stdout.strip()
+        found.append(f"HEAD {head} is not on origin/main: push the branch, open a PR and merge it (merge commit)")
     return found
 
 
