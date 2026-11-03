@@ -270,3 +270,18 @@ Each stays closed unless new evidence reopens it:
 - Caveat: forking a process with threads is only safe when no other thread holds a lock the copy needs. The worker forks only between steps, when user threads should have ended (it warns when they have not), and the copy touches none of the objects the reader thread held.
 - Evidence: `tests/test_fork.py`: namespace kept, then independent; tools reach the host; scratch of its own; interrupt and shutdown affect only the copy, which is reaped; copies do not fork again; the containment checks (no write, no connection) pass inside a copy under namespaces and Landlock.
 
+## D32 · FORK: model-requested branches, run in turn from the world at FORK, kept by the model's own check (2026-11-03, active)
+- Decision:
+  - `FORK(options, check=None, steps=8)` is a REPL built-in, like SUBMIT, defined only when `--fork` is 2 or more. Calling it ends the step;
+  - for each option, frond checks out the world at FORK, forks the main REPL (B6), and runs a branch of the agent for at most `steps` steps. The branch continues the main history, with a note naming its option as the FORK step's output, and has its own observations, jobs and step-log scope;
+  - `check`, a shell command, runs on each branch's world; exit 0 passes. Without a check, a branch that called SUBMIT passes. The passing branch with the fewest steps is kept (a submitted one first), and its world is checked out; with none passing, the world at FORK is. The FORK step's output reports every branch;
+  - the main REPL stays as it was at FORK; branches cannot fork again; `--fork` defaults to 1 (off) until E2.
+- Why: H2 asks whether exploring alternatives and keeping what a verifier prefers raises pass rate per dollar. The model knows when it faces a real choice, and usually knows a command that tells which option worked. Continuing the same history makes every branch's prompt share the main prompt's prefix through the FORK step, so each branch's context costs cache reads (`design.md`, "Views are compiled").
+- Rejected:
+  - branches in parallel, each in a copy of the directory: copies lack the caches and environments worlds exclude (`.venv`, `node_modules`), so checks fail for the wrong reason; and parallel branches race for the VM's 4 CPUs. Running in turn costs wall-clock time, which the program does not measure;
+  - continuing the main REPL from the winner's fork: the copy cannot fork again (D31), so later FORKs would fail; the model recomputes what it needs, as the report says;
+  - an LLM judge to choose between branches: another model call per branch, and a weaker signal than a check;
+  - merging several passing branches by three-way merge: their changes overlap more often than not; one branch is kept, as best-of-k sampling does;
+  - frond deciding when to fork (on every failed check, say): the model sees the choice, frond does not; E2 measures whether the model uses FORK well.
+- Evidence: `tests/test_branches.py`: the passing branch's world is kept and its REPL changes are not; every branch starts from the world at FORK; none passing restores it; branch prompts equal the main prompt through the FORK step; FORK is absent when off; too many options is an error the model sees; branch calls are tagged and fork outcomes exported.
+

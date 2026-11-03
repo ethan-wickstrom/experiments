@@ -54,7 +54,8 @@ MAX_CAPTURE = 2_000_000
 STREAM_INTERVAL = 0.05
 REPR_LIMIT = 4000
 MAX_NAMES = 40
-RESERVED = {"SUBMIT", "ToolError"}
+RESERVED = {"SUBMIT", "FORK", "ToolError"}
+MAX_BRANCH_STEPS = 12
 _send_lock = threading.Lock()
 
 
@@ -67,6 +68,14 @@ def send(message: dict[str, Any]) -> None:
 
 class Submission(BaseException):
     def __init__(self, value: Any) -> None:
+        super().__init__()
+        self.value = value
+
+
+class Branching(BaseException):
+    """Raised by FORK: the step ends here, and the host explores the options (ledger B7)."""
+
+    def __init__(self, value: dict[str, Any]) -> None:
         super().__init__()
         self.value = value
 
@@ -296,6 +305,7 @@ class Session:
         self.namespace: dict[str, Any] = {"__name__": "__repl__", "__builtins__": builtins}
         self.tool_names: set[str] = set()
         self.output_fields: list[dict[str, Any]] | None = None
+        self.max_branches = 1  # FORK exists when the host allows two or more branches
         self.executing = False
         threading.Thread(target=self._read, name="frond-worker-reader", daemon=True).start()
 
@@ -378,7 +388,9 @@ class Session:
             raise ToolError(message)
         return rehydrate(reply.get("value"))
 
-    def configure(self, tools: dict[str, dict[str, str]], output_fields: list[dict[str, Any]] | None) -> None:
+    def configure(
+        self, tools: dict[str, dict[str, str]], output_fields: list[dict[str, Any]] | None, max_branches: int = 1
+    ) -> None:
         for name in self.tool_names - set(tools):
             self.namespace.pop(name, None)
         self.tool_names = set(tools)
@@ -387,6 +399,23 @@ class Session:
             self.namespace[name] = make_stub(self, name, spec.get("doc", ""), spec.get("signature", ""))
         self.namespace["SUBMIT"] = self.submit
         self.namespace["ToolError"] = ToolError
+        self.max_branches = max_branches
+        if max_branches > 1:
+            self.namespace["FORK"] = self.branch
+        else:
+            self.namespace.pop("FORK", None)
+
+    def branch(self, options: list[str], check: str | None = None, steps: int = 8) -> None:
+        """FORK: explore ``options`` in copies of the workspace and REPL; the host keeps the one ``check`` passes."""
+        if not isinstance(options, (list, tuple)) or not all(isinstance(o, str) and o.strip() for o in options):
+            raise TypeError("FORK takes options: a list of non-empty strings, one per approach to try")
+        if not 2 <= len(options) <= self.max_branches:
+            raise ValueError(f"FORK takes 2 to {self.max_branches} options; got {len(options)}")
+        if check is not None and not (isinstance(check, str) and check.strip()):
+            raise TypeError("check must be a shell command (a string) whose exit code 0 means success")
+        if not isinstance(steps, int) or not 1 <= steps <= MAX_BRANCH_STEPS:
+            raise ValueError(f"steps must be an integer from 1 to {MAX_BRANCH_STEPS}")
+        raise Branching({"options": [o.strip() for o in options], "check": check, "steps": steps})
 
     def submit(self, *args: Any, **kwargs: Any) -> None:
         fields = [f["name"] for f in self.output_fields or []]
@@ -402,9 +431,9 @@ class Session:
         raise Submission(values)
 
     def execute(self, request: dict[str, Any]) -> dict[str, Any]:
-        self.configure(request.get("tools") or {}, request.get("output_fields"))
+        self.configure(request.get("tools") or {}, request.get("output_fields"), int(request.get("branches") or 1))
         for key, value in (request.get("variables") or {}).items():
-            if key in self.tool_names or key in {"SUBMIT", "__builtins__"}:
+            if key in self.tool_names or key in {"SUBMIT", "FORK", "__builtins__"}:
                 continue
             self.namespace[key] = value
         code = request.get("code", "")
@@ -434,6 +463,8 @@ class Session:
                     print(text)
         except Submission as sub:
             result = {"type": "done", "status": "final", "value": sub.value}
+        except Branching as fork:
+            result = {"type": "done", "status": "fork", "value": fork.value}
         except KeyboardInterrupt:
             result = {
                 "type": "done",

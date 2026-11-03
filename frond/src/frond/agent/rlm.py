@@ -16,11 +16,13 @@ interactive coding agent needs around each iteration:
 from __future__ import annotations
 
 import contextvars
+import copy
 import inspect
 import textwrap
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from typing import Any, cast
 
 import dspy
@@ -30,6 +32,8 @@ from dspy.primitives.repl_types import REPLEntry, REPLHistory, REPLVariable
 from dspy.utils.exceptions import format_error_for_lm
 
 from frond.agent.adapter import NOTE_CODE, STEER_CODE, FoldEntry, UserEntry, escape_marker, user_tag
+from frond.agent.prompts import FORK_GUIDE
+from frond.agent.repl import ForkRequest
 from frond.agent.tools import display_signature
 
 ERROR_PREFIXES = ("[Error]", "[Type Error]")
@@ -54,6 +58,43 @@ class LoggedEntry(REPLEntry):
 
     seq: int | None = None
     step: int = 0
+
+
+@dataclass
+class Branching:
+    """What a FORK step's branches continue from (ledger B7). Each branch replays nothing: it continues the step's
+    history, with its own note as the FORK step's output, so every branch's prompt shares the main prompt's prefix
+    through the FORK step, which the provider's cache serves."""
+
+    rlm: FrondRLM
+    repl: Any
+    variables: list[REPLVariable]
+    history: REPLHistory
+    iteration: int
+    input_args: dict[str, Any]
+    output_field_names: list[str]
+    interpreter_factory: Any
+    sub_agent_rules: str
+    reasoning: str
+    code: str
+
+    def run(self, repl: Any, note: str, steps: int, hooks: Hooks) -> Prediction | REPLHistory:
+        """Run one branch in ``repl`` (a fork of the main REPL) for at most ``steps`` steps: its Prediction if it
+        called SUBMIT, else its history when the steps ran out."""
+        rlm = copy.copy(self.rlm)
+        rlm.hooks = hooks
+        fork_step = self.iteration + 1
+        entry = LoggedEntry(reasoning=self.reasoning, code=self.code, output=note, step=fork_step)
+        history = REPLHistory(entries=[*self.history.entries, entry], max_output_chars=self.history.max_output_chars)
+        for i in range(steps):
+            result = rlm._execute_iteration(
+                repl, self.variables, history, fork_step + i, self.input_args, self.output_field_names,
+                self.interpreter_factory, self.sub_agent_rules,
+            )  # fmt: skip
+            if isinstance(result, Prediction):
+                return result
+            history = result
+        return history
 
 
 class Hooks:
@@ -89,6 +130,10 @@ class Hooks:
         """Files the model read this turn that changed since (freshness, H3); "(none)" when all still hold."""
         return "(none)"
 
+    def fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
+        """Explore the options of a FORK and return the step's output (ledger B7)."""
+        return "FORK is not available here."
+
     def take_messages(self, step: int) -> list[str]:
         """Messages the user sent while the turn ran, to show the model before ``step`` (and forget)."""
         return []
@@ -121,10 +166,12 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         keep_recent: int = 4,
         marker: str = "",
         freshness: bool = False,
+        max_branches: int = 1,
         **kwargs: Any,
     ) -> None:
         self.hooks = hooks or Hooks()
         self.freshness = freshness  # show the model which of its reads went stale (H3; hooks.stale_reads)
+        self.max_branches = max_branches  # FORK is documented, and defined in the REPL, from 2 (H2, ledger B7)
         self.preview_limits = preview_limits or {}
         self.tail_preview = tail_preview
         self.keep_recent = keep_recent
@@ -170,6 +217,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             signature = signature.append("repl_variables", dspy.InputField(desc=REPL_VARIABLES_DESC), type_=str)
         if self.freshness and "stale_reads" not in signature.input_fields:
             signature = signature.append("stale_reads", dspy.InputField(desc=STALE_READS_DESC), type_=str)
+        if self.max_branches > 1 and "Branching\n" not in signature.instructions:
+            signature = signature.with_instructions(
+                signature.instructions + FORK_GUIDE.format(branches=self.max_branches)
+            )
         return signature
 
     # ── sub-LLM tools with progress events ───────────────────────────────────
@@ -282,6 +333,12 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         hooks.exec_started(step)
         started = time.monotonic()
         result = self._execute_code(repl, code, input_args)
+        if isinstance(result, ForkRequest):  # the step ended at FORK: the branches' outcome is its output
+            branching = Branching(
+                self, repl, variables, history, iteration, input_args, output_field_names,
+                interpreter_factory, sub_agent_rules, reasoning, code,
+            )  # fmt: skip
+            result = hooks.fork(step, result, branching)
         duration = time.monotonic() - started
         if _did_not_compile(result):
             hooks.code_rejected(step)  # protocol adherence (ledger B2)

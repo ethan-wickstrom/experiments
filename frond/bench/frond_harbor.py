@@ -135,6 +135,9 @@ class FrondOptions(InstalledAgentOptions):
     freshness: Annotated[str | None, Cli("--freshness")] = Field(
         default=None, description="on: mark stale reads and guard overwrites; off: only count stale actions; H3"
     )
+    fork: Annotated[int | None, Cli("--fork")] = Field(
+        default=None, description="most branches a FORK may explore; 1 turns FORK off (frond's default); H2"
+    )
 
 
 class Frond(BaseInstalledAgent):

@@ -23,6 +23,7 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any, Protocol
 
@@ -43,6 +44,17 @@ EXECUTION_INSTRUCTIONS = (
 )
 
 type OutputSink = Callable[[str], None]
+
+
+@dataclass(frozen=True)
+class ForkRequest:
+    """The model called FORK: the step ended there, and the host explores the options (ledger B7)."""
+
+    options: list[str]
+    check: str | None
+    steps: int
+
+
 _IDLE: dict[str, Any] = {"type": "idle"}
 # FROND_SANDBOX value -> why a confined worker would not start here, so later workers skip straight to the fallback
 _confine_failures: dict[str, str] = {}
@@ -140,6 +152,7 @@ class ReplSession:
         self._scratch: str | None = None  # the worker's TMPDIR when confined: writable, and readable by commands
         self._tools: dict[str, Callable[..., Any]] = {}
         self.output_fields: list[dict[str, Any]] | None = None
+        self.max_branches = 1  # FORK is defined in the REPL when this is 2 or more (ledger B7)
         self._proc: _Process | None = None
         self._forks: socket.socket | None = None  # where this session sends a forked worker its channel (B6)
         self._inbox: queue.Queue[dict[str, Any] | None] = queue.Queue()
@@ -383,6 +396,7 @@ class ReplSession:
                 "variables": variables,
                 "tools": tools,
                 "output_fields": self.output_fields,
+                "branches": self.max_branches,
             }
         )
         started = time.monotonic()
@@ -467,6 +481,9 @@ class ReplSession:
             stdout = (stdout + "\n" if stdout else "") + f"[warning] {warning}"
         if status == "final":
             return FinalOutput(message.get("value"))
+        if status == "fork":
+            value = message.get("value") or {}
+            return ForkRequest(list(value.get("options") or []), value.get("check"), int(value.get("steps") or 8))
         if status == "interrupted" or reason:
             if reason == "cancelled" or self.control.cancelled():
                 raise TurnCancelled()
@@ -520,6 +537,9 @@ class ReplLease:
     @property
     def names(self) -> list[str]:
         return self._session.names
+
+    def fork(self) -> ReplSession:
+        return self._session.fork()
 
     def shutdown(self) -> None:
         if not self._released:

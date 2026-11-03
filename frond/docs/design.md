@@ -231,6 +231,8 @@ A run is a rooted tree of worlds. In interactive use, the user's working directo
 - **fork(n, k)** creates k children that share n's path. Each has its own directory (a checkout of n's tree), its own forked REPL, and the same view prefix.
 - **select and merge:** verifiers score the children, the parent continues from the best child, and that child's tree merges into the parent's line.
 
+  As built (B7, D32): the model calls `FORK(options, check, steps)`, which ends its step. Branches run one after another in the real directory, each reset to the world at FORK and given a fork of the REPL (B6), so caches and environments excluded from worlds are there for every branch. Each continues the main history with its own note as the FORK step's output, so branches and the main line share one cached prefix. The kept branch's world is checked out; the main REPL stays as it was at FORK.
+
 ### Views are compiled, and caching follows from immutability
 
 The prompt for world w is View(w) = render(policy(path(root → w))).
