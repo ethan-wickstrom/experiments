@@ -53,7 +53,7 @@ Only what the agent cannot get itself (D16).
 | E2 | H2: fork k=3 with verifier selection | paired test; cost ratio | blocked: E0 | `research.md`; arms `--fork 1` and `--fork 3` (B7) |
 | E3 | H3: freshness marks | failed edits and stale actions per task, pass rate | blocked: E0 | `research.md`; the arms are `--freshness on` and `off` (B5) |
 | E4 | H4: fold against summary on LHTB 2.0 | paired test | blocked: E0 | `research.md`; arms `--context fold` and `--context summary` (B10) |
-| E5 | H5: scopes as savepoints on LHTB 2.0 | paired test; tests A1–A4 and A10 | blocked: E0, B9 | `research.md` |
+| E5 | H5: scopes as savepoints on LHTB 2.0 | paired test; tests A1–A4 and A10 | blocked: E0 | `research.md`; arms `--scopes off` and `--scopes on` (B9) |
 | E6 | H6: cache layout | cost and pass rate; tests A9 | blocked: E0, B3 | `research.md` |
 | E7 | Offline prompt optimization (GEPA) with a regression gate (was I11) | gains hold on held-out tasks (A11) | blocked: E1–E6 infrastructure; a reward that does not reward shortcuts | [2607.14004](https://arxiv.org/abs/2607.14004) |
 | E8 | `plan()` ablation (was I10) | pass rate with and without `plan()` | blocked: E0 | Amp [dropped its TODO tool](https://ampcode.com/news/todos-are-done) |
@@ -75,7 +75,7 @@ Only what the agent cannot get itself (D16).
 | B6 | Forkable REPL: the worker forks when idle (`os.fork`, pipes passed with `socket.send_fds`) | a child keeps the namespace, both run independently, and they are confined like the parent | closed (this commit) | D31. `ReplSession.fork()`: the host passes a socketpair end over the worker's fork channel (SCM_RIGHTS); the copy runs in its own session with its own scratch directory and speaks the protocol on that socket; the original reaps it. `tests/test_fork.py`, including the confinement checks run inside a copy under namespaces and under Landlock |
 | B7 | Fork, select, merge: a `fork(options)` REPL function, a branch runner, verifier hooks, selection, merge | a scripted three-branch test that keeps the branch whose tests pass | closed (this commit) | D32. `FORK(options, check, steps)` ends the step; each branch runs in a fork of the REPL, from the world at FORK, continuing the main history (shared cache prefix); the check scores it; the passing branch with the fewest steps is kept, or the world at FORK when none passes. `--fork K` (default 1, off). Branch calls are tagged in `calls.jsonl`, and each FORK's outcomes are in `metrics.json`. `tests/test_branches.py` |
 | B8 | ReAct arm: `dspy.ReAct` with frond's tools | runs the demo task headless | closed (this commit) | D33: not `dspy.ReAct` but a tools action space in frond's own loop (`--arm react`): each step is `tool` plus JSON `args`, called host-side, with the same tools, documentation, turns layout, cache marks, freshness and step log as the RLM arm. `tests/test_tools_arm.py` |
-| B9 | Scopes as savepoints (was P5), after N2 | collapse, rewind and cache-prefix tests | open | H5, D22 |
+| B9 | Scopes as savepoints (was P5), after N2 | collapse, rewind and cache-prefix tests | closed (this commit) | D35. `open_scope`, `close_scope`, `abandon_scope` (`agent/scopes.py`): closing collapses the scope's steps to goal → result; abandoning reverts its workspace changes by three-way merge, cuts the context back with the reason as a note, and lists stale REPL names; the open scopes are a volatile field. `--scopes on` (default off). Counts in `metrics.json`. `tests/test_scopes.py` |
 | B10 | Summary-compaction arm, rebuilt from the removed `_compact` | runs; the context-policy flag picks it | closed (this commit) | D34. `--context summary`: past the budget, the main model summarises the early steps (and any earlier summary, and the user's mid-turn messages); no index points back, and `history_search`/`history_step` are not offered. Both arms count compactions (`metrics.json`), which also tests A5. `tests/test_summary_arm.py` |
 | B11 | Pin DSPy and check at startup (was P6b) | a changed signature gives a clear startup error | open | R9 |
 | B12 | Redact secrets from exported records before results are committed (was I4) | exported records hold no credential values from the environment | closed (this commit) | `agent/redact.py`: the values of credential-named variables (by name), common API key shapes and URL passwords are replaced in every `--export` file and in `-p` output, which Harbor stores and may upload; `tests/test_redact.py` |
@@ -123,7 +123,7 @@ Only what the agent cannot get itself (D16).
 | R4 | Stopping is prompt and final | B17 | open, low | — |
 | R5 | The user's words cannot be forged | — | closed | 3c188c9 (D14) |
 | R6 | No unapproved writes, network use or credentials | the main agent's commands remain | deferred | worker and read-only agents done (3c188c9, D13). The main agent's command sandbox (was P4) is daily-driver work (D16). Benchmark runs are already isolated by the container |
-| R7 | The agent can rewind context and workspace together | B4b, then B9 | open | the workspace half exists: every step-log record names its world (B4b). Rewinding the context with it is B9 |
+| R7 | The agent can rewind context and workspace together | B4b, then B9 | closed (this commit) | `abandon_scope` returns the context and the workspace to the scope's savepoint together (B9); the REPL is not rewound, and its changed names are listed as stale |
 | R8 | Most input is served from cache | E0 | blocked: REQ-1 | — |
 | R9 | An incompatible DSPy fails at startup | B11 | open | — |
 | R11 | macOS | — | closed: won't do | D25 |
@@ -158,7 +158,7 @@ Only what the agent cannot get itself (D16).
 
 | ID | Item | Tested by | Status |
 |---|---|---|---|
-| A1 | The model opens and closes scopes without being told each time | E5 | blocked |
+| A1 | The model opens and closes scopes without being told each time | E5: `scopes` counts in `metrics.json` | blocked |
 | A2 | Collapsing a closed scope hides nothing needed later | E5: `history_step` calls on collapsed steps | blocked |
 | A3 | Listing stale names after an abandon keeps the model off discarded values | E5, B9 tests | blocked |
 | A4 | Rewinds need a verifier signal | E5: split by whether the task has tests | blocked |

@@ -90,7 +90,7 @@ Each is stated as a property of the world. Three are met and left out of the tab
 | R4 | Esc halts within a second and no tool runs afterward; a mid-turn message reaches the model at the next step; Tab queues | Latency measured in the scripted harness | Mid-turn messages and queueing tested; stop latency unmeasured |
 | R5 | The user's words reach the model verbatim and cannot be confused with tool output | A file containing frond's framing for user messages is shown escaped | Verbatim within a turn and for the last 8,000 characters across turns. Can be forged |
 | R6 | Without the user's approval, no frond process writes outside the workspace and temp, reaches the network, or holds credentials | Exfiltration test from the REPL; sandbox tests | Holds only for sub-agents' commands. The PR #2 OS-level read-only guarantee does not cover their Python. Every REPL worker has network access and the keys |
-| R7 | The agent can return its context and the workspace to an earlier point in the turn | Rewind test | Half: every step has a world (D29); no rewind yet (B9) |
+| R7 | The agent can return its context and the workspace to an earlier point in the turn | Rewind test | Done (D35): `abandon_scope` rewinds both to the scope's savepoint |
 | R8 | Most input is served from cache | At least 90% cache reads over a 20-step turn, live on Anthropic and OpenAI | Simulated only |
 | R9 | An incompatible DSPy release fails at startup, not mid-turn | Contract test | Missing |
 | R10 | Every run leaves a complete record for analysis and benchmark review | ATIF export | Done; tested only in a dry run |
@@ -145,6 +145,8 @@ Options 4–7 are not rivals; they describe the same structure from different si
 - frond's REPL variables already play the role of CarryOn's reusable objects. The RLM's premise is that progress lives in the environment, not the transcript.
 
 StateHarness's diagnostic sessions and CarryOn's compiler and grounder are rejected: each adds model calls per fold, and the REPL already holds the objects. The budget fold stays as the fallback for when the agent never closes a scope.
+
+As built (B9, D35): `open_scope(goal)`, `close_scope(result)` and `abandon_scope(reason)` are tools; the loop applies a close or an abandon to the history at the start of the next step. Closing collapses the scope's steps to one entry; abandoning reverts the scope's workspace changes by a three-way merge (so later edits by others stay), cuts the context back, notes the reason, and lists the REPL names changed since as stale. The user's messages from inside a scope are kept. Scopes are a turn's: they do not outlive it.
 
 Assumptions to test (A1–A4, A10 in open-items.md):
 - The model opens and closes scopes unprompted. Spine's agents closed 224 scopes across seven projects; frond's logs should be counted.
@@ -289,7 +291,7 @@ Requirements to design, code, tests and status. Design commitments without a req
 | R4 | D09 | `tui/app.py`, `agent/session.py` | `test_steering`, `test_app` | steer and queue done; stop latency unmeasured | B17 |
 | R5 | D14 | `agent/adapter.py`, `agent/rlm.py`, `agent/session.py` | `test_provenance` | done (3c188c9) | — |
 | R6 | D06, D13 | `agent/_sandbox.py`, `agent/repl.py`, `agent/_worker.py`, `agent/shell.py` | `test_sandbox`, `test_containment` | worker and read-only agents done; main agent's commands deferred | R6, G1 |
-| R7 | D22, D29 | `world/store.py` (checkout), `world/timeline.py` | `test_world`, `test_command_undo` | every step-log record names its world; rewinding the context with it is B9 | B9 |
+| R7 | D22, D29, D35 | `world/timeline.py`, `agent/scopes.py`, `agent/rlm.py` (`_apply_scopes`) | `test_world`, `test_scopes` | done: abandoning a scope rewinds context and workspace together; the REPL is not rewound | closed |
 | R8 | D07 | `agent/adapter.py` | `test_caching` (simulated) | simulated | E0 |
 | R9 | — | — | — | missing | B11 |
 | R10 | D11 | `cli.py` (`--export`), `bench/frond_harbor.py` | `test_memory` | done; Harbor pipeline verified with the oracle agent | E0 |

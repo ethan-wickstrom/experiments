@@ -144,6 +144,9 @@ class FrondOptions(InstalledAgentOptions):
         default=None,
         description="fold: early steps folded into a searchable index (default); summary: an LLM summary; H4",
     )
+    scopes: Annotated[str | None, Cli("--scopes")] = Field(
+        default=None, description="on: open, close and abandon scopes; off: none (frond's default); H5"
+    )
     fork: Annotated[int | None, Cli("--fork")] = Field(
         default=None, description="most branches a FORK may explore; 1 turns FORK off (frond's default); H2"
     )

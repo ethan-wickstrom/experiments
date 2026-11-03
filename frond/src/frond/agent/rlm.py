@@ -36,8 +36,9 @@ from dspy.utils.exceptions import format_error_for_lm
 
 from frond.agent.adapter import NOTE_CODE, STEER_CODE, FoldEntry, UserEntry, escape_marker, user_tag
 from frond.agent.control import TurnCancelled
-from frond.agent.prompts import FORK_GUIDE, TOOL_AGENT_INSTRUCTIONS
+from frond.agent.prompts import FORK_GUIDE, SCOPES_GUIDE, TOOL_AGENT_INSTRUCTIONS
 from frond.agent.repl import ForkRequest
+from frond.agent.scopes import ScopeOp
 from frond.agent.tools import display_signature
 
 ERROR_PREFIXES = ("[Error]", "[Type Error]")
@@ -51,6 +52,7 @@ REPL_VARIABLES_DESC = (
     "Names your code has defined in the REPL so far, with their types and sizes. They persist across steps "
     "and turns, so reuse them instead of recomputing."
 )
+OPEN_SCOPES_DESC = "The scopes you have opened and not yet closed or abandoned, outermost first."
 STALE_READS_DESC = (
     "Files you read this turn that changed afterwards, through your own commands or someone else's. What you saw "
     "of them is out of date: read them again before editing them or relying on them."
@@ -162,6 +164,14 @@ class Hooks:
 
     def folded(self, steps: int, before: int, after: int) -> None: ...
 
+    def scope_ops(self) -> list[ScopeOp]:
+        """Scopes closed or abandoned during the last step, to apply to the history now (H5, ledger B9)."""
+        return []
+
+    def open_scopes(self) -> str:
+        """The prompt field listing the open scopes."""
+        return "(none)"
+
     def summarize(self, transcript: str) -> str | None:
         """An LLM summary of earlier steps, for the summary context policy (H4); None when it cannot be made."""
         return None
@@ -191,8 +201,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         max_branches: int = 1,
         action_space: str = "code",
         context: str = "fold",
+        scopes: bool = False,
         **kwargs: Any,
     ) -> None:
+        self.scopes = scopes  # scopes as savepoints: the tools, the open_scopes field and the guide (H5, B9)
         if context not in ("fold", "summary"):
             raise ValueError(f"context must be 'fold' or 'summary', not {context!r}")
         self.context = context  # past the budget: fold early steps into an index, or summarise them (H4, B10)
@@ -269,7 +281,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         signature = self._tools_signature
         if self.freshness:
             signature = signature.append("stale_reads", dspy.InputField(desc=STALE_READS_DESC), type_=str)
-        return signature
+        return self._with_scopes(signature)
 
     def _tool_context(self, input_args: dict[str, Any]) -> list[str]:
         """The inputs as text: without a REPL, the model reads them here, clipped like the REPL's previews."""
@@ -343,7 +355,40 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             signature = signature.with_instructions(
                 signature.instructions + FORK_GUIDE.format(branches=self.max_branches)
             )
-        return signature
+        return self._with_scopes(signature)
+
+    def _with_scopes(self, signature: type[dspy.Signature]) -> type[dspy.Signature]:
+        if not self.scopes or "open_scopes" in signature.input_fields:
+            return signature
+        signature = signature.with_instructions(signature.instructions + SCOPES_GUIDE)
+        return signature.append("open_scopes", dspy.InputField(desc=OPEN_SCOPES_DESC), type_=str)
+
+    def _apply_scopes(self, history: REPLHistory, ops: list[ScopeOp]) -> REPLHistory:
+        """Collapse each closed scope's steps into one entry, and cut an abandoned one's away with a note. The
+        steps are the tail of the history, so the prompt prefix before the scope stays as it was; the user's
+        messages from inside the scope are kept."""
+        for op in ops:
+            entries = list(history.entries)
+            start = next(
+                (i for i, e in enumerate(entries) if isinstance(e, LoggedEntry) and e.step >= op.scope.step),
+                len(entries),
+            )
+            region = entries[start:]
+            users = [e for e in region if isinstance(e, UserEntry)]
+            seqs = [e.seq for e in region if isinstance(e, LoggedEntry) and e.seq]
+            where = f"Its steps are log seq {min(seqs)}-{max(seqs)}" if seqs else "Its steps are in the step log"
+            where += "; history_step(seq) shows any of them." if self.context == "fold" else "."
+            if op.kind == "close":
+                text = f"Scope closed: {op.scope.goal}\nResult: {op.text}\n{where}"
+            else:
+                text = f"Abandoned: {op.scope.goal}\nWhy: {op.text}\n{op.note}\n{where}"
+            note = FoldEntry(
+                reasoning=f"({'closed' if op.kind == 'close' else 'abandoned'} scope: {op.scope.goal})",
+                code=NOTE_CODE,
+                output=escape_marker(text, self.marker),
+            )
+            history = REPLHistory(entries=[*entries[:start], note, *users], max_output_chars=history.max_output_chars)
+        return history
 
     # ── sub-LLM tools with progress events ───────────────────────────────────
 
@@ -421,6 +466,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         hooks = self.hooks
         hooks.check()
         step = iteration + 1
+        history = self._apply_scopes(history, hooks.scope_ops())
         steers = hooks.take_messages(step)
         if steers:  # appended, so the cached prefix of the prompt survives
             entries = [UserEntry(reasoning="", code=STEER_CODE, output=text) for text in steers]
@@ -429,6 +475,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         hooks.step_started(step, self.max_iters)
         hooks.before_lm(step)
         volatile = {"stale_reads": escape_marker(hooks.stale_reads(step), self.marker)} if self.freshness else {}
+        if self.scopes:
+            volatile["open_scopes"] = escape_marker(hooks.open_scopes(), self.marker)
         if self.action_space == "tools":
             return self._tool_step(step, history, input_args, output_field_names, volatile)
         names = getattr(repl, "names", None)
@@ -548,9 +596,9 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             code=NOTE_CODE,
             output="Summary of the earlier steps of this turn:\n" + escape_marker(summary, self.marker),
         )
-        compacted = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
-        self.hooks.folded(len(old), before, len(compacted.format()))
-        return compacted
+        summarised = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
+        self.hooks.folded(len(old), before, len(summarised.format()))
+        return summarised
 
 
 def _did_not_compile(result: Any) -> bool:

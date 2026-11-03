@@ -35,6 +35,7 @@ from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Compaction, Investigation
 from frond.agent.repl import ForkRequest, ReplPool
 from frond.agent.rlm import Branching, FrondRLM, Hooks
+from frond.agent.scopes import ScopeOp, Scopes
 from frond.agent.shell import JobManager, ShellRunner
 from frond.agent.steplog import StepLog
 from frond.agent.streaming import StreamSink, SubmitStreamer
@@ -95,6 +96,7 @@ class AgentConfig:
     fork: int = 1  # most branches a FORK may explore (H2); 1 leaves FORK out of the REPL and the prompt
     arm: str = "rlm"  # "rlm": Python in a persistent REPL; "react": one tool call per step, same tools (H1)
     context: str = "fold"  # past the budget: "fold" early steps into a searchable index, or "summary" (H4)
+    scopes: bool = False  # scopes as savepoints: open, close (collapse) and abandon (rewind) subtasks (H5)
 
 
 @dataclass
@@ -207,6 +209,12 @@ class _RootHooks(Hooks):
 
     def fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
         return self.agent._fork(step, request, branching)
+
+    def scope_ops(self) -> list[ScopeOp]:
+        return self.agent.scopes.take()
+
+    def open_scopes(self) -> str:
+        return self.agent.scopes.describe()
 
     def before_lm(self, step: int | None) -> None:
         self.agent._stream_step = step
@@ -445,6 +453,8 @@ class Agent:
             self.timeline.warm()
         self._world = ""  # the world after the latest step, for its step-log record
         self.observations = Observations(workspace.root)  # what the model read this turn (freshness, H3)
+        self.scopes = Scopes()  # the open scopes of this turn (H5)
+        self._in_branch = False  # a FORK branch runs: scopes belong to the main line
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -473,7 +483,7 @@ class Agent:
             hooks=_RootHooks(self),
             preview_limits={"request": 20_000, "workspace": 24_000, "history": 12_000, "attachments": 6_000},
             tail_preview=frozenset({"history"}),
-            tools=self.toolbox.functions(),
+            tools=self.toolbox.functions() + (self._scope_tools() if config.scopes else []),
             max_iters=config.max_steps,
             max_llm_calls=config.max_llm_calls,
             max_output_chars=config.max_output_chars,
@@ -484,6 +494,7 @@ class Agent:
             max_branches=config.fork if config.arm == "rlm" else 1,
             action_space="tools" if config.arm == "react" else "code",
             context=config.context,
+            scopes=config.scopes,
         )
         self.pool.root.max_branches = config.fork
         self._listeners = [
@@ -608,6 +619,7 @@ class Agent:
             self._steers, self._accepting_steers = [], True
         head = ""
         self.observations.reset()
+        self.scopes.reset()
         if self.timeline is not None:
             record.world_before, head = self.timeline.begin_turn()
         started = time.monotonic()
@@ -697,6 +709,52 @@ class Agent:
         self.metrics.summaries += 1
         return str(prediction.summary or "").strip() or None
 
+    # ── scopes (H5) ──────────────────────────────────────────────────────────
+
+    def _scope_tools(self) -> list[Callable[..., Any]]:
+        """The three scope tools, counted like the others (ledger B9)."""
+
+        def open_scope(goal: str) -> str:
+            """Start a subtask that will take several steps (reproduce the bug, rewrite parse()). Finish it with
+            close_scope(result), or abandon_scope(reason) if the approach fails. Scopes nest."""
+            self._outside_branch()
+            world = self.timeline.snapshot() if self.timeline is not None else ""
+            depth = self.scopes.open(str(goal), self._step, world, list(self.pool.root.names))
+            return f"opened scope {depth}: {goal}"
+
+        def close_scope(result: str) -> str:
+            """Finish the innermost open scope with its result, as the last call of a step. From the next step its
+            steps are one entry in your context, goal and result; they stay in the step log."""
+            self._outside_branch()
+            scope = self.scopes.end("close", str(result))
+            return f"closed scope: {scope.goal}. From the next step its steps are one entry in your context."
+
+        def abandon_scope(reason: str) -> str:
+            """Give up the innermost open scope: its workspace changes are reverted, your context goes back to where
+            it opened, and your reason stays as a note. REPL variables are not rewound; changed names are listed."""
+            self._outside_branch()
+            scope = self.scopes.innermost()
+            if scope is None:
+                raise ValueError("there is no open scope to abandon")
+            parts = []
+            if self.timeline is not None and scope.world:
+                undone = self.timeline.revert(scope.world, self.timeline.snapshot())
+                self.workspace.invalidate()
+                parts.append(f"Reverted: {', '.join(undone.restored) or 'no files'}.")
+                if undone.conflicts:
+                    parts.append(f"Kept, since they changed again in the same places: {', '.join(undone.conflicts)}.")
+            now = [line for line in self.pool.root.names if line not in scope.names]  # new or changed since
+            changed = sorted({line.split(":", 1)[0].split("(", 1)[0].strip() for line in now})
+            parts.append(f"REPL names changed since it opened, now stale: {', '.join(changed) or 'none'}.")
+            self.scopes.end("abandon", str(reason), " ".join(parts))
+            return f"abandoned scope: {scope.goal}. {' '.join(parts)}"
+
+        return [self.metrics.counted(f) for f in (open_scope, close_scope, abandon_scope)]
+
+    def _outside_branch(self) -> None:
+        if self._in_branch:
+            raise PermissionError("scopes belong to the main line of work; a FORK branch cannot open or end them")
+
     # ── branches (FORK) ──────────────────────────────────────────────────────
 
     def _fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
@@ -712,6 +770,7 @@ class Agent:
             return "FORK needs workspace snapshots, which are off here: choose one option and go on with it."
         start = timeline.snapshot()
         outcomes: list[BranchOutcome] = []
+        self._in_branch = True
         try:
             for index, option in enumerate(request.options, start=1):
                 self.control.check()
@@ -722,6 +781,8 @@ class Agent:
             timeline.work.checkout(start)
             self.workspace.invalidate()
             raise
+        finally:
+            self._in_branch = False
         best = _best(outcomes)
         timeline.work.checkout(best.world if best is not None else start)
         self.workspace.invalidate()

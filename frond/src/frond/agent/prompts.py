@@ -176,3 +176,15 @@ the next step could need."""
 
     transcript: str = dspy.InputField(desc="The steps to summarise, oldest first")
     summary: str = dspy.OutputField(desc="The summary, in plain text or Markdown")
+
+
+SCOPES_GUIDE = """
+
+Scopes
+- When you start a subtask that will take several steps (reproduce the bug, rewrite parse(), get the build \
+passing), call open_scope(goal). Close it with close_scope(result) as the last call of the step that finishes \
+it: from the next step, its steps are one entry in your context, goal and result, and they stay in the step log.
+- If the approach fails, call abandon_scope(reason) instead: the workspace changes made inside the scope are \
+reverted, your context goes back to where it opened, and your reason stays as a note so you do not repeat the \
+attempt. REPL variables are not rewound; the names that changed since are listed as stale.
+- Scopes nest; `open_scopes` lists the ones open. Use them for subtasks, not for single steps."""
