@@ -60,3 +60,7 @@ why = "2026-11-03: D53's structured-output probe, 2 calls on each of Haiku, Sonn
 jobs = "E0-markers"
 usd = 9.50
 why = "2026-11-03: E0's fourth start, on DSPy's field markers, stopped before Opus for G48 (D53): Haiku's 10 trials $0.57 and Sonnet's 10 $8.92, from their usage.json; no trial was killed"
+
+[[spent]]
+usd = 0.02
+why = "2026-11-03: B19's schema probes for the tools arm, outside Harbor: Haiku and Sonnet 5.5, 2 calls answered ($0.01) and 4 refused by the API before running"
