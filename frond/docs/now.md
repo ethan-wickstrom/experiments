@@ -1,6 +1,6 @@
 # Now
 
-Updated 2026-11-03, first session, after B3 (the experiment machinery) and the third start of E0a.
+Updated 2026-11-03, first session, after B4b (worlds wired into frond) while the third E0a run finishes.
 
 ## In flight
 
@@ -10,8 +10,8 @@ E0a, the oracle sweep, runs through the matrix runner on the 56 TB 4.0 tasks tha
 
 ## Next, in order (research-first, D16)
 
-1. B4b: wire worlds into frond, with undo as a revert of the turn's steps, which closes R2, R3, P2, G18 and G19.
-2. B5, B6 and B7: freshness (including stale-action counts), the forkable REPL, then fork, select and merge; each adds its arm flag and spec.
+1. B5: freshness. Observations carry content hashes; the prompt marks those whose files changed since; stale actions are counted (H3).
+2. B6 and B7: the forkable REPL, then fork, select and merge on worlds (H2); each adds its arm flag and spec.
 3. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`.
 
 ## Waiting on the owner

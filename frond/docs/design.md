@@ -85,12 +85,12 @@ Each is stated as a property of the world. Three are met and left out of the tab
 | ID | Requirement | Acceptance check | Status at 2726a56 |
 |---|---|---|---|
 | R1 | With the same model, frond solves at least as many Terminal-Bench 2.1 tasks as Codex CLI, at lower cost per solved task | Paired by task, 5 trials each; no worse within 5 points; cost priced with cache reads | Unmeasured |
-| R2 | Every change in a turn is shown, including command-made ones, and the turn's net change is reviewable | Each mutation kind (edit, create, delete, chmod, symlink, command) emits a diff; a net-change view exists | Per-change diffs in git workspaces only. No net view. Changes to ignored files and non-git folders are unseen |
-| R3 | `/undo` restores what frond changed and leaves later changes by others alone, reporting the conflict | A test edits a file between frond's change and `/undo` | Fails: undo overwrites the later edit |
+| R2 | Every change in a turn is shown, including command-made ones, and the turn's net change is reviewable | Each mutation kind (edit, create, delete, chmod, symlink, command) emits a diff; a net-change view exists | Done (D29): command diffs in any directory, `/diff` for the net change. Files git ignores are left out by design |
+| R3 | `/undo` restores what frond changed and leaves later changes by others alone, reporting the conflict | A test edits a file between frond's change and `/undo` | Done (D29): a three-way revert |
 | R4 | Esc halts within a second and no tool runs afterward; a mid-turn message reaches the model at the next step; Tab queues | Latency measured in the scripted harness | Mid-turn messages and queueing tested; stop latency unmeasured |
 | R5 | The user's words reach the model verbatim and cannot be confused with tool output | A file containing frond's framing for user messages is shown escaped | Verbatim within a turn and for the last 8,000 characters across turns. Can be forged |
 | R6 | Without the user's approval, no frond process writes outside the workspace and temp, reaches the network, or holds credentials | Exfiltration test from the REPL; sandbox tests | Holds only for sub-agents' commands. The PR #2 OS-level read-only guarantee does not cover their Python. Every REPL worker has network access and the keys |
-| R7 | The agent can return its context and the workspace to an earlier point in the turn | Rewind test | Missing |
+| R7 | The agent can return its context and the workspace to an earlier point in the turn | Rewind test | Half: every step has a world (D29); no rewind yet (B9) |
 | R8 | Most input is served from cache | At least 90% cache reads over a 20-step turn, live on Anthropic and OpenAI | Simulated only |
 | R9 | An incompatible DSPy release fails at startup, not mid-turn | Contract test | Missing |
 | R10 | Every run leaves a complete record for analysis and benchmark review | ATIF export | Done; tested only in a dry run |
@@ -271,7 +271,7 @@ At a fork, children run until a verifier gives a signal or a budget runs out. Wi
 | Stale reads are invisible | Stale observations are marked in the view |
 | REPL state dies with the process | A REPL image: a forked process, or a replay recipe |
 
-Build order (ledger): B4 (store and merge) → B5 (freshness) → B6 (forkable REPL) → B7 (fork, select, merge) → B9 (scopes) → B13 (world view).
+Build order (ledger): B4 (store and merge; wired into frond in B4b, D29) → B5 (freshness) → B6 (forkable REPL) → B7 (fork, select, merge) → B9 (scopes) → B13 (world view).
 
 ## Traceability matrix
 
@@ -280,12 +280,12 @@ Requirements to design, code, tests and status. Design commitments without a req
 | Req | Decisions | Code | Tests | Status (2026-11-03) | Ledger |
 |---|---|---|---|---|---|
 | R1 | D20, D21, D28 | `bench/frond_harbor.py`, `bench/matrix.py`, `bench/analyze.py` | `test_bench` | unmeasured; the machinery is in place | E1, E11 |
-| R2 | D10, D22 | `agent/snapshots.py`, `agent/tools.py` | `test_command_undo` | per-change diffs only; no net view | R2, B4 |
-| R3 | D22 | `world/merge.py` (`revert`) | `test_world` | the revert keeps later edits; `/undo` is not switched to it yet | R3, B4b |
+| R2 | D10, D22, D29 | `world/timeline.py`, `agent/session.py` (`turn_diff`), `agent/tools.py`, `tui/app.py` (`/diff`) | `test_command_undo`, `test_app` | done: per-command diffs in any directory, and each turn's net change (`/diff`) | closed |
+| R3 | D22, D29 | `world/merge.py` (`revert`), `agent/session.py` (`undo`) | `test_world`, `test_command_undo` | done: `/undo` reverts by three-way merge and reports what it kept | closed |
 | R4 | D09 | `tui/app.py`, `agent/session.py` | `test_steering`, `test_app` | steer and queue done; stop latency unmeasured | B17 |
 | R5 | D14 | `agent/adapter.py`, `agent/rlm.py`, `agent/session.py` | `test_provenance` | done (3c188c9) | — |
 | R6 | D06, D13 | `agent/_sandbox.py`, `agent/repl.py`, `agent/_worker.py`, `agent/shell.py` | `test_sandbox`, `test_containment` | worker and read-only agents done; main agent's commands deferred | R6, G1 |
-| R7 | D22 | `world/store.py` (checkout) | `test_world` | the workspace half exists; the agent cannot use it yet | B4b, B9 |
+| R7 | D22, D29 | `world/store.py` (checkout), `world/timeline.py` | `test_world`, `test_command_undo` | every step-log record names its world; rewinding the context with it is B9 | B9 |
 | R8 | D07 | `agent/adapter.py` | `test_caching` (simulated) | simulated | E0 |
 | R9 | — | — | — | missing | B11 |
 | R10 | D11 | `cli.py` (`--export`), `bench/frond_harbor.py` | `test_memory` | done; Harbor pipeline verified with the oracle agent | E0 |

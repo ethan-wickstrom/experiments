@@ -6,7 +6,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from frond.agent.control import TurnControl
 from frond.agent.policy import Approver, Mode, Policy
@@ -16,6 +16,7 @@ from frond.agent.shell import JobManager, ShellRunner
 from frond.agent.tools import Toolbox
 from frond.events import Event
 from frond.workspace import Workspace
+from frond.world import Revert, Timeline
 
 
 class WorkspaceCase(unittest.TestCase):
@@ -51,6 +52,24 @@ class WorkspaceCase(unittest.TestCase):
 
     def of_type(self, kind: type) -> list:
         return [e for e in self.events if isinstance(e, kind)]
+
+    def timeline(self, **kwargs: Any) -> Timeline:
+        store = Path(tempfile.mkdtemp(prefix="frond-world-"))
+        self.addCleanup(shutil.rmtree, store, True)
+        return Timeline(self.root, store, **kwargs)
+
+
+class TurnUndo:
+    """A turn's worlds for tests that drive the tools directly: the agent does the same around each turn."""
+
+    def __init__(self, case: WorkspaceCase, tools: Toolbox | None = None) -> None:
+        self.timeline = case.timeline()
+        if tools is not None:
+            tools.timeline = self.timeline  # per-command diffs, as in a session
+        self.before, self.head = self.timeline.begin_turn()
+
+    def undo(self) -> Revert:
+        return self.timeline.revert(self.before, self.timeline.snapshot())
 
 
 def scripted_agent(

@@ -70,7 +70,7 @@ Only what the agent cannot get itself (D16).
 | B2 | Measurement: per-call input, cache read, cache write and output tokens; protocol violations; failed edits; stale actions | `--export` writes them; tests cover each counter | closed 63d52f8 | `--export` now also writes `calls.jsonl` (raw and normalized usage per model call) and `metrics.json` (parse failures, code that did not compile, tool calls and failures, failed edits); `tests/test_metrics.py`. Stale actions move to B5, which defines staleness |
 | B3 | Arms and runner: arm flags passed through Harbor options; `bench/matrix.py` (tasks × arms × trials, resumable); `bench/analyze.py` (Wilcoxon, bootstrap, Holm, cost per solved) | a dry run of the matrix, and analysis on synthetic results | closed (this commit) | D28. Pre-registered TOML specs (`bench/experiments/`); ABBA batches; resume; retries only before the agent starts; first k valid trials; per-call pricing (`bench/prices.toml`); exact Wilcoxon, bootstrap, Holm, and betting confidence sequences for early stopping; `tests/test_bench.py`. Flags: `--layout` (H6) now; each later arm's flag comes with its build item (B5, B7, B8, B9, B10). E0a ran through it |
 | B4a | Worlds core: a content-addressed store with nested Merkle trees, incremental snapshots (stat cache, racy-edit rehash), checkout, diff, line-level merge3, and revert | `tests/test_world.py`: exact round trips (modes, links, type changes, empty directories), excluded caches untouched, racy edits seen, and a later edit by someone else surviving a revert | closed 72818da | `src/frond/world/`; D22 |
-| B4b | Wire worlds into frond: a snapshot around each action, undo as a revert of the turn's steps, a net turn diff, non-git workspaces; delete `Checkpoints` and `GitSnapshots` | the undo tests (`test_command_undo`, `UndoFidelity`) pass on worlds, plus a concurrent-edit test through `/undo` | next | B4a; closes P2, R2 and R3 |
+| B4b | Wire worlds into frond: a snapshot around each action, undo as a revert of the turn's steps, a net turn diff, non-git workspaces; delete `Checkpoints` and `GitSnapshots` | the undo tests (`test_command_undo`, `UndoFidelity`) pass on worlds, plus a concurrent-edit test through `/undo` | closed (this commit) | D29. `world/timeline.py`: a world at turn start and after every step (each step-log record names its world); `/undo` reverts the latest changed turn by three-way merge; `/diff` and `Agent.turn_diff` show a turn's net change; per-command diffs come from worlds too, in any directory. The tools keep no journal; `checkpoints.py` and `snapshots.py` are deleted |
 | B5 | Freshness: observations carry content hashes, and the prompt marks stale ones | a test where a file changes after a read and the next prompt marks it | open | H3, `design.md` "Worlds" |
 | B6 | Forkable REPL: the worker forks when idle (`os.fork`, pipes passed with `socket.send_fds`) | a child keeps the namespace, both run independently, and they are confined like the parent | open | H2 |
 | B7 | Fork, select, merge: a `fork(options)` REPL function, a branch runner, verifier hooks, selection, merge | a scripted three-branch test that keeps the branch whose tests pass | open | H2 |
@@ -118,12 +118,12 @@ Only what the agent cannot get itself (D16).
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
 | R1 | frond against external harnesses on the same model | E11, E1 | blocked: REQ-1 | D21 recasts R1 for research |
-| R2 | A turn's net change is reviewable | net diff between two worlds | next, with B4b | `Store.diff` exists (B4a) |
-| R3 | Undo keeps later edits made by others | B4b: the concurrent-edit test through `/undo` | next, with B4b | the revert property holds (B4a, `test_world`); was P2 |
+| R2 | A turn's net change is reviewable | net diff between two worlds | closed (this commit) | `/diff`, `Agent.turn_diff`; `TurnRecord.files` is the net change; `test_the_turns_net_change_is_reviewable` |
+| R3 | Undo keeps later edits made by others | B4b: the concurrent-edit test through `/undo` | closed (this commit) | `test_an_edit_someone_makes_after_the_turn_survives_undo`, and same-line edits are kept and reported; was P2 |
 | R4 | Stopping is prompt and final | B17 | open, low | — |
 | R5 | The user's words cannot be forged | — | closed | 3c188c9 (D14) |
 | R6 | No unapproved writes, network use or credentials | the main agent's commands remain | deferred | worker and read-only agents done (3c188c9, D13). The main agent's command sandbox (was P4) is daily-driver work (D16). Benchmark runs are already isolated by the container |
-| R7 | The agent can rewind context and workspace together | B4b, then B9 | open | — |
+| R7 | The agent can rewind context and workspace together | B4b, then B9 | open | the workspace half exists: every step-log record names its world (B4b). Rewinding the context with it is B9 |
 | R8 | Most input is served from cache | E0 | blocked: REQ-1 | — |
 | R9 | An incompatible DSPy fails at startup | B11 | open | — |
 | R11 | macOS | — | closed: won't do | D25 |
@@ -149,9 +149,10 @@ Only what the agent cannot get itself (D16).
 | G15 | `/new` left the old conversation searchable through `history_search`, and the next save overwrote the old conversation's session file, so `--continue` could not reach it (PR #3; the overwrite was found while fixing it) | `test_a_new_conversation_cannot_search_the_old_one` | closed (this commit) | `/new` starts a new session file and step log (`Agent.new_log`, `StepLog.restart`); the old files stay |
 | G16 | Code that did not compile cleared the names digest, so the next step showed no variables (PR #3) | `test_code_that_does_not_compile_leaves_the_names_as_they_were` | closed (this commit) | the digest changes only when the worker reports one |
 | G17 | The step log is described as lossless but cuts outputs over 200,000 characters (PR #3) | — | closed (this commit) | documented in `steplog.py` |
-| G18 | File changes made by background jobs are not covered by `/undo` (PR #3) | B4b: a background job's write is reverted by `/undo` | next, with B4b | worlds snapshot the directory, whoever wrote to it |
+| G18 | File changes made by background jobs are not covered by `/undo` (PR #3) | B4b: a background job's write is reverted by `/undo` | closed (this commit) | worlds snapshot the directory, whoever wrote to it; `test_a_background_jobs_writes_during_the_turn_are_undone`. Writes after the turn ends count as someone else's, and undo keeps them |
+| G21 | The world store keeps every version of every file it has seen, for all of a workspace's sessions, and nothing removes old objects | a store past a size bound drops objects no session file or step record reaches | open, low | a mark-and-sweep from the session files' turn worlds and the step logs' worlds |
 | G20 | 10 of TB 4.0's 66 tasks declare more than 4 CPUs or a GPU for their agent or verifier container, and Docker refuses to start them in this 4-CPU VM ("range of CPUs is from 0.01 to 4.00") | — | closed: accepted (this commit) | D28: the population is the 56 tasks that fit, keeping every task's declared limits; the list is `bench/datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt`. Three more ask for 16 GB of memory, which Docker accepts; they risk only running out of memory. A bigger VM would bring the 10 back |
-| G19 | `GitSnapshots`: a nested workspace's objects path, CRLF and filter conversions, and file-to-directory changes in undo (PR #3) | — | next: removed by B4b | B4b deletes `GitSnapshots` in favour of worlds, which store raw bytes and handle kind changes (`test_world`) |
+| G19 | `GitSnapshots`: a nested workspace's objects path, CRLF and filter conversions, and file-to-directory changes in undo (PR #3) | — | closed (this commit) | B4b deletes `GitSnapshots` in favour of worlds, which store raw bytes and handle kind changes (`test_world`) |
 
 ## Assumptions to test
 
@@ -188,16 +189,16 @@ Every row is blocked on E0's logs. Each is done when its measurement is recorded
 | K9 | last 4 steps kept unfolded | `src/frond/agent/rlm.py:111` | how often folded steps are re-read |
 | K10 | 8,000 characters of earlier user messages shown | `src/frond/agent/session.py:127` | how often earlier messages fall out |
 | K11 | 20 diffs shown per command | `src/frond/agent/tools.py:51` | how often one command changes more than 20 files |
-| K12 | snapshots switched off past 2 s | `src/frond/agent/snapshots.py:23` | snapshot times on large repositories (replaced by B4) |
+| K12 | per-command diffs switched off when a snapshot takes over 2 s | `src/frond/world/timeline.py` (`SLOW_SECONDS`) | snapshot times on large repositories |
 | K13 | 40 REPL names listed | `src/frond/agent/_worker.py:49` | names a REPL typically holds |
 | K14 | BM25 k1 = 1.2, b = 0.75 | `src/frond/agent/steplog.py:30` | whether `history_search` hits answer real queries |
-| K16 | world snapshots: 64 MB blob cap, 2 s racy window, excluded cache directories | `src/frond/world/store.py` | snapshot time and store size in real workspaces. Measured 2026-11-03 on 11,897 files (239 MB): 13.6 s cold, 0.16 s warm, 96 MB stored |
-| K15 | resource guards (listed below) | `session.py`, `tools.py`, `steplog.py`, `checkpoints.py`, `tui/app.py` | which of them bind in practice |
+| K16 | world snapshots: 2 s racy window, excluded cache directories; in sessions a 16 MB blob cap and a 200,000-file limit | `src/frond/world/store.py`, `src/frond/world/timeline.py` | snapshot time and store size in real workspaces. Measured 2026-11-03 on 11,897 files (239 MB): 13.6 s cold, 0.16 s warm, 96 MB stored. E0 measures the per-step cost in TB containers |
+| K15 | resource guards (listed below) | `session.py`, `tools.py`, `steplog.py`, `world/timeline.py`, `tui/app.py` | which of them bind in practice |
 
 K15's guards:
 - attachments: 120k characters;
 - stored output: 200k characters;
-- directory snapshots: 50 MB;
+- world snapshots: files over 16 MB kept by signature only, and none past 200,000 files;
 - step timeout: 600 s;
 - LLM calls: 80 per turn, 40 per sub-agent;
 - preview limits: 20k, 24k, 12k and 6k for the main agent; 8k, 8k and 16k for sub-agents;

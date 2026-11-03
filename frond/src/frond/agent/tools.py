@@ -23,13 +23,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from frond.agent.checkpoints import Checkpoints
 from frond.agent.diffing import make_diff
 from frond.agent.metrics import RunMetrics
 from frond.agent.patch import FileOp, PatchError, apply_chunks, parse_patch
 from frond.agent.policy import Policy
 from frond.agent.shell import SANDBOX_UNAVAILABLE, JobManager, ShellRunner, sandbox_status, truncate_middle
-from frond.agent.snapshots import GitSnapshots
 from frond.agent.steplog import StepLog
 from frond.agent.web import fetch_text
 from frond.events import (
@@ -44,6 +42,7 @@ from frond.events import (
     SearchRan,
 )
 from frond.workspace import SKIP_DIRS, Workspace, fuzzy_rank
+from frond.world import Timeline
 
 VIEW_WINDOW = 300
 MAX_LINE = 2000
@@ -155,15 +154,13 @@ class Toolbox:
         scope: str = "",
         read_only: bool = False,
         delegate: Delegate | None = None,
-        checkpoints: Checkpoints | None = None,
         memory: StepLog | None = None,
-        snapshots: GitSnapshots | None = None,
+        timeline: Timeline | None = None,
         metrics: RunMetrics | None = None,
     ) -> None:
         self.ws = workspace
-        self.checkpoints = checkpoints
         self.memory = memory
-        self.snapshots = snapshots
+        self.timeline = timeline  # snapshots around each command, to show what it changed (undo needs none of this)
         self.metrics = metrics  # counts every tool call and failure, for research (ledger B2)
         self.emit = emit
         self.shell = shell
@@ -237,23 +234,8 @@ class Toolbox:
             raise PermissionError("this agent is read-only; report what should change instead")
         self.policy.check_write(p, self.ws.is_inside(p))
 
-    def _remember(self, p: Path) -> None:
-        """Checkpoint the file a change writes to (through a symbolic link, the file it points to)."""
-        if self.checkpoints is not None:
-            self.checkpoints.record(p.resolve() if p.is_symlink() else p)
-
-    def _remember_entry(self, p: Path) -> None:
-        """Checkpoint ``p`` itself before it is deleted or moved away: a symbolic link as a link."""
-        if self.checkpoints is None:
-            return
-        if p.is_symlink():
-            self.checkpoints.record_link(p, os.readlink(p))
-        else:
-            self.checkpoints.record(p)
-
     def _commit(self, p: Path, display: str, old: str | None, new: str) -> tuple[int, int]:
         target = p.resolve() if p.is_symlink() else p
-        self._remember(target)
         target.parent.mkdir(parents=True, exist_ok=True)
         if old is not None and "\r\n" in old and "\r\n" not in new:
             new = new.replace("\n", "\r\n")
@@ -695,7 +677,6 @@ class Toolbox:
             for op, p, old, new in planned:
                 display = self.ws.rel(p)
                 if op.kind == "delete":
-                    self._remember_entry(p)
                     p.unlink()
                     diff = make_diff(old or "", "", display, deleted=True)
                     self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))
@@ -704,8 +685,6 @@ class Toolbox:
                 assert new is not None
                 if op.move_to:
                     dest = self._path(op.move_to)
-                    self._remember_entry(p)
-                    self._remember(dest)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     os.replace(p, dest)
                     added, removed = self._commit(dest, self.ws.rel(dest), old, new)
@@ -725,8 +704,6 @@ class Toolbox:
         self._check_write(p)
         if p.is_symlink():  # remove the link itself, never what it points to
             target = os.readlink(p)
-            if self.checkpoints is not None:
-                self.checkpoints.record_link(p, target)
             p.unlink()
             self.emit(FileChanged(display, "delete", f"(symbolic link to {target})", 0, 0, scope=self.scope))
             self.ws.invalidate()
@@ -737,8 +714,6 @@ class Toolbox:
             count = sum(1 for _ in p.rglob("*"))
             if count:
                 self.policy.check_delete_tree(p, f"{display}/ ({count} {'entry' if count == 1 else 'entries'})")
-            if self.checkpoints is not None:
-                self.checkpoints.record_tree(p)
             shutil.rmtree(p)
             self.emit(FileChanged(display + "/", "delete", f"(directory with {count} entries)", 0, 0, scope=self.scope))
             self.ws.invalidate()
@@ -747,7 +722,6 @@ class Toolbox:
             old = self._read_text(p, display)
         except ToolError:
             old = ""
-        self._remember(p)
         p.unlink()
         diff = make_diff(old, "", display, deleted=True)
         self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))
@@ -763,12 +737,6 @@ class Toolbox:
             raise FileExistsError(f"{self.ws.rel(d)} already exists")
         self._check_write(s)
         self._check_write(d)
-        if self.checkpoints is not None:
-            if s.is_dir():
-                self.checkpoints.record_move(s, d)
-            else:
-                self._remember_entry(s)
-                self._remember(d)
         d.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(s), str(d))
         self.emit(FileChanged(self.ws.rel(d), "move", "", 0, 0, old_path=self.ws.rel(s), scope=self.scope))
@@ -809,13 +777,12 @@ class Toolbox:
                 "command": command,
             }
         timeout = max(1.0, min(float(timeout), 3600.0))
-        tracked = self.snapshots is not None and self.checkpoints is not None and self.snapshots.enabled
-        before = self.snapshots.take() if tracked and self.snapshots else None
-        head = self.snapshots.head() if before and self.snapshots else ""
+        timeline = self.timeline if self.timeline is not None and self.timeline.command_diffs else None
+        before = timeline.snapshot() if timeline is not None else ""
         result = self.shell.run(command, cwd=workdir, timeout=timeout, scope=self.scope)
         self.ws.invalidate()
-        if before and self.snapshots:
-            self._journal_command(command, before, head)
+        if timeline is not None and before:
+            self._show_command_changes(timeline, before, timeline.snapshot(new_ignored=True))
         output = truncate_middle(result.output, MAX_OUTPUT_CHARS, note=f"; full output in {result.log_path}")
         return {
             "__frond__": "command",
@@ -829,45 +796,25 @@ class Toolbox:
             "truncated": result.total_chars > MAX_OUTPUT_CHARS,
         }
 
-    def _journal_command(self, command: str, before: str, head: str) -> None:
-        """Put what a command changed in the turn's undo journal, and show its diffs (see snapshots.py)."""
-        snapshots, checkpoints = self.snapshots, self.checkpoints
-        assert snapshots is not None and checkpoints is not None
-        after = snapshots.take()
-        if not after or after == before:
-            return
-        if snapshots.head() != head:
-            short = command if len(command) <= 60 else command[:59] + "…"
-            self.emit(Notice("info", f"`{short}` moved HEAD; /undo will not revert the files it changed"))
-            return
-        changes = snapshots.changes(before, after)
-        for change in changes:
-            exec_bit = 0o755 if change.mode == "100755" else 0o644
-            mode_changed = change.status in ("D", "T") or (change.new_mode and change.new_mode != change.mode)
-            checkpoints.record_state(
-                change.path,
-                change.before,
-                exec_bit if change.before is not None and mode_changed else None,
-                link=change.mode == "120000",
-            )
+    def _show_command_changes(self, timeline: Timeline, before: str, after: str) -> None:
+        """Show the diffs of what a command changed, from the worlds before and after it (frond.world)."""
+        changes = timeline.diff(before, after)
         shown = 0
         for change in changes:
-            if shown == MAX_COMMAND_DIFFS or change.mode == "120000" or change.new_mode == "120000":
+            if shown == MAX_COMMAND_DIFFS:
+                break
+            if any(e is not None and e.kind != "file" for e in (change.before, change.after)):
+                continue  # links and directories: undo covers them; there is no text to show
+            old, new = timeline.content(change.before) or b"", timeline.content(change.after) or b""
+            if b"\0" in old or b"\0" in new:
                 continue
-            old = (change.before or b"").decode("utf-8", errors="replace") if change.before is not None else ""
-            try:
-                new = change.path.read_text(encoding="utf-8") if change.status != "D" else ""
-            except (OSError, UnicodeDecodeError):
-                continue  # binary or vanished: undo still covers it, there is just no text diff to show
-            if "\0" in old:
-                continue
-            kind: ChangeKind = "create" if change.status == "A" else "delete" if change.status == "D" else "edit"
-            display = self.ws.rel(change.path)
-            diff = make_diff(old, new, display, created=kind == "create", deleted=kind == "delete")
-            self.emit(FileChanged(display, kind, diff.text, diff.added, diff.removed, scope=self.scope))
+            kind: ChangeKind = "create" if change.before is None else "delete" if change.after is None else "edit"
+            text_old, text_new = old.decode("utf-8", errors="replace"), new.decode("utf-8", errors="replace")
+            diff = make_diff(text_old, text_new, change.path, created=kind == "create", deleted=kind == "delete")
+            self.emit(FileChanged(change.path, kind, diff.text, diff.added, diff.removed, scope=self.scope))
             shown += 1
         if len(changes) > shown:
-            self.emit(Notice("info", f"the command changed {len(changes)} files; /undo covers all of them"))
+            self.emit(Notice("info", f"the command changed {len(changes)} paths; /undo covers all of them"))
 
     def _sh_sandboxed(self, command: str, workdir: Path, timeout: float, background: bool) -> dict[str, Any]:
         """A read-only agent's command, in an OS sandbox that refuses every filesystem write (see _sandbox.py).

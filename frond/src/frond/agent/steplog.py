@@ -62,6 +62,7 @@ class Record:
     code: str = ""
     output: str = ""  # the REPL output, the user's message, or the answer
     error: bool = False
+    world: str = ""  # the workspace after this step, as a world tree id (frond.world); "" when not snapshotted
 
     @property
     def headline(self) -> str:
@@ -76,6 +77,7 @@ class Record:
             data.pop("scope")
         if not data["error"]:
             data.pop("error")
+        data.pop("world")  # an id the model has no use for until it can rewind to a step
         return data
 
 
@@ -131,12 +133,13 @@ class StepLog:
         code: str = "",
         output: str = "",
         error: bool = False,
+        world: str = "",
     ) -> int:
         if len(output) > MAX_STORED_OUTPUT:
             output = output[:MAX_STORED_OUTPUT] + f"\n… [{len(output) - MAX_STORED_OUTPUT:,} more chars not kept]"
         with self._lock:
             seq = len(self._records) + 1
-            record = self._index(Record(seq, kind, turn, step, scope, reasoning, code, output, error))
+            record = self._index(Record(seq, kind, turn, step, scope, reasoning, code, output, error, world))
             self._write(record)
             return record.seq
 

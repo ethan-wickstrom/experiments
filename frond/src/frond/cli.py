@@ -195,15 +195,26 @@ def main(argv: list[str] | None = None) -> int:
         current[0] = store.new_path()
         return store.steps_path(current[0])
 
+    world_dir = store.directory / "world"  # shared by the workspace's sessions, so --continue can still /undo
     if not interactive:
-        return run_headless(args, config, workspace, prompt, lm, persist, restored, store.steps_path(session_file))
+        return run_headless(
+            args, config, workspace, prompt, lm, persist, restored, store.steps_path(session_file), world_dir
+        )
 
     from frond.tui.app import App
     from frond.tui.style import detect_color_mode
 
     app = App(workspace, model=model, sub_model=sub_model, color_mode=detect_color_mode(), note=note)
     agent = Agent(
-        config, workspace, app.emit, approver=app.approver, lm=lm, sub_lm=lm, persist=persist, new_log=new_log
+        config,
+        workspace,
+        app.emit,
+        approver=app.approver,
+        lm=lm,
+        sub_lm=lm,
+        persist=persist,
+        new_log=new_log,
+        world_dir=world_dir,
     )
     agent.attach_log(store.steps_path(session_file))
     app.attach(agent)
@@ -245,6 +256,7 @@ def run_headless(
     persist: Callable[[list[TurnRecord]], None] | None = None,
     restored: list[TurnRecord] | None = None,
     log_path: Path | None = None,
+    world_dir: Path | None = None,
 ) -> int:
     from frond.agent.session import Agent
     from frond.printer import Printer
@@ -257,7 +269,7 @@ def run_headless(
     from frond.agent.redact import Redactor
 
     printer = Printer(json_mode=args.json, verbose=args.verbose, redact=Redactor())  # its log may be uploaded
-    agent = Agent(config, workspace, printer, lm=lm, sub_lm=lm, persist=persist)
+    agent = Agent(config, workspace, printer, lm=lm, sub_lm=lm, persist=persist, world_dir=world_dir)
     if log_path is not None:
         agent.attach_log(log_path)
     if restored:

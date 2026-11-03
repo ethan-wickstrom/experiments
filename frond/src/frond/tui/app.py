@@ -57,6 +57,7 @@ COMMANDS: tuple[tuple[str, str], ...] = (
     ("new", "start a fresh conversation"),
     ("reset", "restart the Python REPL (forget its variables)"),
     ("undo", "revert the files changed in the last turn"),
+    ("diff", "show the net change of the last turn that changed files"),
     ("details", "show or hide full code, output and diffs (ctrl+o)"),
     ("copy", "copy the last answer to the clipboard"),
     ("jobs", "list background jobs"),
@@ -77,9 +78,10 @@ Keys
   ctrl+l         redraw · ctrl+z suspend
   @              attach files or folders · /  run a command
 Text selection: hold shift (option in iTerm2/Terminal.app) while dragging, or use /copy.
-Commands: /new /undo /reset /details /copy /jobs /kill /model /quit
-/undo reverts the files frond changed in its last turn; in a git workspace that includes what its shell
-commands changed (except files git ignores)."""
+Commands: /new /undo /diff /reset /details /copy /jobs /kill /model /quit
+/undo reverts what changed in the workspace during frond's last turn, whatever made the change (its edits,
+commands, background jobs), and keeps what you changed since. /diff shows that turn's net change. In a git
+workspace, files git ignores are left out."""
 
 
 class AgentLike(Protocol):
@@ -89,6 +91,7 @@ class AgentLike(Protocol):
     def steer(self, text: str) -> bool: ...
     def cancel(self) -> None: ...
     def undo(self) -> str: ...
+    def turn_diff(self, index: int | None = None) -> list[ev.FileChanged]: ...
     def reset_repl(self) -> None: ...
     def clear(self) -> None: ...
     def close(self) -> None: ...
@@ -610,6 +613,18 @@ class App:
                     summary = self.agent.undo()
                     self.undo_block.reasoning = "↶ " + summary[0].upper() + summary[1:]
                     self.undo_block.touch()
+            case "diff":
+                if self.agent is not None:
+                    changes = self.agent.turn_diff()
+                    block = StepBlock(0, 0)
+                    block.state = "done"
+                    count = f"{len(changes)} path{'s' if len(changes) != 1 else ''}"
+                    block.reasoning = f"Δ The last turn's net change: {count}" if changes else "Δ No turn changed files"
+                    block.items.extend(
+                        DiffCard(c.path, c.kind, c.diff, c.added, c.removed, c.old_path) for c in changes
+                    )
+                    self.add(block)
+                    block.touch()
             case "details":
                 self.toggle_details()
             case "copy":
