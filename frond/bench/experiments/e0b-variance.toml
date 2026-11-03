@@ -1,0 +1,36 @@
+# E0b: variance on the screening model (ledger E0b, research.md, D48). Descriptive, so no claims: two more trials
+# of Opus 5.5 on E0's tasks give each task three trials with E0's, for the within- and between-task variance that
+# sizes E1-E6. E0's 10 tasks less the two its trials showed the cyber classifier refuses (D57), so 8.
+# The two arms are the same configuration, run as separate jobs so that each fits the spending guard (D43) on its
+# own: on E0's worst Opus trial, a job of 8 is at most $36. E0's Opus trials cost $1.33 on average.
+# The cut-off message no longer mentions reasoning (G47), the one harness change since E0; biped-contact-dynamics,
+# refused after a cut-off in all three of its earlier Opus and Sonnet trials, shows whether that mattered.
+id = "E0b"
+title = "Variance on the screening model: two more trials per task"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = [
+  "biped-contact-dynamics",
+  "glycan-ms2-elucidation",
+  "hof-topology-interpenetration",
+  "layout-config-recreation",
+  "layout-config-recreation2",
+  "mvcc-lsm-compaction",
+  "nextjs-performance",
+  "ontology-kg-querying",
+]
+trials = 1
+batch = 8
+seed = 0
+concurrency = 2
+
+[[arms]]
+name = "opus-r2"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { effort = "high", protocol = "json" }
+
+[[arms]]
+name = "opus-r3"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { effort = "high", protocol = "json" }

@@ -1,7 +1,6 @@
 # E5, hypothesis H5: scopes as savepoints (collapse finished subtasks, rewind abandoned ones) raise long-horizon pass
 # rate and cut cost (D35). Also measures A1-A4 and A10: scope counts, and history_step calls on collapsed steps.
-# The model is provisional: E0 picks the screening model by the rule in research.md, and any change is recorded in
-# decisions.md before the first trial. Both arms get 150 steps: long-horizon tasks need far more than TB's 40, and
+# The model is Opus 5.5, the screening model E0 chose by the rule in research.md (D56). Both arms get 150 steps: long-horizon tasks need far more than TB's 40, and
 # the context mechanisms only act once a turn outgrows the budget. E0 also says how often TB turns fold (A5).
 id = "E5"
 title = "H5: scopes as savepoints, on long tasks"
@@ -17,13 +16,13 @@ seed = 5
 [[arms]]
 name = "off"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { scopes = "off", max_steps = "150", effort = "high" }
 
 [[arms]]
 name = "on"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { scopes = "on", max_steps = "150", effort = "high" }
 
 [[claims]]

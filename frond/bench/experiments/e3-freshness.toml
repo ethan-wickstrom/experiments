@@ -1,7 +1,6 @@
 # E3, hypothesis H3: naming stale reads in the prompt, and refusing to overwrite what changed since a read, cuts
 # failed edits and wrong-state actions without lowering pass rate (D30). Both arms count stale actions.
-# The model is provisional: E0 picks the screening model by the rule in research.md, and any change is recorded in
-# decisions.md before the first trial. Sample size follows E0's variance; these are the planned upper bounds.
+# The model is Opus 5.5, the screening model E0 chose by the rule in research.md (D56). Sample size follows E0's variance; these are the planned upper bounds.
 id = "E3"
 title = "H3: freshness marks and compare-and-swap writes"
 dataset = "terminal-bench/terminal-bench@4.0.0"
@@ -9,22 +8,23 @@ tasks = "datasets/terminal-bench@4.0.0.txt"
 exclude = [
   "datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt",
   "results/2026-11-03-e0a-oracle/oracle-failures.txt",
+  "datasets/terminal-bench@4.0.0-refused-cyber.txt",  # D57
 ]
 trials = 3
-batch = 14  # four looks over the 53 tasks E0a leaves (14, 14, 14, 11), D44
+batch = 14  # four looks over the 51 tasks E0a and D57 leave (14, 14, 14, 9), D44
 seed = 3
 concurrency = 2
 
 [[arms]]
 name = "off"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { freshness = "off", effort = "high" }
 
 [[arms]]
 name = "on"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { freshness = "on", effort = "high" }
 
 [[claims]]

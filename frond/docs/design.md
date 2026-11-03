@@ -91,7 +91,7 @@ Each is stated as a property of the world. Three are met and left out of the tab
 | R5 | The user's words reach the model verbatim and cannot be confused with tool output | A file containing frond's framing for user messages is shown escaped | Verbatim within a turn and for the last 8,000 characters across turns. Can be forged |
 | R6 | Without the user's approval, no frond process writes outside the workspace and temp, reaches the network, or holds credentials | Exfiltration test from the REPL; sandbox tests | Holds only for sub-agents' commands. The PR #2 OS-level read-only guarantee does not cover their Python. Every REPL worker has network access and the keys |
 | R7 | The agent can return its context and the workspace to an earlier point in the turn | Rewind test | Done (D35): `abandon_scope` rewinds both to the scope's savepoint |
-| R8 | Most input is served from cache | At least 90% cache reads over a 20-step turn, live on Anthropic and OpenAI | Simulated only |
+| R8 | Most input is served from cache | At least 90% cache reads over a 20-step turn, live on Anthropic and OpenAI | Measured on Anthropic in E0: 89–92% by model; OpenAI unmeasured |
 | R9 | An incompatible DSPy release fails at startup, not mid-turn | Contract test | Missing |
 | R10 | Every run leaves a complete record for analysis and benchmark review | ATIF export | Done; tested only in a dry run |
 | R11 | Works in Linux and macOS terminals; Windows is out of scope (termios) | CI matrix | Tested on Linux only |
@@ -292,7 +292,7 @@ Requirements to design, code, tests and status. Design commitments without a req
 | R5 | D14 | `agent/adapter.py`, `agent/rlm.py`, `agent/session.py` | `test_provenance` | done (3c188c9) | — |
 | R6 | D06, D13 | `agent/_sandbox.py`, `agent/repl.py`, `agent/_worker.py`, `agent/shell.py` | `test_sandbox`, `test_containment` | worker and read-only agents done; main agent's commands deferred | R6, G1 |
 | R7 | D22, D29, D35 | `world/timeline.py`, `agent/scopes.py`, `agent/rlm.py` (`_apply_scopes`) | `test_world`, `test_scopes` | done: abandoning a scope rewinds context and workspace together; the REPL is not rewound | closed |
-| R8 | D07 | `agent/adapter.py` | `test_caching` (simulated) | simulated | E0 |
+| R8 | D07 | `agent/adapter.py` | `test_caching` (simulated), E0 | measured on Anthropic: 89–92% cache reads | — |
 | R9 | D36 | `agent/compat.py`, `cli.py`, `agent/session.py`, `pyproject.toml` | `test_compat` | done: DSPy pinned exactly; its internals checked for presence, callability and parameter names and kinds, by the CLI and by every `Agent` (F41–F44) | closed |
 | R10 | D11, D46 | `cli.py` (`--export`), `bench/frond_harbor.py` | `test_memory`, `test_metrics` | done: a real Opus 5.5 run through Harbor exported usage, cost, cache reads and protocol counts (PR #27) | E0 |
 | R11 | D25 | — | — | Linux only, by decision | closed |

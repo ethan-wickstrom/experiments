@@ -1,6 +1,5 @@
 # E4, hypothesis H4: on long tasks, frond's lossless log with index folds beats LLM summary compaction (D34).
-# The model is provisional: E0 picks the screening model by the rule in research.md, and any change is recorded in
-# decisions.md before the first trial. Both arms get 150 steps: long-horizon tasks need far more than TB's 40, and
+# The model is Opus 5.5, the screening model E0 chose by the rule in research.md (D56). Both arms get 150 steps: long-horizon tasks need far more than TB's 40, and
 # the context mechanisms only act once a turn outgrows the budget. E0 also says how often TB turns fold (A5).
 id = "E4"
 title = "H4: index folds over a lossless log against summary compaction, on long tasks"
@@ -16,13 +15,13 @@ seed = 4
 [[arms]]
 name = "summary"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { context = "summary", max_steps = "150", effort = "high" }
 
 [[arms]]
 name = "fold"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { context = "fold", max_steps = "150", effort = "high" }
 
 [[claims]]
