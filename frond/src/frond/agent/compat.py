@@ -42,6 +42,7 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...] | None], ...] = (
     ("dspy.predict.rlm", "_LLMCallBudget", None),
     ("dspy.predict.rlm", "_strip_code_fences", None),
     ("dspy.adapters.base", "_expand_legacy_custom_type_markers_in_chat_message", None),
+    ("dspy.adapters.chat_adapter", "field_header_pattern", None),  # recovering replies off the protocol (D45)
     ("dspy.clients.backend_selection", "select_backend", None),
     ("dspy.lm15", "CacheConfig", None),
 )
