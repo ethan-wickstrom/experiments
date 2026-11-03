@@ -22,6 +22,8 @@ class RunMetrics:
     stale_actions: int = 0  # edits, writes and deletes of files changed since the model read them (H3, B5)
     tool_calls: Counter[str] = field(default_factory=Counter)
     tool_failures: Counter[str] = field(default_factory=Counter)  # calls that raised: the model got an error back
+    forks: list[list[dict[str, Any]]] = field(default_factory=list)  # each FORK's branches: outcome, steps (H2)
+    branch_calls: dict[int, str] = field(default_factory=dict)  # main-LM call index -> the branch that made it
 
     def counted(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         """``fn`` as a REPL tool that counts its calls and failures (signature and docs kept for the model)."""
@@ -46,6 +48,7 @@ class RunMetrics:
             "tool_calls": dict(sorted(self.tool_calls.items())),
             "tool_failures": dict(sorted(self.tool_failures.items())),
             "failed_edits": sum(self.tool_failures[n] for n in ("edit", "patch", "write")),
+            "forks": self.forks,
         }
 
 
@@ -85,16 +88,17 @@ def normalize_usage(usage: dict[str, Any]) -> dict[str, int]:
     }
 
 
-def call_records(lm: Any, role: str) -> list[dict[str, Any]]:
-    """One record per call the LM made: role, model, normalized and raw usage, cost, time."""
+def call_records(lm: Any, role: str, branches: dict[int, str] | None = None) -> list[dict[str, Any]]:
+    """One record per call the LM made: role, model, normalized and raw usage, cost, time. ``branches`` maps call
+    indexes to the FORK branch that made them, whose role becomes that branch's scope."""
     records = []
-    for entry in getattr(lm, "history", None) or []:
+    for index, entry in enumerate(getattr(lm, "history", None) or []):
         usage = entry.get("usage") or {}
         usage = usage if isinstance(usage, dict) else {}
         cost = entry.get("cost")
         records.append(
             {
-                "role": role,
+                "role": (branches or {}).get(index, role),
                 "model": entry.get("response_model") or entry.get("model") or getattr(lm, "model", ""),
                 "timestamp": entry.get("timestamp"),
                 "usage": normalize_usage(usage),

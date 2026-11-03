@@ -33,8 +33,8 @@ from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage
 from frond.agent.metrics import RunMetrics
 from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Investigation
-from frond.agent.repl import ReplPool
-from frond.agent.rlm import FrondRLM, Hooks
+from frond.agent.repl import ForkRequest, ReplPool
+from frond.agent.rlm import Branching, FrondRLM, Hooks
 from frond.agent.shell import JobManager, ShellRunner
 from frond.agent.steplog import StepLog
 from frond.agent.streaming import StreamSink, SubmitStreamer
@@ -92,6 +92,7 @@ class AgentConfig:
     repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
     layout: str = "turns"  # how each step sees the history: "turns" (frond) or "chat" (DSPy's stock layout; H6)
     freshness: bool = True  # mark stale reads and refuse overwriting what changed since a read (H3); off: count only
+    fork: int = 1  # most branches a FORK may explore (H2); 1 leaves FORK out of the REPL and the prompt
 
 
 @dataclass
@@ -202,6 +203,9 @@ class _RootHooks(Hooks):
     def stale_reads(self, step: int) -> str:
         return self.agent.observations.note()
 
+    def fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
+        return self.agent._fork(step, request, branching)
+
     def before_lm(self, step: int | None) -> None:
         self.agent._stream_step = step
         self.agent._submit.reset()
@@ -226,8 +230,7 @@ class _RootHooks(Hooks):
         self.agent.emit(SubQueryProgress(query_id, total, done))
 
     def history_budget(self) -> int:
-        window = self.agent.window or 200_000
-        return int(min(window * 0.45, 150_000) * 3.6)
+        return self.agent._history_budget()
 
     def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
         turn = self.agent._current.index if self.agent._current else 0
@@ -250,6 +253,105 @@ class _RootHooks(Hooks):
 
     def code_rejected(self, step: int) -> None:
         self.agent.metrics.syntax_errors += 1
+
+
+class _BranchHooks(Hooks):
+    """A FORK branch's loop (ledger B7): its steps are logged and shown under its own card, and it reads its own
+    observations; it cannot fork again, steer, or stream into the main transcript."""
+
+    def __init__(self, agent: Agent, branch_id: int, observations: Observations) -> None:
+        self.agent = agent
+        self.branch_id = branch_id
+        self.observations = observations
+        self.steps = 0
+
+    def check(self) -> None:
+        self.agent.control.check()
+
+    def step_started(self, step: int, max_steps: int) -> None:
+        self.steps += 1
+        self.observations.step = step
+        self.agent.emit(SubAgentProgress(self.branch_id, self.steps, "thinking"))
+
+    def after_lm(self, step: int | None) -> None:
+        self.agent._report_usage()
+
+    def step_planned(self, step: int, reasoning: str, code: str) -> None:
+        first = next((line.strip() for line in reasoning.splitlines() if line.strip()), "working")
+        self.agent.emit(SubAgentProgress(self.branch_id, self.steps, first))
+
+    def history_budget(self) -> int:
+        return self.agent._history_budget()
+
+    def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
+        turn = self.agent._current.index if self.agent._current else 0
+        return self.agent.steps.add(
+            "step",
+            turn=turn,
+            step=step,
+            scope=f"branch{self.branch_id}",
+            reasoning=reasoning,
+            code=code,
+            output=output,
+            error=error,
+        )
+
+    def stale_reads(self, step: int) -> str:
+        return self.observations.note()
+
+    def code_rejected(self, step: int) -> None:
+        self.agent.metrics.syntax_errors += 1
+
+    def fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
+        return "FORK is not available inside a branch: finish your option, then SUBMIT a report."
+
+
+@dataclass
+class BranchOutcome:
+    index: int
+    option: str
+    world: str  # the workspace the branch left, before its check ran
+    steps: int
+    submitted: bool  # it called SUBMIT
+    passed: bool  # its check exited 0 (with no check: it submitted without error)
+    report: str = ""
+    error: str = ""
+    check_output: str = ""
+
+
+def _best(outcomes: list[BranchOutcome]) -> BranchOutcome | None:
+    passing = [o for o in outcomes if o.passed]
+    return min(passing, key=lambda o: (not o.submitted, o.steps, o.index)) if passing else None
+
+
+def _clip(text: str, limit: int) -> str:
+    text = text.strip()
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _fork_report(
+    request: ForkRequest, outcomes: list[BranchOutcome], best: BranchOutcome | None, kept: list[str]
+) -> str:
+    rule = f"check: {request.check}" if request.check else "no check: a branch that called SUBMIT counts as passing"
+    lines = [f"FORK explored {len(outcomes)} options ({rule}):"]
+    for o in outcomes:
+        state = "passed" if o.passed else "failed"
+        ending = "submitted" if o.submitted else f"error: {_clip(o.error, 300)}" if o.error else "ran out of steps"
+        line = f"- option {o.index} ({o.option!r}): {state}; {ending} after {o.steps} step(s)."
+        if o.report:
+            line += f" Its report: {_clip(o.report, 1500)}"
+        if request.check and not o.passed and o.check_output:
+            line += f" Check output (end): {_clip(o.check_output[-600:], 600)}"
+        lines.append(line)
+    if best is not None:
+        changed = ", ".join(kept) or "no files"
+        lines.append(
+            f"Kept option {best.index}. The workspace holds its changes ({changed}). The REPL is as it was at FORK: "
+            "recompute any value the branch defined."
+        )
+    else:
+        lines.append("No branch passed, so the workspace is as it was at FORK. Choose the next step from the reports.")
+    return "\n".join(lines)
 
 
 class _SubHooks(Hooks):
@@ -373,7 +475,9 @@ class Agent:
             interpreter_factory=self.pool,
             marker=self.marker,
             freshness=config.freshness,
+            max_branches=config.fork,
         )
+        self.pool.root.max_branches = config.fork
         self._listeners = [
             dspy.streaming.StreamListener("code", predict=self.rlm.generate_action, allow_reuse=True),
             dspy.streaming.StreamListener("response", predict=self.rlm.extract, allow_reuse=True),
@@ -566,6 +670,116 @@ class Agent:
                 "that code can get around.",
             )
         )
+
+    def _history_budget(self) -> int:
+        """Characters of REPL history kept in the prompt before early steps fold (K7, K8)."""
+        window = self.window or 200_000
+        return int(min(window * 0.45, 150_000) * 3.6)
+
+    # ── branches (FORK) ──────────────────────────────────────────────────────
+
+    def _fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
+        """Explore a FORK's options, each from the world and REPL at FORK, and keep the best (ledger B7, H2).
+
+        Branches run one after another in the workspace itself, reset to the world at FORK before each, so each
+        sees the real directory with its caches and environments (copies would lack the excluded ones). Each runs
+        in a fork of the main REPL. The kept branch's world is checked out at the end; with none passing, the world
+        at FORK is.
+        """
+        timeline = self.timeline
+        if timeline is None or not timeline.enabled:
+            return "FORK needs workspace snapshots, which are off here: choose one option and go on with it."
+        start = timeline.snapshot()
+        outcomes: list[BranchOutcome] = []
+        try:
+            for index, option in enumerate(request.options, start=1):
+                self.control.check()
+                timeline.work.checkout(start)
+                self.workspace.invalidate()
+                outcomes.append(self._run_branch(index, len(request.options), option, request, branching))
+        except TurnCancelled:
+            timeline.work.checkout(start)
+            self.workspace.invalidate()
+            raise
+        best = _best(outcomes)
+        timeline.work.checkout(best.world if best is not None else start)
+        self.workspace.invalidate()
+        self.metrics.forks.append(
+            [
+                {
+                    "option": o.index,
+                    "steps": o.steps,
+                    "submitted": o.submitted,
+                    "passed": o.passed,
+                    "kept": o is best,
+                    "check": bool(request.check),
+                }
+                for o in outcomes
+            ]
+        )
+        kept = [c.path for c in timeline.diff(start, best.world)] if best is not None else []
+        return _fork_report(request, outcomes, best, kept)
+
+    def _run_branch(
+        self, index: int, total: int, option: str, request: ForkRequest, branching: Branching
+    ) -> BranchOutcome:
+        assert self.timeline is not None
+        branch_id = next(self._subagent_ids)
+        scope = f"branch{branch_id}"
+        self.emit(SubAgentStarted(branch_id, f"branch {index}/{total}: {option}"))
+        observations = Observations(self.workspace.root)
+        jobs = JobManager(self.log_dir / scope, self.emit)
+        toolbox = Toolbox(
+            self.workspace,
+            self.emit,
+            shell=self.shell,
+            jobs=jobs,
+            policy=self.policy,
+            scope=scope,
+            memory=self.steps,
+            timeline=self.timeline,
+            metrics=self.metrics,
+            observations=observations,
+            freshness=self.config.freshness,
+        )
+        hooks = _BranchHooks(self, branch_id, observations)
+        check = ""
+        if request.check:
+            check = f" Afterwards frond runs `{request.check}`; a branch whose check passes is kept."
+        note = (
+            f"[frond] You are branch {index} of {total}. Pursue only this option: {option}\n"
+            "The workspace and the REPL are as they were when FORK was called; other branches pursue the other "
+            f"options from the same point. You have {request.steps} steps. When you are done, SUBMIT a short "
+            f"report of what you did and how you checked it.{check}"
+        )
+        submitted, report, error, repl = False, "", "", None
+        try:
+            repl = self.pool.root.fork()
+            repl.tools.update({getattr(fn, "__name__", ""): fn for fn in toolbox.functions()})
+            first_call = len(self.lm.history)
+            try:
+                with dspy.context(send_stream=None):
+                    result = branching.run(repl, note, request.steps, hooks)
+            finally:  # the branch's model calls, so its cost can be told from the main line's (H2)
+                for call in range(first_call, len(self.lm.history)):
+                    self.metrics.branch_calls[call] = scope
+            if isinstance(result, dspy.Prediction):
+                submitted, report = True, str(result.get("response") or "")
+        except TurnCancelled:
+            raise
+        except Exception as exc:
+            error = describe_error(exc)
+        finally:
+            jobs.kill_all()
+            if repl is not None:
+                repl.shutdown()
+        world = self.timeline.snapshot()
+        passed, check_output = submitted and not error, ""
+        if request.check:
+            run = self.shell.run(request.check, cwd=self.workspace.root, timeout=self.config.step_timeout, scope=scope)
+            passed, check_output = run.ok, run.output
+        self.emit(SubAgentFinished(branch_id, _clip(report or error or "(no report)", 400), hooks.steps, passed))
+        return BranchOutcome(index, option, world, hooks.steps, submitted, passed, report, error, check_output)
 
     # ── sub-agents ───────────────────────────────────────────────────────────
 

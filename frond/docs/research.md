@@ -36,7 +36,7 @@ Each run records, in `frond -p --export` and on to Harbor:
 - protocol violations: replies that failed to parse into reasoning and code;
 - failed edits: edit or patch calls that raised;
 - stale actions: edits, writes and deletes of files changed since the model last read them (`stale_actions`; both freshness arms count them);
-- forks and the verifier scores of each branch.
+- forks: each FORK's branches with their steps, check result and which was kept (`metrics.json`), and each branch's model calls, tagged with the branch in `calls.jsonl`, so fork overhead is priced separately.
 
 ## Statistics
 

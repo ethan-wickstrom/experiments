@@ -80,6 +80,14 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "off only counts such actions (an experiment arm, H3)",
     )
     p.add_argument(
+        "--fork",
+        type=int,
+        default=1,
+        metavar="K",
+        help="let the model FORK up to K branches and keep the one its check passes; 1 turns FORK off "
+        "(default 1; an experiment arm, H2)",
+    )
+    p.add_argument(
         "--demo", action="store_true", help="scripted session in a temporary sample project (no API key needed)"
     )
     p.add_argument(
@@ -179,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         effort=None if args.effort == "default" else args.effort,
         layout=args.layout,
         freshness=args.freshness == "on",
+        fork=max(1, args.fork),
     )
     prompt = " ".join(args.prompt).strip()
 
@@ -318,7 +327,7 @@ def export_run(agent: Agent, directory: Path) -> None:
     with open(directory / "calls.jsonl", "w", encoding="utf-8") as f:
         roles = [("main", agent.lm)] + ([("sub", agent.sub_lm)] if agent.sub_lm is not agent.lm else [])
         for role, lm in roles:
-            for record in call_records(lm, role):
+            for record in call_records(lm, role, agent.metrics.branch_calls if lm is agent.lm else None):
                 f.write(redact(json.dumps(record, default=str)) + "\n")
     this_run = [r for r in agent.history if r.first_seq > agent.steps.loaded]
     metrics = {

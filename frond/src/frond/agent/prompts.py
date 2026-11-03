@@ -99,3 +99,16 @@ class Investigation(dspy.Signature):
     context: str = dspy.InputField(desc="Background from the delegating agent (may be empty)")
     workspace: str = dspy.InputField(desc="The environment and the project's instructions")
     report: str = dspy.OutputField(desc="A complete, specific report of the findings")
+
+
+FORK_GUIDE = """
+
+Branching
+- When you face a real choice between approaches and a command can tell which one worked (tests, a build, a \
+script), call FORK(options=[...], check="<shell command>", steps=8) as the last statement of a step. frond copies \
+the workspace and this REPL once per option (at most {branches}), lets a branch of you pursue each option for up to \
+`steps` steps, runs `check` on what each branch left (exit code 0 means success), and keeps the branch that passed \
+(on a tie, the one that took the fewest steps).
+- The step's output then reports each branch's result. The workspace holds the kept branch's changes; the REPL is \
+as it was at FORK. If no branch passed, the workspace is as it was at FORK.
+- Branches cost a step each per option: fork only for decisions that reasoning or one quick experiment cannot settle."""
