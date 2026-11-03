@@ -293,7 +293,7 @@ Requirements to design, code, tests and status. Design commitments without a req
 | R6 | D06, D13 | `agent/_sandbox.py`, `agent/repl.py`, `agent/_worker.py`, `agent/shell.py` | `test_sandbox`, `test_containment` | worker and read-only agents done; main agent's commands deferred | R6, G1 |
 | R7 | D22, D29, D35 | `world/timeline.py`, `agent/scopes.py`, `agent/rlm.py` (`_apply_scopes`) | `test_world`, `test_scopes` | done: abandoning a scope rewinds context and workspace together; the REPL is not rewound | closed |
 | R8 | D07 | `agent/adapter.py` | `test_caching` (simulated) | simulated | E0 |
-| R9 | — | — | — | missing | B11 |
+| R9 | D36 | `agent/compat.py`, `cli.py`, `pyproject.toml` | `test_compat` | done: DSPy pinned exactly, its internals checked at startup | closed |
 | R10 | D11 | `cli.py` (`--export`), `bench/frond_harbor.py` | `test_memory` | done; Harbor pipeline verified with the oracle agent | E0 |
 | R11 | D25 | — | — | Linux only, by decision | closed |
 

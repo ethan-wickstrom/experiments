@@ -28,7 +28,7 @@ from .spec import BENCH, BOUNDED, Claim, Spec, load
 from .stats import bootstrap, bootstrap_interval, difference_cs, holm, wilcoxon
 
 TOKEN_KEYS = ("input", "cache_read", "cache_write", "output")
-COUNTERS = ("failed_edits", "parse_failures", "syntax_errors", "steps")
+COUNTERS = ("failed_edits", "stale_actions", "parse_failures", "syntax_errors", "compactions", "summaries", "steps")
 
 
 @dataclass
