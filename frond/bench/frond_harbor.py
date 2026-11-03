@@ -135,6 +135,10 @@ class FrondOptions(InstalledAgentOptions):
     freshness: Annotated[str | None, Cli("--freshness")] = Field(
         default=None, description="on: mark stale reads and guard overwrites; off: only count stale actions; H3"
     )
+    arm: Annotated[str | None, Cli("--arm")] = Field(
+        default=None,
+        description="rlm: Python in a persistent REPL (frond's default); react: one tool call per step; H1",
+    )
     fork: Annotated[int | None, Cli("--fork")] = Field(
         default=None, description="most branches a FORK may explore; 1 turns FORK off (frond's default); H2"
     )

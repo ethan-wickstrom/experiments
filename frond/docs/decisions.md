@@ -285,3 +285,16 @@ Each stays closed unless new evidence reopens it:
   - frond deciding when to fork (on every failed check, say): the model sees the choice, frond does not; E2 measures whether the model uses FORK well.
 - Evidence: `tests/test_branches.py`: the passing branch's world is kept and its REPL changes are not; every branch starts from the world at FORK; none passing restores it; branch prompts equal the main prompt through the FORK step; FORK is absent when off; too many options is an error the model sees; branch calls are tagged and fork outcomes exported.
 
+## D33 · The tool-calling arm is an action space of frond's own loop, not dspy.ReAct (2026-11-03, active)
+- Decision:
+  - `--arm react` switches FrondRLM to a tools action space. Each step the model writes `reasoning`, `tool` and `args` (a JSON object); frond calls that one tool host-side and shows its result as the step's output; `submit` ends the turn;
+  - everything else is the RLM arm's: the tools and their documentation, the instructions (rewritten without the REPL, `prompts.TOOL_AGENT_INSTRUCTIONS`), the turns layout with the latest reply cache-marked, freshness, folding, steering, the step log and the exports. The inputs are shown as text, clipped like the REPL's previews;
+  - FORK and `llm_query` exist only in the RLM arm: both need code;
+  - E1 caps the tools arm at 100 steps and the RLM arm at 40: a tools step is a single call, and the comparison is pass rate and cost, not steps.
+- Why: H1 asks whether the action space (code in a persistent REPL against single JSON tool calls) changes pass rate per dollar. Holding everything else fixed is what lets E1 attribute a difference to the action space.
+- Rejected:
+  - `dspy.ReAct`: it re-renders the whole trajectory into one user message each step, so it loses prompt caching (H6's control condition), and it describes tools in its own format. A difference would mix action space with layout;
+  - the provider's native tool calling: a second difference (the API's tool_use blocks) beside the action space; E12 studies native rendering on its own;
+  - equal step caps: they would test a budget, not the action space; the step caps are pre-registered in E1's spec, and cost is measured either way.
+- Evidence: `tests/test_tools_arm.py`: a turn of single calls edits, checks and answers; past calls appear as turns in the call format; no code field or REPL variables reach the prompt; unknown tools and bad arguments come back as errors; the cache mark lands on the latest call.
+

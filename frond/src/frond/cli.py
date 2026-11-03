@@ -80,6 +80,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "off only counts such actions (an experiment arm, H3)",
     )
     p.add_argument(
+        "--arm",
+        choices=["rlm", "react"],
+        default="rlm",
+        help="rlm: act by writing Python in a persistent REPL (frond); react: one tool call per step with the same "
+        "tools, prompt layout and harness (an experiment arm, H1)",
+    )
+    p.add_argument(
         "--fork",
         type=int,
         default=1,
@@ -188,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         layout=args.layout,
         freshness=args.freshness == "on",
         fork=max(1, args.fork),
+        arm=args.arm,
     )
     prompt = " ".join(args.prompt).strip()
 

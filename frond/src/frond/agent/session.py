@@ -93,6 +93,7 @@ class AgentConfig:
     layout: str = "turns"  # how each step sees the history: "turns" (frond) or "chat" (DSPy's stock layout; H6)
     freshness: bool = True  # mark stale reads and refuse overwriting what changed since a read (H3); off: count only
     fork: int = 1  # most branches a FORK may explore (H2); 1 leaves FORK out of the REPL and the prompt
+    arm: str = "rlm"  # "rlm": Python in a persistent REPL; "react": one tool call per step, same tools (H1)
 
 
 @dataclass
@@ -475,7 +476,8 @@ class Agent:
             interpreter_factory=self.pool,
             marker=self.marker,
             freshness=config.freshness,
-            max_branches=config.fork,
+            max_branches=config.fork if config.arm == "rlm" else 1,
+            action_space="tools" if config.arm == "react" else "code",
         )
         self.pool.root.max_branches = config.fork
         self._listeners = [
