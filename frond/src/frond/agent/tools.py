@@ -229,7 +229,7 @@ class Toolbox:
         if _is_binary(data):
             raise ToolError(f"{display} looks like a binary file ({size:,} bytes)")
         if observe and self.observations is not None:
-            self.observations.saw(display, data)
+            self.observations.saw(p, data, display)
         if strict:
             try:
                 return data.decode("utf-8")
@@ -242,26 +242,49 @@ class Toolbox:
             raise PermissionError("this agent is read-only; report what should change instead")
         self.policy.check_write(p, self.ws.is_inside(p))
 
-    def _stale(self, display: str, *, replaces: bool) -> Observation | None:
-        """The model's read of ``display`` when the file changed since (counted as a stale action). With freshness
-        on, an action that ``replaces`` the whole file is refused: it would overwrite a change the model never saw."""
-        stale = self.observations.changed(display) if self.observations is not None else None
+    def _stale(self, p: Path, display: str, *, replaces: bool) -> Observation | None:
+        """The model's read of ``p`` when the file changed since (counted as a stale action). With freshness on, an
+        action that ``replaces`` the whole file is refused: it would overwrite a change the model never saw. A file
+        that is gone holds nothing to lose, so writing it anew goes ahead (F18)."""
+        stale = self.observations.changed(p) if self.observations is not None else None
         if stale is None:
             return None
         if self.metrics is not None:
             self.metrics.bump("stale_actions")
-        if self.freshness and replaces:
+        if self.freshness and replaces and (p.exists() or p.is_symlink()):
             raise ToolError(
                 f"{display} changed since you read it at step {stale.step}. Read it again before replacing or "
                 "deleting it, so the change made since is not lost."
             )
         return stale
 
-    def _wrote(self, p: Path, display: str, stale: Observation | None) -> None:
-        """After the model's own change the file holds what it intended, unless its picture was stale already."""
-        if self.observations is not None and stale is None:
+    def _stale_within(self, p: Path, display: str) -> None:
+        """Before a directory goes: each read inside it that went stale is a stale action, and with freshness on the
+        delete is refused, as it would be for each file alone (F16)."""
+        if self.observations is None:
+            return
+        stale = [o for o in self.observations.within(p) if self.observations.changed(o.real) is not None]
+        if not stale:
+            return
+        if self.metrics is not None:
+            self.metrics.bump("stale_actions", len(stale))
+        if self.freshness:
+            names = ", ".join(f"{o.path} (read at step {o.step})" for o in stale[:5])
+            raise ToolError(
+                f"files in {display} changed since you read them: {names}. Read them again before deleting "
+                f"{display}, so the changes made since are not lost."
+            )
+
+    def _wrote(self, p: Path, display: str, stale: Observation | None, *, whole: bool = False) -> None:
+        """After the model's own change the file holds what it intended: all of it after a whole-file write, and
+        after an edit unless its picture was stale already."""
+        if self.observations is not None and (whole or stale is None):
             with contextlib.suppress(OSError):
-                self.observations.saw(display, (p.resolve() if p.is_symlink() else p).read_bytes())
+                self.observations.saw(p, (p.resolve() if p.is_symlink() else p).read_bytes(), display)
+
+    def _gone(self, p: Path, display: str) -> None:
+        if self.observations is not None:
+            self.observations.absent(p, display)
 
     def _stale_note(self, display: str, stale: Observation | None) -> str:
         if stale is None or not self.freshness:
@@ -590,10 +613,12 @@ class Toolbox:
             old = self._read_text(p, display, strict=True) if p.exists() else None
             if old == content:
                 return f"{display} unchanged (content identical)"
-            stale = self._stale(display, replaces=True)
+            stale = self._stale(p, display, replaces=True)
             added, removed = self._commit(p, display, old, content)
-            self._wrote(p, display, stale)
+            self._wrote(p, display, stale, whole=True)
         lines = content.count("\n") + (0 if content.endswith("\n") or not content else 1)
+        if old is None and stale is not None and self.freshness:
+            return f"created {display} ({lines} lines). Note: it was deleted after you read it at step {stale.step}"
         if old is None:
             return f"created {display} ({lines} lines)"
         return f"rewrote {display} (+{added} −{removed}, now {lines} lines)"
@@ -615,8 +640,8 @@ class Toolbox:
             raise ToolError("old is empty; to replace the whole file use write(), to create a file pass a new path")
         with self._write_lock:
             text = self._read_text(p, display, strict=True)
+            stale = self._stale(p, display, replaces=False)  # counted even if the old text no longer matches (F19)
             updated = self._replace(text, old, new, replace_all, display)
-            stale = self._stale(display, replaces=False)
             added, removed = self._commit(p, display, text, updated)
             self._wrote(p, display, stale)
         prefix = next(
@@ -702,10 +727,10 @@ class Toolbox:
                     planned.append((op, p, None, op.content))
                 elif op.kind == "delete":
                     planned.append((op, p, self._read_text(p, display, strict=True), None))
-                    stale[p] = self._stale(display, replaces=True)
+                    stale[p] = self._stale(p, display, replaces=True)
                 else:
                     old = self._read_text(p, display, strict=True)
-                    stale[p] = self._stale(display, replaces=False)
+                    stale[p] = self._stale(p, display, replaces=False)
                     try:
                         new = apply_chunks(old, op.chunks, display) if op.chunks else old
                     except PatchError as exc:
@@ -722,6 +747,7 @@ class Toolbox:
                 display = self.ws.rel(p)
                 if op.kind == "delete":
                     p.unlink()
+                    self._gone(p, display)
                     diff = make_diff(old or "", "", display, deleted=True)
                     self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))
                     summary.append(f"deleted {display}")
@@ -732,12 +758,13 @@ class Toolbox:
                     dest = self._path(op.move_to)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     os.replace(p, dest)
+                    self._gone(p, display)
                     added, removed = self._commit(dest, self.ws.rel(dest), old, new)
                     self._wrote(dest, self.ws.rel(dest), stale.get(p))
                     summary.append(f"moved {display} → {self.ws.rel(dest)} (+{added} −{removed}){note}")
                 else:
                     added, removed = self._commit(p, display, old, new)
-                    self._wrote(p, display, stale.get(p))
+                    self._wrote(p, display, stale.get(p), whole=old is None)
                     summary.append(f"{'created' if old is None else 'updated'} {display} (+{added} −{removed}){note}")
             self.ws.invalidate()
         return "\n".join(summary)
@@ -759,9 +786,13 @@ class Toolbox:
             if not recursive:
                 raise ToolError(f"{display} is a directory; pass recursive=True to delete it and its contents")
             count = sum(1 for _ in p.rglob("*"))
+            self._stale_within(p, display)
             if count:
                 self.policy.check_delete_tree(p, f"{display}/ ({count} {'entry' if count == 1 else 'entries'})")
+            read_inside = self.observations.within(p) if self.observations is not None else []
             shutil.rmtree(p)
+            for o in read_inside:
+                self._gone(Path(o.real), o.path)
             self.emit(FileChanged(display + "/", "delete", f"(directory with {count} entries)", 0, 0, scope=self.scope))
             self.ws.invalidate()
             return f"deleted directory {display} ({count} entries)"
@@ -769,8 +800,9 @@ class Toolbox:
             old = self._read_text(p, display)
         except ToolError:
             old = ""
-        self._stale(display, replaces=True)
+        self._stale(p, display, replaces=True)
         p.unlink()
+        self._gone(p, display)
         diff = make_diff(old, "", display, deleted=True)
         self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))
         self.ws.invalidate()
@@ -786,7 +818,10 @@ class Toolbox:
         self._check_write(s)
         self._check_write(d)
         d.parent.mkdir(parents=True, exist_ok=True)
+        real = self.observations.real(s) if self.observations is not None else ""
         shutil.move(str(s), str(d))
+        if self.observations is not None:
+            self.observations.moved(real, d, self.ws.rel(d))
         self.emit(FileChanged(self.ws.rel(d), "move", "", 0, 0, old_path=self.ws.rel(s), scope=self.scope))
         self.ws.invalidate()
         return f"moved {self.ws.rel(s)} → {self.ws.rel(d)}"
