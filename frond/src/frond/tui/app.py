@@ -394,7 +394,7 @@ class App:
                 self.add(self.plan)
             case ev.UsageUpdated():
                 self.usage = e
-            case ev.Compacted(steps=steps, before_chars=before, after_chars=after):
+            case ev.Folded(steps=steps, before_chars=before, after_chars=after):
                 self.add(
                     NoticeBlock(
                         "info",

@@ -160,7 +160,7 @@ class Hooks:
         """A custom preview for input variable ``name`` (None: the default)."""
         return None
 
-    def compacted(self, steps: int, before: int, after: int) -> None: ...
+    def folded(self, steps: int, before: int, after: int) -> None: ...
 
     def summarize(self, transcript: str) -> str | None:
         """An LLM summary of earlier steps, for the summary context policy (H4); None when it cannot be made."""
@@ -523,7 +523,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             output=f"{FOLD_GUIDE}\n{INDEX_MARK}\n" + "\n".join(lines),
         )
         folded = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
-        self.hooks.compacted(len(old), before, len(folded.format()))
+        self.hooks.folded(len(old), before, len(folded.format()))
         return folded
 
     def _summarize(
@@ -549,7 +549,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             output="Summary of the earlier steps of this turn:\n" + escape_marker(summary, self.marker),
         )
         compacted = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
-        self.hooks.compacted(len(old), before, len(compacted.format()))
+        self.hooks.folded(len(old), before, len(compacted.format()))
         return compacted
 
 

@@ -43,13 +43,13 @@ from frond.events import (
     ChangeKind,
     CodeDelta,
     CommandStarted,
-    Compacted,
     Emit,
     Event,
     ExecFinished,
     ExecOutput,
     ExecStarted,
     FileChanged,
+    Folded,
     Notice,
     ReasoningDelta,
     ResponseDelta,
@@ -253,9 +253,9 @@ class _RootHooks(Hooks):
     def summarize(self, transcript: str) -> str | None:
         return self.agent._summarize(transcript)
 
-    def compacted(self, steps: int, before: int, after: int) -> None:
+    def folded(self, steps: int, before: int, after: int) -> None:
         self.agent.metrics.compactions += 1
-        self.agent.emit(Compacted(steps, before, after))
+        self.agent.emit(Folded(steps, before, after))
 
     def code_rejected(self, step: int) -> None:
         self.agent.metrics.syntax_errors += 1
@@ -295,7 +295,7 @@ class _BranchHooks(Hooks):
             "step",
             turn=turn,
             step=step,
-            scope=f"branch{self.branch_id}",
+            agent=f"branch{self.branch_id}",
             reasoning=reasoning,
             code=code,
             output=output,
@@ -383,7 +383,7 @@ class _SubHooks(Hooks):
             "step",
             turn=turn,
             step=step,
-            scope=f"sub{self.agent_id}",
+            agent=f"sub{self.agent_id}",
             reasoning=reasoning,
             code=code,
             output=output,

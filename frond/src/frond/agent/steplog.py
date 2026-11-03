@@ -57,7 +57,7 @@ class Record:
     kind: Kind
     turn: int
     step: int = 0  # the step within its turn (0 for messages and answers)
-    scope: str = ""  # "" for the main agent, "sub3" for a sub-agent's steps
+    agent: str = ""  # "" for the main agent; "sub3" for a sub-agent's steps, "branch2" for a FORK branch's
     reasoning: str = ""
     code: str = ""
     output: str = ""  # the REPL output, the user's message, or the answer
@@ -73,8 +73,8 @@ class Record:
 
     def public(self) -> dict[str, Any]:
         data = asdict(self)
-        if not self.scope:
-            data.pop("scope")
+        if not self.agent:
+            data.pop("agent")
         if not data["error"]:
             data.pop("error")
         data.pop("world")  # an id the model has no use for until it can rewind to a step
@@ -104,7 +104,10 @@ class StepLog:
                 data = path.read_bytes()
                 for line in data.decode("utf-8", errors="replace").splitlines():
                     try:
-                        self._index(Record(**json.loads(line)))
+                        fields = json.loads(line)
+                        if "scope" in fields:  # written before the field was renamed (ledger N2)
+                            fields["agent"] = fields.pop("scope")
+                        self._index(Record(**fields))
                     except (ValueError, TypeError):
                         continue  # a line cut short by a crash
                 if data and not data.endswith(b"\n"):
@@ -128,7 +131,7 @@ class StepLog:
         *,
         turn: int,
         step: int = 0,
-        scope: str = "",
+        agent: str = "",
         reasoning: str = "",
         code: str = "",
         output: str = "",
@@ -139,7 +142,7 @@ class StepLog:
             output = output[:MAX_STORED_OUTPUT] + f"\n… [{len(output) - MAX_STORED_OUTPUT:,} more chars not kept]"
         with self._lock:
             seq = len(self._records) + 1
-            record = self._index(Record(seq, kind, turn, step, scope, reasoning, code, output, error, world))
+            record = self._index(Record(seq, kind, turn, step, agent, reasoning, code, output, error, world))
             self._write(record)
             return record.seq
 
@@ -208,8 +211,8 @@ class StepLog:
         hit = {"seq": record.seq, "kind": record.kind, "turn": record.turn}
         if record.step:
             hit["step"] = record.step
-        if record.scope:
-            hit["scope"] = record.scope
+        if record.agent:
+            hit["agent"] = record.agent
         hit["headline"] = record.headline
         hit["match"] = match if len(match) <= 200 else match[:199] + "…"
         hit["score"] = round(score, 2)

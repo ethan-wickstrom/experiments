@@ -89,9 +89,9 @@ Only what the agent cannot get itself (D16).
 
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
-| N1 | `Compacted` → `Folded` (event and hook) | no `Compacted` or `compacted` identifiers remain; tests pass | open | design.md "Vocabulary" |
-| N2 | `Record.scope` → `Record.agent`, before B9 | logs write `agent`, readers accept `scope`, and the Harbor adapter reads the new name | open | design.md "Vocabulary" |
-| N3 | `Checkpoints` → absorbed into worlds (B4) | the class is gone | open | D22 |
+| N1 | `Compacted` → `Folded` (event and hook) | no `Compacted` or `compacted` identifiers remain; tests pass | closed (this commit) | renamed throughout |
+| N2 | `Record.scope` → `Record.agent`, before B9 | logs write `agent`, readers accept `scope`, and the Harbor adapter reads the new name | closed (this commit) | `test_a_log_written_before_the_rename_still_loads`; the adapter reads either |
+| N3 | `Checkpoints` → absorbed into worlds (B4) | the class is gone | closed | removed in B4b (D29) |
 
 ## Questions, unknowns, unverified claims
 

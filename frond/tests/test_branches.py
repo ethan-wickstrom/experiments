@@ -54,7 +54,7 @@ class ForkTest(WorkspaceCase):
         self.assertIn("Kept option 2. The workspace holds its changes (answer.txt)", final_prompt)
         self.assertEqual([e.ok for e in self.of_type(SubAgentFinished)], [False, True, False])
         self.assertEqual(len(self.of_type(SubAgentStarted)), 3)
-        scopes = {r.scope for r in agent.steps.records() if r.scope}
+        scopes = {r.agent for r in agent.steps.records() if r.agent}
         self.assertEqual(len(scopes), 3)  # every branch's steps are in the step log
         out = Path(tempfile.mkdtemp(prefix="frond-export-"))
         self.addCleanup(shutil.rmtree, out, True)
