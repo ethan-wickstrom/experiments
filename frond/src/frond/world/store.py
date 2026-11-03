@@ -11,6 +11,7 @@ containers benchmarks run in.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -120,18 +121,34 @@ class Store:
         return seen
 
     def sweep(self, keep: set[str], *, older_than: float) -> int:
-        """Delete the objects outside ``keep`` last used before ``older_than`` (a timestamp); bytes freed."""
+        """Delete the objects outside ``keep`` last used before ``older_than`` (a timestamp); bytes freed.
+
+        Each candidate is first renamed aside, so a ``put`` from then on writes the object anew rather than marking
+        the one about to go; it is deleted only if, once aside, it still shows no use. A ``put`` that marked it in
+        between, for a tree being built, brings it back (F45). Leftovers of an interrupted sweep are put back first.
+        """
         freed = 0
         for directory in (self.root / "objects").iterdir():
             if not directory.is_dir():
                 continue
+            for aside in directory.glob(".gone-*"):
+                _restore(aside)
             for path in directory.iterdir():
-                if path.name.startswith(".tmp-") or directory.name + path.name in keep:
+                if path.name.startswith((".tmp-", ".gone-")) or directory.name + path.name in keep:
                     continue
-                st = path.stat()
-                if st.st_mtime < older_than:
-                    path.unlink(missing_ok=True)
+                try:
+                    if path.stat().st_mtime >= older_than:
+                        continue
+                    aside = path.with_name(f".gone-{path.name}")
+                    os.rename(path, aside)
+                    st = aside.stat()
+                    if st.st_mtime >= older_than:  # put marked it before the rename: in use again
+                        _restore(aside)
+                        continue
+                    aside.unlink()
                     freed += st.st_size
+                except FileNotFoundError:
+                    continue
         return freed
 
     def get(self, oid: str) -> tuple[str, bytes]:
@@ -197,6 +214,22 @@ class Store:
         return leaves or [(path, Entry("tree", oid))]  # an empty directory is a leaf of its own
 
 
+def _restore(aside: Path) -> None:
+    """Put an object set aside by a sweep back under its name, unless a ``put`` wrote it there anew meanwhile: that copy
+    stays, with its newer time, and the aside goes (review of #25)."""
+    target = aside.with_name(aside.name.removeprefix(".gone-"))
+    try:
+        os.link(aside, target)  # never replaces an existing file
+    except FileExistsError:
+        pass
+    except OSError:  # no hard links here: the check and the rename are not one step, but nearly
+        if not target.exists():
+            with contextlib.suppress(OSError):
+                os.rename(aside, target)
+    with contextlib.suppress(OSError):
+        aside.unlink()
+
+
 class Worktree:
     """A directory and the snapshots taken of it, with a stat cache so only changed files are read again."""
 
@@ -244,7 +277,15 @@ class Worktree:
                     entries[name] = self._file_entry(item, key, started)
             except FileNotFoundError:
                 continue  # removed while the snapshot ran
+            except PermissionError:  # unreadable: kept by its signature, like a large file, and never restored (F13)
+                entries[name] = self._opaque(item)
         return self.store.put_tree(entries)
+
+    @staticmethod
+    def _opaque(item: os.DirEntry[str]) -> Entry:
+        st = item.stat(follow_symlinks=False)
+        mode = stat.S_IMODE(st.st_mode)
+        return Entry("large", object_id("large", repr((st.st_size, st.st_mtime_ns, st.st_ino, mode)).encode()), mode)
 
     def _file_entry(self, item: os.DirEntry[str], key: str, started: int) -> Entry:
         self._visited += 1
@@ -268,6 +309,8 @@ class Worktree:
 
     def checkout(self, target: str, current: str | None = None) -> list[Change]:
         """Make the directory hold ``target``, touching only paths that differ; returns what changed."""
+        if not target:  # "" is what a failed or switched-off snapshot returns, never a world: it would empty the tree
+            raise ValueError("no world to check out: a snapshot that failed names none")
         current = current if current is not None else self.snapshot()
         changes = self.store.diff(current, target)
         for change in sorted(changes, key=lambda c: c.after is not None):  # removals first

@@ -249,7 +249,13 @@ def main(argv: list[str] | None = None) -> int:
     if world_dir.is_dir():  # past its bound, drop what no recent session reaches (ledger G21), in the background
         from frond.world import Store
 
-        threading.Thread(target=store.collect, args=(Store(world_dir),), name="frond-world-gc", daemon=True).start()
+        threading.Thread(
+            target=store.collect,
+            args=(Store(world_dir),),
+            kwargs={"keep": session_file},  # a continued session keeps its undo history, however old (F46)
+            name="frond-world-gc",
+            daemon=True,
+        ).start()
     if not interactive:
         return run_headless(
             args, config, workspace, prompt, lm, persist, restored, store.steps_path(session_file), world_dir

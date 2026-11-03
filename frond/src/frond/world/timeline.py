@@ -83,22 +83,27 @@ class Timeline:
 
         threading.Thread(target=first, name="frond-world-warmup", daemon=True).start()
 
-    def snapshot(self, *, new_ignored: bool = False) -> str:
+    def snapshot(self, *, new_ignored: bool = True) -> str:
         """The workspace now, as a tree id. ``new_ignored``: first leave out paths git began ignoring that did not
-        exist at the previous snapshot (a build's output directory, say)."""
+        exist at the previous snapshot (a build's output directory, say), whoever made them: the model's command, or
+        a background job between steps (F14). A snapshot that fails turns snapshots off with the reason, rather than
+        failing the turn (F13)."""
         with self._lock:
             if not self.enabled:
                 return ""
             started = time.monotonic()
-            if new_ignored and self.git:
-                fresh = git_ignored(self.root) - self.work.ignored
-                if self.last is not None:
-                    fresh = frozenset(p for p in fresh if self.lookup(self.last, p.rstrip("/")) is None)
-                self.work.ignored |= fresh
             try:
+                if new_ignored and self.git:
+                    fresh = git_ignored(self.root) - self.work.ignored
+                    if self.last is not None:
+                        fresh = frozenset(p for p in fresh if self.lookup(self.last, p.rstrip("/")) is None)
+                    self.work.ignored |= fresh
                 self.last = self.work.snapshot()
             except TooLarge as exc:
                 self.enabled, self.reason, self.last = False, str(exc), None
+                return ""
+            except OSError as exc:  # a full disk, say: undo and diffs stop, the agent does not
+                self.enabled, self.reason, self.last = False, f"a snapshot failed: {exc}", None
                 return ""
             self.last_seconds = time.monotonic() - started
             if self.last_seconds > SLOW_SECONDS:
@@ -111,8 +116,11 @@ class Timeline:
         with self._lock:
             if not self.enabled:
                 return "", ""
-            self.work.ignored = git_ignored(self.root) if self.git else frozenset()
-            return self.snapshot(), self.head()
+            try:
+                self.work.ignored = git_ignored(self.root) if self.git else frozenset()
+            except OSError:
+                self.work.ignored = frozenset()
+            return self.snapshot(new_ignored=False), self.head()
 
     def head(self) -> str:
         return git_head(self.root) if self.git else ""

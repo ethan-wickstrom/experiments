@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import ClassVar
+from unittest import mock
 
 from frond.agent.scripted import Step
 from frond.cli import export_run
@@ -94,6 +95,20 @@ class ForkTest(WorkspaceCase):
         self.assertEqual([m.text for m in one[:-1]], [m.text for m in two[:-1]])  # differ only in their own note
         self.assertIn("You are branch 1 of 2", one[-1].text or "")
         self.assertIn("You are branch 2 of 2", two[-1].text or "")
+
+    def test_a_fork_whose_snapshot_fails_changes_nothing(self):  # review of #25
+        steps = [
+            Step("Try.", "FORK(['a', 'b'], check='python3 check.py', steps=1)"),
+            Step("Done.", "SUBMIT(response='done')"),
+        ]
+        agent, engine = self.agent(steps, branches=2)
+        assert agent.timeline is not None
+        with mock.patch.object(agent.timeline, "snapshot", return_value=""):
+            agent.run_turn("try")
+        final_prompt = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("FORK needs workspace snapshots, which stopped", final_prompt)
+        self.assertEqual((self.root / "notes.txt").read_text(), "start\n")
+        self.assertTrue((self.root / CHECK).exists())
 
     def test_with_fork_off_there_is_no_fork(self):
         steps = [Step("Try.", "FORK(['a', 'b'])"), Step("Done.", "SUBMIT(response='ok')")]

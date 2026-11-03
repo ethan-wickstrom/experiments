@@ -55,6 +55,23 @@ class GitWorkspaceTest(WorkspaceCase):
         status = subprocess.run(["git", "status", "--porcelain"], cwd=self.root, capture_output=True, text=True)
         self.assertEqual(status.stdout, "")
 
+    def test_a_background_jobs_new_ignored_output_survives_undo(self):  # F14
+        shutil.rmtree(self.root / "build")  # not there when the turn starts
+        turn = TurnUndo(self)
+        (self.root / "build").mkdir()  # a background job's output, written between steps
+        (self.root / "build" / "out").write_text("result\n")
+        step = turn.timeline.snapshot()  # a step's snapshot, not a foreground command's
+        self.assertIsNone(turn.timeline.lookup(step, "build"))
+        turn.undo()
+        self.assertEqual((self.root / "build" / "out").read_text(), "result\n")
+
+    def test_a_mode_change_alone_shows_in_the_net_change(self):  # F15
+        agent, _ = scripted_agent(self, [Step("Chmod.", "sh('chmod +x run.sh')\nSUBMIT(response='ok')")])
+        agent.run_turn("make it executable")
+        [change] = agent.turn_diff()
+        self.assertEqual(change.path, "run.sh")
+        self.assertEqual(change.diff, "(mode 644 → 755)")
+
     def test_a_turn_that_commits_is_left_to_git(self):
         commit = " ".join(GIT) + " commit -qam second"
         steps = [Step("Commit.", f"sh({f'echo more >> a.txt && {commit}'!r})\nSUBMIT(response='committed')")]

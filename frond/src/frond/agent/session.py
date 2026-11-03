@@ -351,7 +351,7 @@ class BranchOutcome:
 
 
 def _best(outcomes: list[BranchOutcome]) -> BranchOutcome | None:
-    passing = [o for o in outcomes if o.passed]
+    passing = [o for o in outcomes if o.passed and o.world]  # a branch whose world was not captured cannot be kept
     return min(passing, key=lambda o: (not o.submitted, o.steps, o.index)) if passing else None
 
 
@@ -686,7 +686,9 @@ class Agent:
             record.world_after = self.timeline.snapshot()
             record.head_moved = self.timeline.head() != head
             # the turn's net change, whoever made it: tools, commands, background jobs (requirement R2)
-            record.files = sorted({c.path for c in self.timeline.diff(record.world_before, record.world_after)})
+            if record.world_after:  # "" when snapshots stopped during the turn: no net change can be told
+                diff = self.timeline.diff(record.world_before, record.world_after)
+                record.files = sorted({c.path for c in diff})
         answer = record.response or record.error or f"(turn {record.status})"
         record.last_seq = self.steps.add("answer", turn=record.index, output=answer, error=record.status == "error")
         self.history.append(record)
@@ -772,8 +774,11 @@ class Agent:
             if scope is None:
                 raise ValueError("there is no open scope to abandon")
             parts = []
-            if self.timeline is not None and scope.world:
-                undone = self.timeline.revert(scope.world, self.timeline.snapshot())
+            now = self.timeline.snapshot() if self.timeline is not None and scope.world else ""
+            if self.timeline is not None and scope.world and not now:
+                parts.append(f"Nothing was reverted: workspace snapshots stopped ({self.timeline.reason}).")
+            elif self.timeline is not None and scope.world:
+                undone = self.timeline.revert(scope.world, now)
                 self.workspace.invalidate()
                 parts.append(f"Reverted: {', '.join(undone.restored) or 'no files'}.")
                 if undone.conflicts:
@@ -804,6 +809,8 @@ class Agent:
         if timeline is None or not timeline.enabled:
             return "FORK needs workspace snapshots, which are off here: choose one option and go on with it."
         start = timeline.snapshot()
+        if not start:  # snapshots stopped just now: never check out what they could not capture (review of #25)
+            return f"FORK needs workspace snapshots, which stopped ({timeline.reason}): choose one option and go on."
         outcomes: list[BranchOutcome] = []
         self._in_branch = True
         try:
@@ -981,8 +988,11 @@ class Agent:
                 "here: undo the commit with git"
             )
         current = timeline.snapshot()
+        if not current:
+            return f"nothing undone: workspace snapshots stopped ({timeline.reason})"
         result = timeline.revert(target.world_before, target.world_after)
-        for change in timeline.diff(current, timeline.snapshot()):
+        after = timeline.snapshot()
+        for change in timeline.diff(current, after) if after else []:
             self._emit(self._change_event(change, scope="undo"))
         target.undone = True
         self.workspace.invalidate()
@@ -1011,11 +1021,14 @@ class Agent:
             kinds = " → ".join(e.kind if e is not None else "absent" for e in (change.before, change.after))
             return FileChanged(change.path, kind, f"({kinds})", 0, 0, scope=scope)
         old_bytes, new_bytes = timeline.content(change.before) or b"", timeline.content(change.after) or b""
+        before, after = change.before, change.after
+        mode = f"(mode {before.mode:o} → {after.mode:o})" if before and after and before.mode != after.mode else ""
         if b"\0" in old_bytes or b"\0" in new_bytes:
-            return FileChanged(change.path, kind, "(binary file)", 0, 0, scope=scope)
+            return FileChanged(change.path, kind, "\n".join(filter(None, ["(binary file)", mode])), 0, 0, scope=scope)
         old, new = old_bytes.decode("utf-8", errors="replace"), new_bytes.decode("utf-8", errors="replace")
         diff = make_diff(old, new, change.path, created=kind == "create", deleted=kind == "delete")
-        return FileChanged(change.path, kind, diff.text, diff.added, diff.removed, scope=scope)
+        text = "\n".join(filter(None, [diff.text if old != new else "", mode]))  # a chmod alone shows (F15)
+        return FileChanged(change.path, kind, text, diff.added, diff.removed, scope=scope)
 
     def attach_log(self, path: Path) -> None:
         """Keep the step log in ``path`` (beside the session file), loading what an earlier session recorded."""

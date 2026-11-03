@@ -238,6 +238,13 @@ class MatrixTest(BenchCase):
         with mock.patch("subprocess.run", side_effect=docker("0022")):
             self.assertFalse([p for p in matrix.preflight(s, None) if "umask" in p])
 
+    def test_the_anthropic_key_may_be_stored_as_claude_api_key(self):  # the owner's name for it (REQ-1)
+        env = matrix.with_aliases({"CLAUDE_API_KEY": "secret-value", "PATH": "/bin"})
+        self.assertEqual(env["ANTHROPIC_API_KEY"], "secret-value")
+        both = matrix.with_aliases({"CLAUDE_API_KEY": "alias", "ANTHROPIC_API_KEY": "direct"})
+        self.assertEqual(both["ANTHROPIC_API_KEY"], "direct")  # an explicit key wins
+        self.assertNotIn("ANTHROPIC_API_KEY", matrix.with_aliases({"PATH": "/bin"}))
+
     def test_jobs_of_another_spec_or_source_are_not_resumed(self):  # F8
         current = {"spec_sha256": "s1", "source_sha256": "c1"}
         self.assertEqual(matrix.resumable({"runs": []}, current, False), [])
