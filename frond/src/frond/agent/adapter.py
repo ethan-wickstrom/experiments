@@ -95,10 +95,21 @@ def last_reply_index(demos: list[dict[str, Any]], history: REPLHistory) -> int |
 
 
 class FrondAdapter(dspy.ChatAdapter):
-    def __init__(self, *, cache_breakpoints: bool = False, marker: str = "", **kwargs: Any) -> None:
+    def __init__(
+        self, *, cache_breakpoints: bool = False, marker: str = "", metrics: Any = None, **kwargs: Any
+    ) -> None:
         super().__init__(**kwargs)
         self.cache_breakpoints = cache_breakpoints
+        self.metrics = metrics  # a RunMetrics: counts replies that do not parse (ledger B2)
         self.marker = marker  # marks the user's messages; escaped out of every step's output (see user_tag)
+
+    def parse(self, signature: type[dspy.Signature], completion: str) -> dict[str, Any]:
+        try:
+            return super().parse(signature, completion)
+        except Exception:
+            if self.metrics is not None:
+                self.metrics.parse_failures += 1
+            raise
 
     def format_system_message(self, signature: type[dspy.Signature]) -> str:
         text = super().format_system_message(signature)

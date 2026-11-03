@@ -48,6 +48,7 @@ Only what the agent cannot get itself (D16).
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
 | E0 | Pilot (was P0): 10 TB 4.0 tasks × 3 trials on Opus 5.5, plus 10 × 1 on Sonnet 5.5 and Haiku 5.5 to pick the screening model | report in `bench/results/` with per-call cache reads, protocol violations, failed edits, per-task variance, and the trials H1–H6 need | blocked: REQ-1, B1, B2 | `research.md` |
+| E0a | Oracle sweep: Harbor's reference solutions on all 66 TB 4.0 tasks in this VM, so that infrastructure failures (TLS, resources, disk) are known before any model is blamed | pass list in `bench/results/` | in progress (started 2026-11-03) | needs no key |
 | E1 | H1: RLM against ReAct, same tools | paired test per `research.md` | blocked: E0, B3, B8 | `research.md` |
 | E2 | H2: fork k=3 with verifier selection | paired test; cost ratio | blocked: E0, B4, B6, B7 | `research.md` |
 | E3 | H3: freshness marks | failed edits per task, pass rate | blocked: E0, B5 | `research.md` |
@@ -66,9 +67,9 @@ Only what the agent cannot get itself (D16).
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
 | B1 | Claude 5.5 compatibility and effort: send no sampling parameters, set `output_config.effort` from `--effort` (default high) | a payload test on `claude-opus-5-5` shows no temperature, no disabled thinking, and the chosen effort | closed 2605fb3 | `build_lm(effort=…)`, `tests/test_lm.py`; D26 |
-| B2 | Measurement: per-call input, cache read, cache write and output tokens; protocol violations; failed edits; stale actions | `--export` writes them; tests cover each counter | next | `research.md`, Measurements |
+| B2 | Measurement: per-call input, cache read, cache write and output tokens; protocol violations; failed edits; stale actions | `--export` writes them; tests cover each counter | closed (this commit) | `--export` now also writes `calls.jsonl` (raw and normalized usage per model call) and `metrics.json` (parse failures, code that did not compile, tool calls and failures, failed edits); `tests/test_metrics.py`. Stale actions move to B5, which defines staleness |
 | B3 | Arms and runner: `--arm`, `--layout`, `--context`, `--fork`, `--freshness` and `--scopes` flags passed through Harbor options; `bench/matrix.py` (tasks × arms × trials, resumable); `bench/analyze.py` (Wilcoxon, bootstrap, Holm, cost per solved) | a dry run of the matrix, and analysis on synthetic results | next | `research.md` |
-| B4a | Worlds core: a content-addressed store with nested Merkle trees, incremental snapshots (stat cache, racy-edit rehash), checkout, diff, line-level merge3, and revert | `tests/test_world.py`: exact round trips (modes, links, type changes, empty directories), excluded caches untouched, racy edits seen, and a later edit by someone else surviving a revert | closed (this commit) | `src/frond/world/`; D22 |
+| B4a | Worlds core: a content-addressed store with nested Merkle trees, incremental snapshots (stat cache, racy-edit rehash), checkout, diff, line-level merge3, and revert | `tests/test_world.py`: exact round trips (modes, links, type changes, empty directories), excluded caches untouched, racy edits seen, and a later edit by someone else surviving a revert | closed 72818da | `src/frond/world/`; D22 |
 | B4b | Wire worlds into frond: a snapshot around each action, undo as a revert of the turn's steps, a net turn diff, non-git workspaces; delete `Checkpoints` and `GitSnapshots` | the undo tests (`test_command_undo`, `UndoFidelity`) pass on worlds, plus a concurrent-edit test through `/undo` | next | B4a; closes P2, R2 and R3 |
 | B5 | Freshness: observations carry content hashes, and the prompt marks stale ones | a test where a file changes after a read and the next prompt marks it | open | H3, `design.md` "Worlds" |
 | B6 | Forkable REPL: the worker forks when idle (`os.fork`, pipes passed with `socket.send_fds`) | a child keeps the namespace, both run independently, and they are confined like the parent | open | H2 |
@@ -106,7 +107,7 @@ Only what the agent cannot get itself (D16).
 | Q1 | The OpenAI and Gemini default model IDs in `lm.py` are unverified (was I8) | each confirmed or replaced from the provider's model list | open, low | Anthropic IDs confirmed (D24) |
 | Q2 | Does GPT-5.4-mini write literal `\n` into scripts? (was I9) | measured if an OpenAI arm runs | deferred: no OpenAI arm planned | [2608.06370](https://arxiv.org/abs/2608.06370) |
 | V1 | No turn has run on a live model | E0 completes a task | blocked: REQ-1 | — |
-| V2 | frond has never run a real Terminal-Bench task | E0 | blocked: REQ-1 | Harbor plus Docker verified with the oracle agent, 2026-11-03 |
+| V2 | frond has never run a real Terminal-Bench task | E0 | blocked: REQ-1 | Harbor plus Docker verified with the oracle agent, and frond installs in a TB 4.0 container (install-only), 2026-11-03 |
 | V3 | The macOS Seatbelt profile has never run | — | closed: won't do | D25 (the program is Linux-only) |
 | V4 | The cache savings are simulated | E0 measures `cache_read_input_tokens` | blocked: REQ-1 | — |
 
@@ -134,6 +135,7 @@ Only what the agent cannot get itself (D16).
 | G3 | frond never sets reasoning effort, so Opus 5.5 would run at `medium` | B1 | closed 2605fb3 | D26 |
 | G4 | DSPy sends any provider whose `<PREFIX>_BASE_URL` is set through LiteLLM, which cannot carry `prompt_cache`. Hosted sessions set `ANTHROPIC_BASE_URL` to the public endpoint, so every frond call from such a VM failed | payload test | closed 2605fb3 | D26 |
 | G5 | Harbor may forward `ANTHROPIC_BASE_URL` into task containers | E0's first run shows the container environment | open, low | frond handles the variable either way (D26) |
+| G6 | This VM's egress re-terminates TLS, so task containers must trust its CA, or installs and API calls fail | an install-only run in a TB 4.0 container | closed (this commit) | the Harbor adapter carries the host's CA bundle into the container and points curl, uv and Python at it. Verified 2026-11-03: frond 0.1.0 installed in `layout-config-recreation2`. Task verifiers that need the internet are measured by E0a |
 
 ## Assumptions to test
 

@@ -25,6 +25,7 @@ from typing import Any
 
 from frond.agent.checkpoints import Checkpoints
 from frond.agent.diffing import make_diff
+from frond.agent.metrics import RunMetrics
 from frond.agent.patch import FileOp, PatchError, apply_chunks, parse_patch
 from frond.agent.policy import Policy
 from frond.agent.shell import SANDBOX_UNAVAILABLE, JobManager, ShellRunner, sandbox_status, truncate_middle
@@ -157,11 +158,13 @@ class Toolbox:
         checkpoints: Checkpoints | None = None,
         memory: StepLog | None = None,
         snapshots: GitSnapshots | None = None,
+        metrics: RunMetrics | None = None,
     ) -> None:
         self.ws = workspace
         self.checkpoints = checkpoints
         self.memory = memory
         self.snapshots = snapshots
+        self.metrics = metrics  # counts every tool call and failure, for research (ledger B2)
         self.emit = emit
         self.shell = shell
         self._jobs = jobs
@@ -196,7 +199,8 @@ class Toolbox:
             names += ["subagent", "subagent_batched"]
         if self.read_only:
             names = [n for n in names if n not in self.MUTATING and n != "plan"]
-        return [getattr(self, n) for n in names]
+        functions = [getattr(self, n) for n in names]
+        return [self.metrics.counted(f) for f in functions] if self.metrics is not None else functions
 
     # ── helpers ──────────────────────────────────────────────────────────────
 

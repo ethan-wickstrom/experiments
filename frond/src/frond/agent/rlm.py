@@ -91,6 +91,9 @@ class Hooks:
 
     def compacted(self, steps: int, before: int, after: int) -> None: ...
 
+    def code_rejected(self, step: int) -> None:
+        """The step's code did not compile."""
+
 
 def _clip(text: str, limit: int) -> str:
     if len(text) <= limit:
@@ -256,6 +259,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             code = str(action.code or "")
             hooks.step_planned(step, reasoning, code)
             error = f"[Error] {format_error_for_lm(exc)}"
+            hooks.code_rejected(step)
             hooks.exec_finished(step, error, error, 0.0, False)
             outcome = self._process_execution_result(action, code, error, history, output_field_names)
             return self._logged(outcome, step, reasoning, code)
@@ -265,6 +269,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         started = time.monotonic()
         result = self._execute_code(repl, code, input_args)
         duration = time.monotonic() - started
+        if _did_not_compile(result):
+            hooks.code_rejected(step)  # protocol adherence (ledger B2)
         outcome = self._process_execution_result(action, code, result, history, output_field_names)
         if isinstance(outcome, Prediction):
             hooks.exec_finished(step, "", None, duration, True)
@@ -322,6 +328,14 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         folded = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
         self.hooks.compacted(len(old), before, len(folded.format()))
         return folded
+
+
+def _did_not_compile(result: Any) -> bool:
+    """A step result reporting that the code itself failed to compile, as opposed to failing while it ran."""
+    if not isinstance(result, str) or not result.startswith(ERROR_PREFIXES):
+        return False
+    lines = result.strip().splitlines()
+    return '"<repl>"' in lines[0] and lines[-1].startswith(("SyntaxError:", "IndentationError:", "TabError:"))
 
 
 def _first_line(text: str, limit: int) -> str:
