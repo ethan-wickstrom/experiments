@@ -1,6 +1,6 @@
 # Now
 
-Updated 2026-11-03, second session: the program's first model calls. The key works (REQ-1 closed by the paid smoke). The first call ended frond's run on a reply off the field protocol; frond now recovers such replies or turns them into error steps (G34, D46). E0 runs from a frozen worktree (D47).
+Updated 2026-11-03, second session: the program's first model calls. The key works (REQ-1 closed by the paid smoke). The first call ended frond's run on a reply off the field protocol; frond now recovers such replies or turns them into error steps (G34, D46). E0 runs from a frozen worktree (D47). Every review finding is closed (F1–F68), including FORK's (F22–F31, F60–F67) before E2, the tools arm's (F32–F37, F48) before E1 and scopes' (F38–F40) before E5; E11's reference agents are bounded (G33, D50).
 
 ## In flight
 
@@ -10,12 +10,11 @@ E0a is done: 53 of the 55 tasks that start pass under the reference solutions, a
 
 ## Next, in order (research-first, D16)
 
-1. E0: analyse with `uv run python -m bench.analyze bench/experiments/e0-pilot.toml --out bench/results/<date>-e0`. Read protocol adherence first: `parse_failures`, `parse_recovered`, `unparsed_steps` per model (D46).
-2. Review findings: all closed (F1–F67: fixed, verified or declined). New ones go into the ledger as they arrive.
+1. E0: analyse with `uv run python -m bench.analyze bench/experiments/e0-pilot.toml --out bench/results/<date>-e0`; the report's protocol table gives adherence per step (D46). On the first 8 Haiku trials: pass 0/8, $0.04 a trial, 88% of input from cache, 32% of replies off protocol (21% recovered, 11% cost a step). Record the run's spending in `bench/budget.toml` (D49).
+2. Review findings: all closed (F1–F68: fixed, verified or declined). New ones go into the ledger as they arrive; REQ-3 holds Devin's unposted security findings.
 3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), E0b's spec (2 more trials per task on that model, for the variance that sizes E1–E6), and the program's budget, as a new REQ from E0's measured costs: E1 alone, at 56 tasks × 3 trials × 2 arms, is several hundred dollars on Sonnet.
-4. G33 before E11: per-trial bounds for Claude Code and Terminus 2.
-5. E1–E6 and E11 in the order in `research.md`.
-6. B13 (a TUI world view of branches and scopes), B17 (stop latency).
+4. E1–E6 and E11 in the order in `research.md`, once the budget allows; G39 (how often E11's bounds bind) before E11's analysis.
+5. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner
 
