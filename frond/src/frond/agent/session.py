@@ -85,6 +85,8 @@ class AgentConfig:
     subagent_steps: int = 16
     context_window: int | None = None
     prompt_cache: bool = True
+    effort: str | None = "high"  # the main model's reasoning effort (decision D26); None: the model's default
+    sub_effort: str | None = None  # for llm_query sub-calls and sub-agents
     track_commands: bool = True  # snapshot a git workspace around shell commands, so /undo covers their changes
     repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
 
@@ -279,11 +281,11 @@ class Agent:
         self.control = TurnControl()
         self.log_dir = Path(tempfile.mkdtemp(prefix="frond-"))
         atexit.register(self.close)
-        self.lm = lm or build_lm(config.model, prompt_cache=config.prompt_cache)
+        self.lm = lm or build_lm(config.model, prompt_cache=config.prompt_cache, effort=config.effort)
         self.sub_lm = sub_lm or (
             self.lm
             if config.sub_model == config.model
-            else build_lm(config.sub_model, prompt_cache=config.prompt_cache)
+            else build_lm(config.sub_model, prompt_cache=config.prompt_cache, effort=config.sub_effort)
         )
         self.window: int | None = config.context_window
         # Each step's history is sent as conversation turns, with the latest reply marked for providers that

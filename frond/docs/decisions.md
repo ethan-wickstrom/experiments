@@ -180,3 +180,15 @@ Each stays closed unless new evidence reopens it:
 - No macOS work in the research program: the program runs on Linux containers. Seatbelt stays untested (V3, closed).
 - No ACP support for now: it serves daily-driver IDE use, not the research question. Reopen after the research program.
 - PR #2's mistaken commit message stays as it is: it credits a mouse-input fix to the wrong commit, and rewriting pushed history is destructive.
+
+## D26 · Explicit reasoning effort; keep the native route behind the public endpoint (2026-11-03, active)
+- Decision:
+  - frond sets the main model's effort to `high` (`--effort`, which the Harbor adapter passes through), and leaves sub-calls at the model's default;
+  - when `<PREFIX>_BASE_URL` or `_API_BASE` names the provider's own public endpoint, as hosted sessions set `ANTHROPIC_BASE_URL=https://api.anthropic.com`, frond unsets it so DSPy keeps its native engine, with prompt caching and effort;
+  - for a real gateway, frond keeps the variable and turns prompt caching off instead of failing.
+- Rejected:
+  - effort `medium`, Opus 5.5's default: the Claude API guidance asks for at least `high` on intelligence-sensitive work, and E10 sweeps effort;
+  - `xhigh` by default: the cost has not been measured;
+  - unsetting every base URL: breaks real gateways;
+  - declaring a provider through `dspy.lm15.register_provider`: more DSPy-internal surface for the same effect.
+- Evidence: without the fix, every call from this VM fails with "requires LiteLLM, which has no prompt_cache bridge" (ledger G4). `tests/test_lm.py` captures the exact payload.

@@ -45,8 +45,14 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         action="store_true",
         help="continue the most recent conversation in this workspace",
     )
-    p.add_argument("-m", "--model", help="main model, e.g. anthropic/claude-sonnet-5-5")
+    p.add_argument("-m", "--model", help="main model, e.g. anthropic/claude-opus-5-5")
     p.add_argument("--sub-model", help="model for llm_query sub-calls and sub-agents (default: a smaller sibling)")
+    p.add_argument(
+        "--effort",
+        choices=("low", "medium", "high", "xhigh", "max", "default"),
+        default="high",
+        help="the main model's reasoning effort (default high; 'default' leaves it to the model)",
+    )
     p.add_argument("-C", "--cwd", type=Path, help="workspace directory (default: the current directory)")
     p.add_argument("--max-steps", type=int, default=40, help="REPL steps per turn before wrapping up (default 40)")
     p.add_argument("--step-timeout", type=float, default=600, help="seconds one REPL step may run (default 600)")
@@ -156,6 +162,7 @@ def main(argv: list[str] | None = None) -> int:
         approval="yolo" if args.yolo else "readonly" if args.read_only else "auto",
         context_window=args.context_window or (200_000 if args.demo or args.script else None),
         prompt_cache=not args.no_prompt_cache,
+        effort=None if args.effort == "default" else args.effort,
     )
     prompt = " ".join(args.prompt).strip()
 
