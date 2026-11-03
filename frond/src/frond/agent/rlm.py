@@ -37,7 +37,9 @@ from dspy.signatures.signature import make_signature
 from dspy.utils.exceptions import AdapterParseError, format_error_for_lm
 
 from frond.agent.adapter import (
+    NOTE,
     NOTE_CODE,
+    NOTE_DESC,
     STEER_CODE,
     FoldEntry,
     UserEntry,
@@ -46,7 +48,7 @@ from frond.agent.adapter import (
     without_markers,
 )
 from frond.agent.control import TurnCancelled
-from frond.agent.lm import PROVIDER_ERRORS
+from frond.agent.lm import PROVIDER_ERRORS, Refused
 from frond.agent.prompts import FORK_GUIDE, SCOPES_GUIDE, TOOL_AGENT_INSTRUCTIONS
 from frond.agent.repl import WORKER, ForkRequest
 from frond.agent.scopes import ScopeOp
@@ -216,16 +218,23 @@ class Hooks:
         the reply had reached the output limit (G38)."""
 
 
-def _cut_off(completion: str) -> bool:
-    """Whether the call that returned ``completion`` stopped at the output limit. The LM's history is shared with
-    sub-agents and FORK branches in other threads, so the call is found by its output, not taken as the latest."""
+def _call_of(completion: str) -> tuple[Any, Any]:
+    """The finish reason and the raw response of the call that returned ``completion``. The LM's history is shared
+    with sub-agents and FORK branches in other threads, so the call is found by its output, not taken as the latest."""
     history = getattr(dspy.settings.lm, "history", None) or []
     for entry in reversed(history[-50:]):
         outputs = entry.get("outputs") or []
         texts = [o if isinstance(o, str) else (o.get("text") if isinstance(o, dict) else None) for o in outputs]
         if completion in texts:
-            return _finish_reason(entry.get("response"), texts.index(completion)) == "length"
-    return False
+            response = entry.get("response")
+            return _finish_reason(response, texts.index(completion)), response
+    return None, None
+
+
+def _refusal_category(response: Any) -> str:
+    data = getattr(response, "provider_data", None)
+    details = data.get("stop_details") if isinstance(data, dict) else None
+    return str(details.get("category") or "") if isinstance(details, dict) else ""
 
 
 def _finish_reason(response: Any, index: int) -> Any:
@@ -239,6 +248,22 @@ def _finish_reason(response: Any, index: int) -> Any:
         return None
     choice = choices[index]
     return choice.get("finish_reason") if isinstance(choice, dict) else getattr(choice, "finish_reason", None)
+
+
+PYTHON_FENCES = frozenset({"", "python", "py", "python3"})
+
+
+def strip_fences(text: str) -> str:
+    """The code in a step's code field. The field is one fenced block, so its fence is the field's first and last
+    lines: code whose strings hold a fence of their own (an answer with a markdown code block, say) keeps them. DSPy's
+    stripper ended the block at the first inner fence, which cut such code mid-string (G42). Any other shape goes to
+    DSPy's, which also refuses a fence for another language."""
+    lines = text.strip().splitlines()
+    if len(lines) >= 2 and lines[0].startswith("```") and lines[-1].strip() == "```":
+        tag = lines[0][3:].strip()
+        if (tag.split(maxsplit=1)[0].lower() if tag else "") in PYTHON_FENCES:
+            return "\n".join(lines[1:-1]).strip("\n")
+    return _strip_code_fences(text)
 
 
 def _clip(text: str, limit: int) -> str:
@@ -332,7 +357,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
                 ("variables_info", dspy.InputField(desc="The request, history, workspace and attachments"), str),
                 ("repl_history", dspy.InputField(desc="Your earlier steps: each call and its result"), REPLHistory),
                 ("iteration", dspy.InputField(desc="The current step (1-indexed) out of the maximum"), str),
-                ("reasoning", dspy.OutputField(desc="What you know, what remains, why this call is next"), str),
+                (NOTE, dspy.OutputField(desc=NOTE_DESC), str),
                 ("tool", dspy.OutputField(desc="The name of one tool, or submit"), str),
                 ("args", dspy.OutputField(desc="The tool's arguments, as a JSON object"), dict[str, Any]),
             ]
@@ -385,7 +410,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             hooks.after_lm(step)
             return self._unparsed(step, exc, history, output_field_names)
         hooks.after_lm(step)
-        reasoning = str(action.reasoning or "")
+        reasoning = str(getattr(action, NOTE, "") or "")
+        action["reasoning"] = reasoning  # what DSPy's loop records each step's narration as
         name = str(getattr(action, "tool", "") or "").strip()
         args = getattr(action, "args", None)
         args = args if isinstance(args, dict) else {}
@@ -419,6 +445,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
 
     def _action_signature_for_current_factory(self, factory: Any, sub_agent_rules: str) -> type[dspy.Signature]:
         signature = super()._action_signature_for_current_factory(factory, sub_agent_rules)
+        if "reasoning" in signature.output_fields:  # DSPy asks for step-by-step reasoning in the reply: a note instead
+            signature = signature.delete("reasoning").insert(0, NOTE, dspy.OutputField(desc=NOTE_DESC), type_=str)
         if "repl_variables" not in signature.input_fields:
             signature = signature.append("repl_variables", dspy.InputField(desc=REPL_VARIABLES_DESC), type_=str)
         if self.freshness and "stale_reads" not in signature.input_fields:
@@ -570,9 +598,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             hooks.after_lm(step)
             return self._unparsed(step, exc, history, output_field_names)
         hooks.after_lm(step)
-        reasoning = str(action.reasoning or "")
+        reasoning = str(getattr(action, NOTE, "") or "")
+        action["reasoning"] = reasoning  # what DSPy's loop records each step's narration as
         try:
-            code = _strip_code_fences(str(action.code or ""))
+            code = strip_fences(str(action.code or ""))
         except SyntaxError as exc:
             code = str(action.code or "")
             hooks.step_planned(step, reasoning, code)
@@ -611,7 +640,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         step's reasoning, so the history shows the model its own words in the format it must use."""
         hooks = self.hooks
         completion = str(exc.lm_response or "")
-        cut_off = _cut_off(completion)
+        finish, response = _call_of(completion)
+        if finish == "content_filter":  # declined by the provider's classifier: retrying would be declined too (G43)
+            raise Refused(_refusal_category(response)) from exc
+        cut_off = finish == "length"
         hooks.reply_unparsed(step, cut_off)
         reply = _clip(without_markers(completion), 4_000) or "(an empty reply)"
         if self.action_space == "tools":
@@ -625,7 +657,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             else "Your reply did not follow the step format, so nothing ran."
         )
         error = (
-            f"[Error] {why} Reply with `[[ ## reasoning ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put "
+            f"[Error] {why} Reply with `[[ ## {NOTE} ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put "
             "nothing before the first marker."
         )
         hooks.step_planned(step, reply, empty)

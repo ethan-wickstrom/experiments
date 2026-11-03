@@ -76,14 +76,14 @@ class ParseFailureTest(unittest.TestCase):
         metrics = RunMetrics()
         adapter = FrondAdapter(metrics=metrics)
         got = adapter.parse(self.signature(), fenced)
-        self.assertEqual(got["reasoning"], "I'll start by looking at the renderer.")
+        self.assertEqual(got["note"], "I'll start by looking at the renderer.")
         self.assertEqual(got["code"], "```python\nprint(ls('.'))\nr = sh('ls')\n```")
         got = adapter.parse(self.signature(), invoke)
-        self.assertEqual(got["reasoning"], "I have three steps, so this one gathers everything.")
+        self.assertEqual(got["note"], "I have three steps, so this one gathers everything.")
         self.assertEqual(got["code"], "```python\nprint(read('/app/render.py')[:6000])\nprint(ls('/app/data'))\n```")
         tool = '<invoke name="view">\n<parameter name="path">app.py</parameter>\n<parameter name="start">3</parameter>'
         got = adapter.parse(self.signature("tools"), f"Look first.\n{tool}\n</invoke>")
-        self.assertEqual(got, {"reasoning": "Look first.", "tool": "view", "args": {"path": "app.py", "start": 3}})
+        self.assertEqual(got, {"note": "Look first.", "tool": "view", "args": {"path": "app.py", "start": 3}})
         self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (3, 3))  # adherence is still measured
 
     def test_a_reply_that_could_mean_more_than_one_action_is_not_guessed(self):  # G34
@@ -106,6 +106,62 @@ class ParseFailureTest(unittest.TestCase):
             with self.assertRaises(AdapterParseError, msg=reply):
                 adapter.parse(self.signature(), reply)
         self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (7, 0))
+
+
+class NoteFieldTest(WorkspaceCase):
+    """No prompt asks for the model's reasoning in its reply: Sonnet 5.5's classifier refused every step that did, as
+    reasoning extraction, and Anthropic's guidance is a short explanation instead (G41, D51)."""
+
+    def test_both_arms_ask_for_a_note_and_never_for_reasoning(self):
+        done: list[tuple[str, Step | ToolStep]] = [
+            ("rlm", Step("Done.", "SUBMIT(response='ok')")),
+            ("react", ToolStep("Done.", "submit", {"response": "ok"})),
+        ]
+        for arm, step in done:
+            with self.subTest(arm=arm):
+                agent, engine = scripted_agent(self, [step], arm=arm)
+                record = agent.run_turn("go")
+                self.assertEqual(record.response, "ok")
+                request = engine.requests[0]
+                system = (
+                    request.system
+                    if isinstance(request.system, str)
+                    else "".join(getattr(part, "text", "") for part in request.system or [])
+                )
+                text = system + "\n".join(m.text or "" for m in request.messages)
+                self.assertIn("[[ ## note ## ]]", text)
+                self.assertNotIn("## reasoning ##", text)
+                self.assertNotIn("Think step-by-step", text)
+                self.assertNotIn("`reasoning`", text)
+
+
+class RefusalTest(WorkspaceCase):
+    def test_a_provider_refusal_ends_the_turn_as_the_providers_failure(self):  # G43: not 40 billed retries
+        from types import SimpleNamespace
+
+        refusal = SimpleNamespace(provider_data={"stop_details": {"category": "reasoning_extraction"}})
+        agent, engine = scripted_agent(self, ["", Step("Never reached.", "SUBMIT(response='ok')")])
+        with mock.patch("frond.agent.rlm._call_of", return_value=("content_filter", refusal)):
+            record = agent.run_turn("go")
+        self.assertEqual((record.status, record.error_kind), ("error", "provider"))
+        self.assertEqual(agent.metrics.refusal, "reasoning_extraction")
+        self.assertEqual(len(engine.requests), 1)
+
+
+class FenceTest(WorkspaceCase):
+    def test_an_answer_with_a_code_block_is_not_cut_at_its_inner_fence(self):  # G42: seen on Opus, Sonnet and Haiku
+        answer = "app.py holds one line:\n\n```python\nx = 1\n```\n\nNothing else."
+        agent, _ = scripted_agent(self, [Step("Answer.", f"SUBMIT(response={answer!r})")])
+        record = agent.run_turn("go")
+        self.assertEqual((record.status, record.response), ("done", answer))
+
+    def test_other_shapes_still_go_to_dspy(self):
+        from frond.agent.rlm import strip_fences
+
+        self.assertEqual(strip_fences("print(1)"), "print(1)")
+        self.assertEqual(strip_fences("```py\nprint(1)\n```"), "print(1)")
+        with self.assertRaises(SyntaxError):
+            strip_fences("```bash\nls\n```")
 
 
 class UnparsedStepTest(WorkspaceCase):

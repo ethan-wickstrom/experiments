@@ -36,6 +36,15 @@ PROVIDER_DEFAULTS: tuple[tuple[str, str, str], ...] = (
 NATIVE_PREFIXES = ("anthropic/", "openai/", "gemini/", "xai/")
 
 
+class Refused(Exception):
+    """The provider's classifier declined the request (``stop_reason: refusal``): no output, and often billed. The
+    same request would be declined again, so the turn ends here as the provider's failure (G43)."""
+
+    def __init__(self, category: str) -> None:
+        super().__init__(f"the model provider refused the request ({category or 'no category given'})")
+        self.category = category
+
+
 # Failures of the model provider, not of the agent: a run that ends on one says nothing about the harness, so research
 # exports flag it and the analysis does not score it (ledger G22). A context overflow or an invalid request is the
 # harness's own doing and stays an ordinary failure.
@@ -46,6 +55,7 @@ PROVIDER_ERRORS: tuple[type[Exception], ...] = (
     dspy.LMTimeoutError,
     dspy.LMServerError,
     dspy.LMTransportError,
+    Refused,
 )
 
 

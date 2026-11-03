@@ -37,3 +37,12 @@ why = "2026-11-03: E0's first start, stopped for G36: one Haiku trial at $0.025,
 [[spent]]
 usd = 0.30
 why = "2026-11-03: six replays of frond's first-step request on Opus 5.5, measuring G34, outside Harbor (about $0.04 each)"
+
+[[spent]]
+jobs = "E0-protocol-v1"
+usd = 1.06
+why = "2026-11-03: E0's second start: 10 Haiku trials, then 5 Sonnet trials whose every call Sonnet 5.5 refused (G41), until the VM restarted; the sum of every usage.json"
+
+[[spent]]
+usd = 0.30
+why = "2026-11-03: diagnosing G41 and G42 outside Harbor: direct Sonnet calls and refusals (billed), and 3-step frond runs on Haiku, Sonnet and Opus (about $0.15), bounded above"

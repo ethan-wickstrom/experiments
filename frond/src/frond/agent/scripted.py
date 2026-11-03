@@ -27,7 +27,7 @@ class Step:
 
     def render(self) -> str:
         return (
-            f"[[ ## reasoning ## ]]\n{self.reasoning}\n\n[[ ## code ## ]]\n```python\n{self.code.strip()}\n```"
+            f"[[ ## note ## ]]\n{self.reasoning}\n\n[[ ## code ## ]]\n```python\n{self.code.strip()}\n```"
             "\n\n[[ ## completed ## ]]\n"
         )
 
@@ -42,7 +42,7 @@ class ToolStep:
 
     def render(self) -> str:
         return (
-            f"[[ ## reasoning ## ]]\n{self.reasoning}\n\n[[ ## tool ## ]]\n{self.tool}\n\n"
+            f"[[ ## note ## ]]\n{self.reasoning}\n\n[[ ## tool ## ]]\n{self.tool}\n\n"
             f"[[ ## args ## ]]\n{json.dumps(self.args)}\n\n[[ ## completed ## ]]\n"
         )
 
