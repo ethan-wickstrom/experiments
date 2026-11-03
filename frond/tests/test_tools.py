@@ -9,6 +9,7 @@ from unittest import mock
 
 from frond.agent.control import TurnControl
 from frond.agent.policy import risky_reason
+from frond.agent.shell import sandbox_status
 from frond.agent.tools import ToolError
 from frond.events import CommandFinished, CommandOutput, FileChanged, PlanUpdated
 from tests.helpers import WorkspaceCase
@@ -123,13 +124,6 @@ class WritingTest(WorkspaceCase):
         with self.assertRaises(PermissionError):
             tools.write("x.txt", "nope")
 
-    def test_read_only_toolbox_refuses_modifying_commands(self):
-        tools = self.toolbox(read_only=True)
-        for command in ("echo hi > notes.txt", "sed -i 's/a/b/' x", "git checkout -b x", "uv add requests"):
-            with self.assertRaisesRegex(PermissionError, "read-only"):
-                tools.sh(command)
-        self.assertEqual(tools.sh("echo fine 2>&1")["output"].strip(), "fine")
-
     def test_plan_parses_statuses(self):
         self.toolbox().plan(["[x] one", "[>] two", "three"])
         items = self.of_type(PlanUpdated)[-1].items
@@ -187,8 +181,12 @@ class ShellTest(WorkspaceCase):
         with self.assertRaisesRegex(PermissionError, "not available here"):
             self.toolbox().sh("rm -rf build")
         self.assertEqual(self.toolbox(mode="yolo").sh("rm -rf build")["status"], "ok")
-        with self.assertRaises(PermissionError):
-            self.toolbox(mode="readonly").sh("ls")
+        if sandbox_status(self.root)[0]:  # read-only mode runs commands in the sandbox: nothing to approve
+            (self.root / "build").mkdir()
+            unasked = self.toolbox(mode="readonly", approver=lambda title, detail: asked.append(detail) or "no")
+            self.assertFalse(unasked.sh("rm -rf build")["ok"])
+            self.assertTrue((self.root / "build").is_dir())
+            self.assertEqual(asked, ["rm -rf build"])
 
 
 if __name__ == "__main__":

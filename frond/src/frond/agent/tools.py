@@ -27,7 +27,7 @@ from frond.agent.checkpoints import Checkpoints
 from frond.agent.diffing import make_diff
 from frond.agent.patch import FileOp, PatchError, apply_chunks, parse_patch
 from frond.agent.policy import Policy
-from frond.agent.shell import JobManager, ShellRunner, truncate_middle
+from frond.agent.shell import SANDBOX_UNAVAILABLE, JobManager, ShellRunner, sandbox_status, truncate_middle
 from frond.agent.web import fetch_text
 from frond.events import Emit, FileChanged, FileViewed, PlanItem, PlanStatus, PlanUpdated, SearchRan
 from frond.workspace import SKIP_DIRS, Workspace, fuzzy_rank
@@ -119,21 +119,6 @@ def glob_to_regex(pattern: str) -> re.Pattern[str]:
             out.append(re.escape(ch))
             i += 1
     return re.compile("".join(out) + r"\Z")
-
-
-# Commands a read-only sub-agent may not run: a heuristic guard (redirection, in-place editors, file management,
-# state-changing git, package installs, formatters in write mode), not a sandbox.
-MUTATING_COMMAND = re.compile(
-    r"(?:^|[^<>&0-9])>>?\s*(?!&|/dev/null)[^\s&|]"
-    r"|\b(?:sed|perl)\s+(?:-\S*i|--in-place)|\btee\b"
-    r"|(?:^|[;&|(]\s*|\bxargs\s+|\bsudo\s+)(?:rm|rmdir|mv|cp|touch|mkdir|chmod|chown|ln|truncate|dd|install|patch)\b"
-    r"|\bgit\s+(?:add|commit|checkout|switch|reset|restore|clean|stash|merge|rebase|apply|am|cherry-pick|revert"
-    r"|push|pull|fetch|tag|branch\s+-[dDmM]|worktree|submodule|rm|mv|init|config)\b"
-    r"|\b(?:pip3?|uv|npm|pnpm|yarn|bun|cargo|gem|brew|apt(?:-get)?|poetry|conda)\s+"
-    r"(?:install|add|remove|uninstall|update|upgrade|sync|lock|init|publish|i|ci)\b"
-    r"|\bgo\s+(?:get|install|mod\s+tidy)\b"
-    r"|\bruff\s+format\b(?!.*--check)|\b(?:black|gofmt\s+-w|rustfmt)\b|--fix\b|--write\b|\s-w\s"
-)
 
 
 def _is_binary(sample: bytes) -> bool:
@@ -778,15 +763,12 @@ class Toolbox:
         and watchers; it returns `r.job` for job_output()/job_kill(). The user sees every command."""
         if not isinstance(command, str) or not command.strip():
             raise ToolError("command must be a non-empty string")
-        if self.read_only and MUTATING_COMMAND.search(command):
-            raise PermissionError(
-                "this agent is read-only and the command looks like it changes files or state; "
-                "report what should be run instead"
-            )
-        self.policy.check_command(command)
         workdir = self._path(cwd) if cwd else self.ws.root
         if not workdir.is_dir():
             raise NotADirectoryError(f"cwd {cwd!r} is not a directory")
+        if self.read_only or self.policy.mode == "readonly":
+            return self._sh_sandboxed(command, workdir, timeout, background)
+        self.policy.check_command(command)
         if background:
             job = self._jobs.start(command, workdir, self.shell.env(), scope=self.scope)
             deadline = time.monotonic() + 1.5
@@ -817,6 +799,36 @@ class Toolbox:
             "duration": round(result.duration, 2),
             "log": result.log_path,
             "truncated": result.total_chars > MAX_OUTPUT_CHARS,
+        }
+
+    def _sh_sandboxed(self, command: str, workdir: Path, timeout: float, background: bool) -> dict[str, Any]:
+        """A read-only agent's command, in an OS sandbox that refuses every filesystem write (see _sandbox.py).
+
+        Nothing it runs can change files, so it needs no approval; without a sandbox it does not run at all."""
+        if background:
+            raise PermissionError("a read-only agent cannot start background jobs; report what should run instead")
+        available, why = sandbox_status(self.ws.root)
+        if not available:
+            raise PermissionError(
+                f"read-only commands run only inside an OS sandbox, and none is available here ({why}). "
+                "Use view(), grep(), glob() and ls() instead, or report the command for the main agent to run."
+            )
+        timeout = max(1.0, min(float(timeout), 3600.0))
+        result = self.shell.run(command, cwd=workdir, timeout=timeout, scope=self.scope, sandboxed=True)
+        if result.exit_code == SANDBOX_UNAVAILABLE and result.output.startswith("frond-sandbox:"):
+            raise PermissionError(result.output.strip())
+        output = truncate_middle(result.output, MAX_OUTPUT_CHARS, note=f"; full output in {result.log_path}")
+        return {
+            "__frond__": "command",
+            "command": command,
+            "exit_code": result.exit_code,
+            "status": result.status,
+            "ok": result.ok,
+            "output": output,
+            "duration": round(result.duration, 2),
+            "log": result.log_path,
+            "truncated": result.total_chars > MAX_OUTPUT_CHARS,
+            "sandbox": why,
         }
 
     def jobs(self) -> list[dict[str, Any]]:
