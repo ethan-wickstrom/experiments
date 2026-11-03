@@ -69,6 +69,18 @@ def build_wheel() -> Path:
     return _wheel
 
 
+def step_call(code: str) -> tuple[str, dict[str, Any]]:
+    """A step's action as a tool call: the tools arm logs its call as JSON with ``tool`` and ``args`` (F35), the code
+    arm logs Python, run by the ``python`` tool."""
+    try:
+        call = json.loads(code)
+    except ValueError:
+        call = None
+    if isinstance(call, dict) and isinstance(call.get("tool"), str) and isinstance(call.get("args"), dict):
+        return call["tool"], call["args"]
+    return "python", {"code": code}
+
+
 def trajectory(export: Path, *, version: str, model: str | None) -> Trajectory:
     """frond's exported record as an ATIF trajectory: messages, then one tool call per REPL step."""
     usage = _read_json(export / "usage.json")
@@ -92,15 +104,14 @@ def trajectory(export: Path, *, version: str, model: str | None) -> Trajectory:
             steps.append(Step(step_id=step_id, source="agent", message=record.get("output", ""), extra=extra))
         else:
             call = f"step-{record.get('seq')}"
+            function, arguments = step_call(record.get("code", ""))
             steps.append(
                 Step(
                     step_id=step_id,
                     source="agent",
                     model_name=model,
                     message=record.get("reasoning", ""),
-                    tool_calls=[
-                        ToolCall(tool_call_id=call, function_name="python", arguments={"code": record.get("code", "")})
-                    ],
+                    tool_calls=[ToolCall(tool_call_id=call, function_name=function, arguments=arguments)],
                     observation=Observation(
                         results=[ObservationResult(source_call_id=call, content=record.get("output", ""))]
                     ),

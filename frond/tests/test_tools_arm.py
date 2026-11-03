@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from typing import ClassVar
 
@@ -36,7 +37,9 @@ class ToolsArmTest(WorkspaceCase):
         last = text_of(engine.requests[3])
         self.assertIn("[[ ## tool ## ]]\nview", last)  # earlier calls are turns in the tool-call format
         self.assertIn('[[ ## args ## ]]\n{"path": "app.py"}', last)
-        self.assertIn("exit code 0\n2", last)  # the command's result, as printing it would show
+        self.assertRegex(
+            last, r"\$ python3 -c 'import app; print\(app.f\(\)\)'  \[exit 0, [\d.]+s\]\n2"
+        )  # as in the REPL
         system = engine.requests[0].system or ""
         system = system if isinstance(system, str) else "".join(getattr(p, "text", "") for p in system)
         self.assertIn("- submit(response: str)", system)
@@ -44,7 +47,7 @@ class ToolsArmTest(WorkspaceCase):
         self.assertNotIn("[[ ## code ## ]]", system + last)  # no code anywhere: the model cannot write any
         self.assertNotIn("repl_variables", system + last)
         steps_logged = [r.code for r in agent.steps.records() if r.kind == "step"]
-        self.assertEqual(steps_logged[0], "view(path='app.py')")
+        self.assertEqual(json.loads(steps_logged[0]), {"tool": "view", "args": {"path": "app.py"}})  # F35
 
     def test_unknown_tools_and_bad_arguments_are_errors_the_model_sees(self):
         steps = [
@@ -73,6 +76,74 @@ class ToolsArmTest(WorkspaceCase):
         marked = [m["role"] for m in last["messages"] if any("cache_control" in b for b in m["content"])]
         self.assertEqual(marked, ["assistant"])
         self.assertEqual([m["role"] for m in last["messages"]], ["user", "assistant", "user", "assistant", "user"])
+
+    def test_a_background_job_shows_the_id_its_tools_take(self):  # Devin, #16 (F33)
+        steps = [
+            ToolStep("Start it.", "sh", {"command": "sleep 30", "background": True}),
+            ToolStep("Stop it.", "job_kill", {"job": 1}),
+            ToolStep("Done.", "submit", {"response": "ok"}),
+        ]
+        agent, engine = scripted_agent(self, steps, arm="react")
+        agent.run_turn("go")
+        self.assertRegex(text_of(engine.requests[1]), r"job 1 \(pid \d+\) running; log: ")
+
+    def test_grep_matches_print_as_in_the_repl(self):  # Devin, #16 (F36)
+        steps = [ToolStep("Find.", "grep", {"pattern": "return"}), ToolStep("Done.", "submit", {"response": "ok"})]
+        agent, engine = scripted_agent(self, steps, arm="react")
+        agent.run_turn("go")
+        second = text_of(engine.requests[1])
+        self.assertIn("app.py\n  2:     return 1", second)
+        self.assertIn("(1 matches in 1 files)", second)
+        self.assertNotIn('"__frond__"', second)
+
+    def test_a_submit_with_the_wrong_arguments_is_an_error_the_model_sees(self):  # Devin, #16 (F34)
+        steps = [
+            ToolStep("Done?", "submit", {"respose": "typo"}),
+            ToolStep("Done.", "submit", {"response": "ok"}),
+        ]
+        agent, engine = scripted_agent(self, steps, arm="react")
+        record = agent.run_turn("go")
+        self.assertEqual(record.response, "ok")
+        self.assertIn("submit takes exactly these arguments: response; it got: respose", text_of(engine.requests[1]))
+
+    def test_earlier_user_requests_survive_a_long_history(self):  # Devin, #16 (F32): as in the RLM arm
+        steps = [
+            ToolStep("Reply.", "submit", {"response": "x" * 20_000}),
+            ToolStep("Done.", "submit", {"response": "ok"}),
+        ]
+        agent, engine = scripted_agent(self, steps, arm="react")
+        agent.run_turn("Never edit migrations.")
+        agent.run_turn("Now tidy app.py.")
+        second_turn = text_of(engine.requests[-1])
+        self.assertIn("Never edit migrations.", second_turn)
+        self.assertIn("The user's messages so far, verbatim", second_turn)
+
+    def test_a_cut_output_points_at_what_this_arm_can_do(self):  # Devin, #21 (F48)
+        from frond.agent.adapter import narrowing_hint
+
+        signature = agent_signature(self)
+        hint = narrowing_hint(signature, 7, history_tools=True)
+        self.assertNotIn("history_step", hint)
+        self.assertIn("narrower range", hint)
+
+    def test_the_scripted_playground_replays_tool_calls(self):  # Devin, #16 (F37)
+        import contextlib
+        import io
+
+        from frond import cli
+
+        script = self.root / "script.json"
+        script.write_text(json.dumps([{"reasoning": "Done.", "tool": "submit", "args": {"response": "replayed"}}]))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = cli.main(["-p", "--script", str(script), "--arm", "react", "--cwd", str(self.root), "go"])
+        self.assertEqual(code, 0)
+        self.assertIn("replayed", out.getvalue())
+
+
+def agent_signature(case: WorkspaceCase):
+    agent, _ = scripted_agent(case, [], arm="react")
+    return agent.rlm._tool_signature()
 
 
 if __name__ == "__main__":
