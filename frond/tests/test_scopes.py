@@ -53,6 +53,49 @@ class ScopesTest(WorkspaceCase):
         self.assertIn("now stale: y", last)
         self.assertNotIn("x = 99", last)
 
+    def test_abandoning_reverts_what_the_opening_step_did_before_it_opened(self):  # Devin, #18 (F38)
+        steps = [
+            Step("Edit, then open.", "edit('app.py', 'x = 1', 'x = 2')\nopen_scope('try it')"),
+            Step("Give up.", "abandon_scope('wrong idea')"),
+            Step("Done.", "SUBMIT(response=open('app.py').read())"),
+        ]
+        agent, engine = scripted_agent(self, steps, scopes=True)
+        record = agent.run_turn("go")
+        self.assertEqual(record.response, "x = 1")  # the opening step left the context, and so did its edit
+        self.assertIn("Reverted: app.py", prompts_of(engine)[-1])
+
+    def test_without_snapshots_a_scope_cannot_be_abandoned_only_closed(self):  # Devin, #18 (F39)
+        steps = [
+            Step("Open.", "open_scope('try it')"),
+            Step("Try.", "write('scratch.py', 'tmp')"),
+            Step("Give up.", "abandon_scope('wrong idea')"),
+            Step("Close instead.", "close_scope('failed: wrote scratch.py')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = scripted_agent(self, steps, scopes=True, worlds=False)
+        agent.run_turn("go")
+        prompts = prompts_of(engine)
+        self.assertIn("this scope cannot be abandoned", prompts[3])
+        self.assertTrue((self.root / "scratch.py").exists())
+        self.assertNotIn("Abandoned: try it", prompts[-1])  # the attempt was not cut from the context
+        self.assertIn("Scope closed: try it\nResult: failed: wrote scratch.py", prompts[-1])
+
+    def test_files_that_could_not_be_reverted_are_named(self):  # Devin, #18 (F40)
+        (self.root / "data.bin").write_bytes(b"0" * 4000)
+        steps = [
+            Step("Open.", "open_scope('try it')"),
+            Step("Try.", "sh('printf changed > data.bin')"),
+            Step("Give up.", "abandon_scope('wrong idea')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = scripted_agent(self, steps, scopes=True)
+        assert agent.timeline is not None
+        agent.timeline.work.max_blob = 1000
+        agent.run_turn("go")
+        self.assertIn(
+            "Still changed, since they were too large or unreadable to have been kept: data.bin", prompts_of(engine)[-1]
+        )
+
     def test_the_prompt_prefix_before_a_scope_is_unchanged(self):
         steps = [
             Step("Before.", "print('before')"),

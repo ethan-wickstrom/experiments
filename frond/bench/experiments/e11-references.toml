@@ -21,15 +21,19 @@ agent = "frond_harbor:Frond"
 model = "anthropic/claude-opus-5-5"
 options = { effort = "high" }
 
+# Per-trial bounds (G33, D50): set well above what a trial typically spends, so they seldom bind; how often they
+# did is to be reported (ledger G39). Harbor's dspy-rlm stops at 20 iterations and 50 LLM calls by default.
 [[arms]]
 name = "claude-code"
 agent = "claude-code"
 model = "anthropic/claude-opus-5-5"
+options = { max_budget_usd = "10" }
 
 [[arms]]
 name = "terminus-2"
 agent = "terminus-2"
 model = "anthropic/claude-opus-5-5"
+options = { max_turns = "150" }
 
 [[arms]]
 name = "dspy-rlm"

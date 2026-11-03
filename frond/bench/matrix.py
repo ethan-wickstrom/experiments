@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 from .analyze import analyze, call_cost, job_dirs, load_prices
-from .budget import Budget, has_guess, job_estimate, load_budget, spending
+from .budget import BOUNDED, Budget, has_guess, job_estimate, load_budget, spending, unbounded
 from .prune import prune_while
 from .spec import BENCH, Arm, Spec, load
 
@@ -220,6 +220,9 @@ def preflight(spec: Spec, ca: Path | None) -> list[str]:
         )
         if arm.model and not has_guess(arm.model, budget):
             problems.append(f"arm {arm.name}: no per-trial guess for {arm.model} in bench/budget.toml (D43)")
+        if unbounded(arm):
+            needed = BOUNDED.get(arm.agent) or "a per-trial bound"
+            problems.append(f"arm {arm.name}: {arm.agent} runs unbounded per trial; set {needed} in its options (G33)")
         for prefix, key in KEYS.items():
             if arm.model and arm.model.startswith(prefix) and not with_aliases(dict(os.environ)).get(key):
                 problems.append(f"arm {arm.name} needs {key} (ledger REQ-1)")

@@ -20,11 +20,13 @@ options = { arm = "rlm", fork = "3", freshness = "on", context = "fold", scopes 
 name = "claude-code"
 agent = "claude-code"
 model = "anthropic/claude-opus-5-5"
+options = { max_budget_usd = "10" }  # E11's bounds (G33), so a run with a real key stays bounded too
 
 [[arms]]
 name = "terminus-2"
 agent = "terminus-2"
 model = "anthropic/claude-opus-5-5"
+options = { max_turns = "150" }
 
 [[arms]]
 name = "dspy-rlm"
