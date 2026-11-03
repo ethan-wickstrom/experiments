@@ -281,11 +281,11 @@ Requirements to design, code, tests and status. Design commitments without a req
 |---|---|---|---|---|---|
 | R1 | D20, D21 | `bench/frond_harbor.py` | — | unmeasured | E1, E11 |
 | R2 | D10, D22 | `agent/snapshots.py`, `agent/tools.py` | `test_command_undo` | per-change diffs only; no net view | R2, B4 |
-| R3 | D22 | — | — | fails: undo overwrites later edits | R3, B4 |
+| R3 | D22 | `world/merge.py` (`revert`) | `test_world` | the revert keeps later edits; `/undo` is not switched to it yet | R3, B4b |
 | R4 | D09 | `tui/app.py`, `agent/session.py` | `test_steering`, `test_app` | steer and queue done; stop latency unmeasured | B17 |
 | R5 | D14 | `agent/adapter.py`, `agent/rlm.py`, `agent/session.py` | `test_provenance` | done (3c188c9) | — |
 | R6 | D06, D13 | `agent/_sandbox.py`, `agent/repl.py`, `agent/_worker.py`, `agent/shell.py` | `test_sandbox`, `test_containment` | worker and read-only agents done; main agent's commands deferred | R6, G1 |
-| R7 | D22 | — | — | missing | B4, B9 |
+| R7 | D22 | `world/store.py` (checkout) | `test_world` | the workspace half exists; the agent cannot use it yet | B4b, B9 |
 | R8 | D07 | `agent/adapter.py` | `test_caching` (simulated) | simulated | E0 |
 | R9 | — | — | — | missing | B11 |
 | R10 | D11 | `cli.py` (`--export`), `bench/frond_harbor.py` | `test_memory` | done; Harbor pipeline verified with the oracle agent | E0 |

@@ -65,10 +65,11 @@ Only what the agent cannot get itself (D16).
 
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
-| B1 | Claude 5.5 compatibility and effort: send no sampling parameters, set `output_config.effort` from `--effort` (default high) | a payload test on `claude-opus-5-5` shows no temperature, no disabled thinking, and the chosen effort | closed (this commit) | `build_lm(effort=…)`, `tests/test_lm.py`; D26 |
+| B1 | Claude 5.5 compatibility and effort: send no sampling parameters, set `output_config.effort` from `--effort` (default high) | a payload test on `claude-opus-5-5` shows no temperature, no disabled thinking, and the chosen effort | closed 2605fb3 | `build_lm(effort=…)`, `tests/test_lm.py`; D26 |
 | B2 | Measurement: per-call input, cache read, cache write and output tokens; protocol violations; failed edits; stale actions | `--export` writes them; tests cover each counter | next | `research.md`, Measurements |
 | B3 | Arms and runner: `--arm`, `--layout`, `--context`, `--fork`, `--freshness` and `--scopes` flags passed through Harbor options; `bench/matrix.py` (tasks × arms × trials, resumable); `bench/analyze.py` (Wilcoxon, bootstrap, Holm, cost per solved) | a dry run of the matrix, and analysis on synthetic results | next | `research.md` |
-| B4 | Worlds: a content-addressed store with snapshot, checkout and diff, and a three-way merge; undo becomes a revert by merge; it replaces `Checkpoints` and `GitSnapshots` | tests for byte-exact restore, ignored files, non-git workspaces, and an edit made between a change and its undo surviving | next | D22, `design.md` "Worlds"; closes P2, R2 and R3 |
+| B4a | Worlds core: a content-addressed store with nested Merkle trees, incremental snapshots (stat cache, racy-edit rehash), checkout, diff, line-level merge3, and revert | `tests/test_world.py`: exact round trips (modes, links, type changes, empty directories), excluded caches untouched, racy edits seen, and a later edit by someone else surviving a revert | closed (this commit) | `src/frond/world/`; D22 |
+| B4b | Wire worlds into frond: a snapshot around each action, undo as a revert of the turn's steps, a net turn diff, non-git workspaces; delete `Checkpoints` and `GitSnapshots` | the undo tests (`test_command_undo`, `UndoFidelity`) pass on worlds, plus a concurrent-edit test through `/undo` | next | B4a; closes P2, R2 and R3 |
 | B5 | Freshness: observations carry content hashes, and the prompt marks stale ones | a test where a file changes after a read and the next prompt marks it | open | H3, `design.md` "Worlds" |
 | B6 | Forkable REPL: the worker forks when idle (`os.fork`, pipes passed with `socket.send_fds`) | a child keeps the namespace, both run independently, and they are confined like the parent | open | H2 |
 | B7 | Fork, select, merge: a `fork(options)` REPL function, a branch runner, verifier hooks, selection, merge | a scripted three-branch test that keeps the branch whose tests pass | open | H2 |
@@ -114,12 +115,12 @@ Only what the agent cannot get itself (D16).
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
 | R1 | frond against external harnesses on the same model | E11, E1 | blocked: REQ-1 | D21 recasts R1 for research |
-| R2 | A turn's net change is reviewable | net diff between two worlds | next, with B4 | — |
-| R3 | Undo keeps later edits made by others | B4's revert-by-merge test | next, with B4 | was P2 |
+| R2 | A turn's net change is reviewable | net diff between two worlds | next, with B4b | `Store.diff` exists (B4a) |
+| R3 | Undo keeps later edits made by others | B4b: the concurrent-edit test through `/undo` | next, with B4b | the revert property holds (B4a, `test_world`); was P2 |
 | R4 | Stopping is prompt and final | B17 | open, low | — |
 | R5 | The user's words cannot be forged | — | closed | 3c188c9 (D14) |
 | R6 | No unapproved writes, network use or credentials | the main agent's commands remain | deferred | worker and read-only agents done (3c188c9, D13). The main agent's command sandbox (was P4) is daily-driver work (D16). Benchmark runs are already isolated by the container |
-| R7 | The agent can rewind context and workspace together | B4, then B9 | open | — |
+| R7 | The agent can rewind context and workspace together | B4b, then B9 | open | — |
 | R8 | Most input is served from cache | E0 | blocked: REQ-1 | — |
 | R9 | An incompatible DSPy fails at startup | B11 | open | — |
 | R11 | macOS | — | closed: won't do | D25 |
@@ -130,8 +131,8 @@ Only what the agent cannot get itself (D16).
 |---|---|---|---|---|
 | G1 | Under Landlock alone, the worker can read frond's environment through `/proc` and send it over UDP using ctypes (was I13) | decided | deferred | In research containers the key already sits in frond's own environment, and the container is the boundary. Revisit for daily use, with `PR_SET_DUMPABLE` as the candidate fix |
 | G2 | In TB containers the worker runs under Landlock, not namespaces | — | closed: accepted | U6 |
-| G3 | frond never sets reasoning effort, so Opus 5.5 would run at `medium` | B1 | closed (this commit) | D26 |
-| G4 | DSPy sends any provider whose `<PREFIX>_BASE_URL` is set through LiteLLM, which cannot carry `prompt_cache`. Hosted sessions set `ANTHROPIC_BASE_URL` to the public endpoint, so every frond call from such a VM failed | payload test | closed (this commit) | D26 |
+| G3 | frond never sets reasoning effort, so Opus 5.5 would run at `medium` | B1 | closed 2605fb3 | D26 |
+| G4 | DSPy sends any provider whose `<PREFIX>_BASE_URL` is set through LiteLLM, which cannot carry `prompt_cache`. Hosted sessions set `ANTHROPIC_BASE_URL` to the public endpoint, so every frond call from such a VM failed | payload test | closed 2605fb3 | D26 |
 | G5 | Harbor may forward `ANTHROPIC_BASE_URL` into task containers | E0's first run shows the container environment | open, low | frond handles the variable either way (D26) |
 
 ## Assumptions to test
@@ -172,6 +173,7 @@ Every row is blocked on E0's logs. Each is done when its measurement is recorded
 | K12 | snapshots switched off past 2 s | `src/frond/agent/snapshots.py:23` | snapshot times on large repositories (replaced by B4) |
 | K13 | 40 REPL names listed | `src/frond/agent/_worker.py:49` | names a REPL typically holds |
 | K14 | BM25 k1 = 1.2, b = 0.75 | `src/frond/agent/steplog.py:30` | whether `history_search` hits answer real queries |
+| K16 | world snapshots: 64 MB blob cap, 2 s racy window, excluded cache directories | `src/frond/world/store.py` | snapshot time and store size in real workspaces. Measured 2026-11-03 on 11,897 files (239 MB): 13.6 s cold, 0.16 s warm, 96 MB stored |
 | K15 | resource guards (listed below) | `session.py`, `tools.py`, `steplog.py`, `checkpoints.py`, `tui/app.py` | which of them bind in practice |
 
 K15's guards:
