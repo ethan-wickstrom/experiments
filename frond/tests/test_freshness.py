@@ -134,6 +134,46 @@ class ReviewFindingsTest(WorkspaceCase):
             tools.write("src/app.py", "x = 3\n")
         self.assertIn("changed = True", (self.root / "src" / "app.py").read_text())
 
+    def test_a_symlink_retargeted_since_the_read_is_stale(self):  # review of #24
+        (self.root / "first.txt").write_text("first\n")
+        (self.root / "second.txt").write_text("second, never read\n")
+        (self.root / "config").symlink_to("first.txt")
+        tools, _ = self.tools()
+        tools.view("config")
+        (self.root / "config").unlink()
+        (self.root / "config").symlink_to("second.txt")
+        with self.assertRaisesRegex(ToolError, "changed since you read it"):
+            tools.write("config", "overwrite\n")
+        self.assertEqual((self.root / "second.txt").read_text(), "second, never read\n")
+        assert tools.observations is not None
+        self.assertIn("config", [o.path for o in tools.observations.stale()])
+        tools.view("config")  # read again through the new link: fresh
+        tools.write("config", "overwrite\n")
+
+    def test_a_stale_read_moves_with_its_file(self):  # review of #24
+        tools, _ = self.tools()
+        tools.view("settings.py")
+        (self.root / "settings.py").write_text("a = 2  # formatted\n")
+        tools.move("settings.py", "conf/settings.py")
+        assert tools.observations is not None
+        self.assertEqual([o.path for o in tools.observations.stale()], ["conf/settings.py"])
+
+    def test_a_child_already_gone_does_not_block_its_directory(self):  # review of #24
+        tools, metrics = self.tools()
+        tools.view("src/app.py")
+        (self.root / "src" / "app.py").unlink()  # as sh("rm src/app.py") would
+        tools.delete("src", recursive=True)
+        self.assertFalse((self.root / "src").exists())
+        self.assertEqual(metrics.stale_actions, 1)  # still a stale action, counted
+
+    def test_moving_a_link_leaves_its_targets_read_alone(self):  # review of #24
+        tools, metrics = self.tools()
+        tools.view("src/app.py")
+        (self.root / "alias").symlink_to("src/app.py")
+        tools.move("alias", "other/alias")
+        tools.write("src/app.py", "x = 2\n")  # unchanged since read: no refusal, nothing stale
+        self.assertEqual(metrics.stale_actions, 0)
+
     def test_the_models_own_delete_or_move_leaves_its_picture_true(self):  # F18
         tools, metrics = self.tools()
         tools.view("settings.py")

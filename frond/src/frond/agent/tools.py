@@ -268,7 +268,8 @@ class Toolbox:
             return
         if self.metrics is not None:
             self.metrics.bump("stale_actions", len(stale))
-        if self.freshness:
+        stale = [o for o in stale if Path(o.real).exists()]  # one gone already has nothing to lose (review of #24)
+        if self.freshness and stale:
             names = ", ".join(f"{o.path} (read at step {o.step})" for o in stale[:5])
             raise ToolError(
                 f"files in {display} changed since you read them: {names}. Read them again before deleting "
@@ -818,9 +819,12 @@ class Toolbox:
         self._check_write(s)
         self._check_write(d)
         d.parent.mkdir(parents=True, exist_ok=True)
+        link = s.is_symlink()  # a link moves alone: what it points to stays where it is (review of #24)
         real = self.observations.real(s) if self.observations is not None else ""
         shutil.move(str(s), str(d))
-        if self.observations is not None:
+        if self.observations is not None and link:
+            self.observations.forget_names(s)
+        elif self.observations is not None:
             self.observations.moved(real, d, self.ws.rel(d))
         self.emit(FileChanged(self.ws.rel(d), "move", "", 0, 0, old_path=self.ws.rel(s), scope=self.scope))
         self.ws.invalidate()
