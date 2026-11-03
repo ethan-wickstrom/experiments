@@ -9,8 +9,8 @@ from typing import ClassVar
 from dspy.lm15 import CacheConfig
 
 from frond.agent.adapter import FrondAdapter
-from frond.agent.scripted import ToolStep
-from frond.events import FileChanged
+from frond.agent.scripted import CutOff, ToolStep
+from frond.events import FileChanged, ReasoningDelta, ResponseDelta
 from tests.helpers import WorkspaceCase, scripted_agent
 from tests.test_caching import anthropic_payload
 
@@ -72,6 +72,24 @@ class ToolsArmTest(WorkspaceCase):
         self.assertIn("Your reply was not one tool call, so nothing ran.", text_of(engine.requests[1]))
         counts = (agent.metrics.parse_failures, agent.metrics.unparsed_steps)
         self.assertEqual(counts, (1, 1))
+
+    def test_an_empty_reply_counts_once(self):  # Codex, #48: parse_native and the adapter both counted it
+        steps = [CutOff(""), ToolStep("Done.", "submit", {"response": "ok"})]
+        agent, _ = scripted_agent(self, steps, arm="react")
+        self.assertEqual(agent.run_turn("go").response, "ok")
+        counts = (agent.metrics.parse_failures, agent.metrics.unparsed_steps, agent.metrics.cut_off_replies)
+        self.assertEqual(counts, (1, 1, 1))
+
+    def test_the_note_and_the_reply_stream_from_the_call(self):  # Codex, #48: native arguments are streamed
+        steps = [
+            ToolStep("Looking at app.py now.", "view", {"path": "app.py"}),
+            ToolStep("Done.", "submit", {"response": "f returns 1"}),
+        ]
+        agent, _ = scripted_agent(self, steps, arm="react")
+        record = agent.run_turn("look")
+        notes = "".join(e.text for e in self.of_type(ReasoningDelta))
+        self.assertIn("Looking at app.py now.", notes)
+        self.assertEqual("".join(e.text for e in self.of_type(ResponseDelta)), record.response)
 
     def test_the_markers_protocol_keeps_the_field_format(self):
         steps = [ToolStep("Look.", "view", {"path": "app.py"}), ToolStep("Done.", "submit", {"response": "ok"})]

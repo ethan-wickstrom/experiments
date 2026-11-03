@@ -393,8 +393,8 @@ class FrondAdapter(dspy.ChatAdapter):
         except AdapterParseError as exc:
             # A reply with no text (cut off at the output limit while thinking, or refused) fails in DSPy before
             # parse() is called; it is off the protocol all the same (G45)
-            if self.metrics is not None and empty_reply(exc):
-                self.metrics.bump(f"{self.counters}parse_failures")
+            if self.metrics is not None and empty_reply(exc) and not self.native_tools(signature):
+                self.metrics.bump(f"{self.counters}parse_failures")  # parse_native has counted its own (Codex, #48)
             raise
 
     def call_native(
