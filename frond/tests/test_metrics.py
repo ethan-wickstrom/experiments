@@ -94,11 +94,14 @@ class ParseFailureTest(unittest.TestCase):
             '<invoke name="python"><parameter name="script">print(1)</parameter></invoke>',
             '<invoke name="a"><parameter name="code">1</parameter></invoke><invoke name="b"></invoke>',
             "```bash\nls\n```",
+            # Codex, #27: a fenced action and an invoked one; running only the second would drop the first
+            'Read it:\n```python\nread("app.py")\n```\n<invoke name="python"><parameter name="code">'
+            'write("app.py", "x")</parameter></invoke>',
         ]
         for reply in replies:
             with self.assertRaises(AdapterParseError, msg=reply):
                 adapter.parse(self.signature(), reply)
-        self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (4, 0))
+        self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (5, 0))
 
 
 class UnparsedStepTest(WorkspaceCase):

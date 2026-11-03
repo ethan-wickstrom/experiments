@@ -155,6 +155,8 @@ def recover_action(signature: type[dspy.Signature], completion: str) -> dict[str
         return None
     if calls:
         call = calls[0]
+        if FENCE.search(completion[: call.start()] + completion[call.end() :]):
+            return None  # a fenced block besides the call is a second action
         params = {name: value.strip("\n") for name, value in PARAMETER.findall(call.group(2))}
         reasoning = without_markers(completion[: call.start()])
         if fields == {"reasoning", "code"} and set(params) == {"code"}:
