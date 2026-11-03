@@ -273,6 +273,9 @@ class _RootHooks(Hooks):
     def code_rejected(self, step: int) -> None:
         self.agent.metrics.bump("syntax_errors")
 
+    def reply_unparsed(self, step: int) -> None:
+        self.agent.metrics.bump("unparsed_steps")
+
     def provider_error(self) -> None:
         self.agent.metrics.bump("provider_errors")
 
@@ -332,6 +335,9 @@ class _BranchHooks(Hooks):
 
     def code_rejected(self, step: int) -> None:
         self.agent.metrics.bump("syntax_errors")
+
+    def reply_unparsed(self, step: int) -> None:
+        self.agent.metrics.bump("unparsed_steps")
 
     def fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
         return "FORK is not available inside a branch: finish your option, then SUBMIT a report."

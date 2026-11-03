@@ -162,6 +162,23 @@ def exec_umask() -> str:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True, check=False)
 
 
+def harbor_ready(attempts: int = 3, timeout: float = 300.0) -> bool:
+    """Whether Harbor's tool environment installs and starts, tried a few times with a timeout each.
+
+    uvx installs Harbor's environment on first use, with no timeout of its own on a download that stalls: on
+    2026-11-03 one hung for minutes before the smoke run's job could start, and would have held a sweep just as long
+    (G32). A fresh attempt opens new connections; the environment is cached once one succeeds.
+    """
+    for _ in range(attempts):
+        try:
+            done = subprocess.run([*HARBOR, "--version"], capture_output=True, timeout=timeout, check=False)
+        except subprocess.TimeoutExpired:
+            continue
+        if done.returncode == 0:
+            return True
+    return False
+
+
 def models_of(arm: Arm) -> list[str]:
     """The models a frond arm calls: its own, and the sub-model it names or frond picks for it."""
     if not arm.model:
@@ -191,6 +208,8 @@ def preflight(spec: Spec, ca: Path | None) -> list[str]:
                 f"docker exec runs with umask {umask}, not 0022, so files agents and tests create get other modes "
                 "than on a standard host (G26): stop dockerd and run scripts/dev-env.sh"
             )
+    if not harbor_ready():
+        problems.append(f"Harbor's environment did not install or start: try `{shlex.join([*HARBOR, '--version'])}`")
     budget, prices = load_budget(), load_prices()
     for arm in spec.arms:
         problems.extend(
@@ -355,6 +374,11 @@ def main(argv: list[str] | None = None) -> int:
         name = cell.name(spec)
         status = state(jobs, name)
         if status != "done":
+            # each Harbor job builds frond's wheel anew, so a source edited during the run would reach later arms
+            if not args.allow_changed_source and source_digest() != current["source_sha256"]:
+                print(f"stopping before {name}: frond's source changed during the run (F8, D42)", file=sys.stderr)
+                manifest_path.write_text(json.dumps(manifest, indent=1) + "\n")
+                return 2
             allowed, spending_text = affordable(spec, cell, jobs, budget)
             print(f"budget: {spending_text}", flush=True)
             if not allowed:

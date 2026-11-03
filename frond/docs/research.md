@@ -33,7 +33,7 @@ Each run records, in `frond -p --export` and on to Harbor:
 - tokens per model call: input, cache read, cache write and output, as the provider reports them (`cache_read_input_tokens` on Anthropic);
 - cost at list prices;
 - steps and wall-clock time;
-- protocol violations: replies that failed to parse into reasoning and code;
+- protocol violations: replies that did not follow the field protocol (`parse_failures`), of which `parse_recovered` named one action unambiguously and `unparsed_steps` did not and cost a step (D45);
 - failed edits: edit or patch calls that raised;
 - stale actions: edits, writes and deletes of files changed since the model last read them (`stale_actions`; both freshness arms count them);
 - forks: each FORK's branches with their steps, check result and which was kept (`metrics.json`), and each branch's model calls, tagged with the branch in `calls.jsonl`, so fork overhead is priced separately.
@@ -80,6 +80,8 @@ uv run python -m bench.analyze bench/experiments/<spec>.toml --out bench/results
 ```
 
 Before a paid run, `bench/experiments/smoke.toml` with `ANTHROPIC_API_KEY=<anything>` checks the whole pipeline at no cost: the first model call fails with 401, after frond has installed, parsed every arm flag, and written its export.
+
+The first run with a real key is `smoke.toml --arms frond`, 3 steps on Opus 5.5; then `grep -rlF "$CLAUDE_API_KEY" jobs | wc -l` must print 0. The reference agents spend first in E11, under per-trial bounds (D44, G33).
 
 The runner adds the egress-CA overlay, without which every task whose agent, solution or tests reach the internet fails in this VM (G7). It retries only failures before the agent starts, because Harbor reruns a retried trial under the same name and would otherwise keep the better of two attempts. Jobs go to `jobs/<id>/` (ignored by git).
 

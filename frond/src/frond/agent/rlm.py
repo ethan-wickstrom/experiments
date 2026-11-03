@@ -32,9 +32,17 @@ from dspy.primitives.code_interpreter import FinalOutput
 from dspy.primitives.prediction import Prediction
 from dspy.primitives.repl_types import REPLEntry, REPLHistory, REPLVariable
 from dspy.signatures.signature import make_signature
-from dspy.utils.exceptions import format_error_for_lm
+from dspy.utils.exceptions import AdapterParseError, format_error_for_lm
 
-from frond.agent.adapter import NOTE_CODE, STEER_CODE, FoldEntry, UserEntry, escape_marker, user_tag
+from frond.agent.adapter import (
+    NOTE_CODE,
+    STEER_CODE,
+    FoldEntry,
+    UserEntry,
+    escape_marker,
+    user_tag,
+    without_markers,
+)
 from frond.agent.control import TurnCancelled
 from frond.agent.lm import PROVIDER_ERRORS
 from frond.agent.prompts import FORK_GUIDE, SCOPES_GUIDE, TOOL_AGENT_INSTRUCTIONS
@@ -184,6 +192,9 @@ class Hooks:
     def provider_error(self) -> None:
         """A model call inside an llm_query or a sub-agent failed for the provider's reasons (F47)."""
 
+    def reply_unparsed(self, step: int) -> None:
+        """The step's reply followed no format frond can read, so the model was shown an error (G34)."""
+
 
 def _clip(text: str, limit: int) -> str:
     if len(text) <= limit:
@@ -313,13 +324,17 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         volatile: dict[str, str],
     ) -> Prediction | REPLHistory:
         hooks = self.hooks
-        action = self.generate_action(
-            signature=self._tool_signature(),
-            variables_info=self._tool_context(input_args),
-            repl_history=history,
-            iteration=f"{step}/{self.max_iters}",
-            **volatile,
-        )
+        try:
+            action = self.generate_action(
+                signature=self._tool_signature(),
+                variables_info=self._tool_context(input_args),
+                repl_history=history,
+                iteration=f"{step}/{self.max_iters}",
+                **volatile,
+            )
+        except AdapterParseError as exc:
+            hooks.after_lm(step)
+            return self._unparsed(step, exc, history, output_field_names)
         hooks.after_lm(step)
         reasoning = str(action.reasoning or "")
         name = str(getattr(action, "tool", "") or "").strip()
@@ -490,14 +505,18 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         if self.action_space == "tools":
             return self._tool_step(step, history, input_args, output_field_names, volatile)
         names = getattr(repl, "names", None)
-        action = self.generate_action(
-            signature=self._action_signature_for_current_factory(interpreter_factory, sub_agent_rules),
-            variables_info=[v.format() for v in variables],
-            repl_history=history,
-            iteration=f"{step}/{self.max_iters}",
-            repl_variables=escape_marker("\n".join(names), self.marker) if names else "(none yet)",
-            **volatile,
-        )
+        try:
+            action = self.generate_action(
+                signature=self._action_signature_for_current_factory(interpreter_factory, sub_agent_rules),
+                variables_info=[v.format() for v in variables],
+                repl_history=history,
+                iteration=f"{step}/{self.max_iters}",
+                repl_variables=escape_marker("\n".join(names), self.marker) if names else "(none yet)",
+                **volatile,
+            )
+        except AdapterParseError as exc:
+            hooks.after_lm(step)
+            return self._unparsed(step, exc, history, output_field_names)
         hooks.after_lm(step)
         reasoning = str(action.reasoning or "")
         try:
@@ -531,6 +550,29 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             output = outcome.entries[-1].output
             hooks.exec_finished(step, output, output if output.startswith(ERROR_PREFIXES) else None, duration, False)
         return self._logged(outcome, step, reasoning, code)
+
+    def _unparsed(
+        self, step: int, exc: AdapterParseError, history: REPLHistory, output_field_names: list[str]
+    ) -> Prediction | REPLHistory:
+        """A step whose reply could not be read: nothing runs, and the model sees its reply and what was expected,
+        at the cost of a step, instead of the turn ending (G34). The reply, without field markers, stands as the
+        step's reasoning, so the history shows the model its own words in the format it must use."""
+        hooks = self.hooks
+        hooks.reply_unparsed(step)
+        reply = _clip(without_markers(str(exc.lm_response or "")), 4_000) or "(an empty reply)"
+        if self.action_space == "tools":
+            fields, empty = "`[[ ## tool ## ]]` with the tool's name, then `[[ ## args ## ]]` with a JSON object", "{}"
+        else:
+            fields, empty = "`[[ ## code ## ]]` with one ```python block", ""
+        error = (
+            "[Error] Your reply did not follow the step format, so nothing ran. Reply with `[[ ## reasoning ## ]]`, "
+            f"then {fields}, then `[[ ## completed ## ]]`, and put nothing before the first marker."
+        )
+        hooks.step_planned(step, reply, empty)
+        hooks.exec_finished(step, error, error, 0.0, False)
+        action = Prediction(reasoning=reply, code=empty)
+        outcome = self._process_execution_result(action, empty, error, history, output_field_names)
+        return self._logged(outcome, step, reply, empty)
 
     def _logged(self, outcome: Prediction | REPLHistory, step: int, reasoning: str, code: str) -> Any:
         """Record the step in the step log, and tag its history entry with the record's sequence number."""
