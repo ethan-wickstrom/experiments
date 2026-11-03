@@ -139,6 +139,16 @@ class UnparsedStepTest(WorkspaceCase):
         self.assertNotIn("did not follow the step format", second)
         self.assertEqual((agent.metrics.unparsed_steps, agent.metrics.cut_off_replies), (1, 1))
 
+    def test_a_cut_off_is_read_from_either_response_shape(self):  # Codex, #31: the LiteLLM route's choices
+        from types import SimpleNamespace
+
+        from frond.agent.rlm import _finish_reason
+
+        self.assertEqual(_finish_reason(SimpleNamespace(finish_reason="length"), 0), "length")
+        litellm = SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop"), {"finish_reason": "length"}])
+        self.assertEqual(_finish_reason(litellm, 1), "length")
+        self.assertIsNone(_finish_reason(None, 0))
+
     def test_a_sub_agents_replies_count_apart_from_the_main_models(self):  # Devin, #27 (F51): another model
         steps: list[Step | ToolStep | str] = [
             Step("Delegate.", "print(subagent('look around'))"),

@@ -224,8 +224,21 @@ def _cut_off(completion: str) -> bool:
         outputs = entry.get("outputs") or []
         texts = [o if isinstance(o, str) else (o.get("text") if isinstance(o, dict) else None) for o in outputs]
         if completion in texts:
-            return getattr(entry.get("response"), "finish_reason", None) == "length"
+            return _finish_reason(entry.get("response"), texts.index(completion)) == "length"
     return False
+
+
+def _finish_reason(response: Any, index: int) -> Any:
+    """A history entry's finish reason: on the response for DSPy's native route, on the matching choice for the
+    LiteLLM route (Codex, #31)."""
+    reason = getattr(response, "finish_reason", None)
+    if reason is not None:
+        return reason
+    choices = getattr(response, "choices", None) or (response.get("choices") if isinstance(response, dict) else None)
+    if not choices or index >= len(choices):
+        return None
+    choice = choices[index]
+    return choice.get("finish_reason") if isinstance(choice, dict) else getattr(choice, "finish_reason", None)
 
 
 def _clip(text: str, limit: int) -> str:
