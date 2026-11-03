@@ -20,7 +20,7 @@ from frond.agent.lm import usage_totals
 from frond.agent.metrics import RunMetrics, normalize_usage
 from frond.agent.prompts import CodingTurn
 from frond.agent.rlm import FrondRLM
-from frond.agent.scripted import Step
+from frond.agent.scripted import Step, ToolStep
 from frond.cli import export_run
 from tests.helpers import WorkspaceCase, scripted_agent
 
@@ -58,6 +58,69 @@ class ParseFailureTest(unittest.TestCase):
         with self.assertRaises(AdapterParseError):
             FrondAdapter(metrics=metrics).parse(signature, "no field markers at all")
         self.assertEqual(metrics.parse_failures, 1)
+
+    def signature(self, action_space: str = "code") -> type[dspy.Signature]:
+        rlm = FrondRLM(CodingTurn, action_space=action_space)
+        return rlm._tool_signature() if action_space == "tools" else rlm._action_signature_for_current_factory(None, "")
+
+    def test_a_reply_off_the_protocol_that_says_what_to_run_is_recovered(self):  # G34: Opus 5.5's two shapes
+        fenced = (
+            "I'll start by looking at the renderer.\n\n```python\nprint(ls('.'))\nr = sh('ls')\n```\n\n"
+            "[[ ## completed ## ]]\n"
+        )
+        invoke = (
+            'I have three steps, so this one gathers everything.\n\n\n<invoke name="python">\n'
+            "<parameter name=\"code\">print(read('/app/render.py')[:6000])\nprint(ls('/app/data'))</parameter>\n"
+            "</invoke>\n\n[[ ## completed ## ]] \n"
+        )
+        metrics = RunMetrics()
+        adapter = FrondAdapter(metrics=metrics)
+        got = adapter.parse(self.signature(), fenced)
+        self.assertEqual(got["reasoning"], "I'll start by looking at the renderer.")
+        self.assertEqual(got["code"], "```python\nprint(ls('.'))\nr = sh('ls')\n```")
+        got = adapter.parse(self.signature(), invoke)
+        self.assertEqual(got["reasoning"], "I have three steps, so this one gathers everything.")
+        self.assertEqual(got["code"], "```python\nprint(read('/app/render.py')[:6000])\nprint(ls('/app/data'))\n```")
+        tool = '<invoke name="view">\n<parameter name="path">app.py</parameter>\n<parameter name="start">3</parameter>'
+        got = adapter.parse(self.signature("tools"), f"Look first.\n{tool}\n</invoke>")
+        self.assertEqual(got, {"reasoning": "Look first.", "tool": "view", "args": {"path": "app.py", "start": 3}})
+        self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (3, 3))  # adherence is still measured
+
+    def test_a_reply_that_could_mean_more_than_one_action_is_not_guessed(self):  # G34
+        metrics = RunMetrics()
+        adapter = FrondAdapter(metrics=metrics)
+        replies = [
+            "First:\n```python\nprint(1)\n```\nthen:\n```python\nprint(2)\n```",
+            '<invoke name="python"><parameter name="script">print(1)</parameter></invoke>',
+            '<invoke name="a"><parameter name="code">1</parameter></invoke><invoke name="b"></invoke>',
+            "```bash\nls\n```",
+            # Codex, #27: a fenced action and an invoked one; running only the second would drop the first
+            'Read it:\n```python\nread("app.py")\n```\n<invoke name="python"><parameter name="code">'
+            'write("app.py", "x")</parameter></invoke>',
+        ]
+        for reply in replies:
+            with self.assertRaises(AdapterParseError, msg=reply):
+                adapter.parse(self.signature(), reply)
+        self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (5, 0))
+
+
+class UnparsedStepTest(WorkspaceCase):
+    """A reply frond cannot read costs a step and is shown to the model; it no longer ends the run (G34)."""
+
+    def test_the_turn_goes_on_after_a_reply_that_cannot_be_read(self):
+        done_steps: list[tuple[str, Step | ToolStep]] = [
+            ("rlm", Step("Done.", "SUBMIT(response='ok')")),
+            ("react", ToolStep("Done.", "submit", {"response": "ok"})),
+        ]
+        for arm, done in done_steps:
+            with self.subTest(arm=arm):
+                agent, engine = scripted_agent(self, ["Let me think about this first.", done], arm=arm)
+                record = agent.run_turn("go")
+                self.assertEqual((record.status, record.response), ("done", "ok"))
+                self.assertEqual((agent.metrics.parse_failures, agent.metrics.unparsed_steps), (1, 1))
+                second = "\n".join(m.text or "" for m in engine.requests[1].messages)
+                self.assertIn("did not follow the step format", second)
+                self.assertIn("Let me think about this first.", second)  # its own words, in the right format
 
 
 class UsageTotalsTest(unittest.TestCase):

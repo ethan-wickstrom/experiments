@@ -61,6 +61,8 @@ COUNTERS = (
     "failed_edits",
     "stale_actions",
     "parse_failures",
+    "parse_recovered",  # replies off the protocol whose action was recovered (G34)
+    "unparsed_steps",  # replies that were not, each shown to the model as an error step (G34)
     "syntax_errors",
     "compactions",
     "summaries",

@@ -18,10 +18,12 @@ and keeps tool output in messages of its own rather than in one string with the 
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import dspy
 from dspy.adapters.base import _expand_legacy_custom_type_markers_in_chat_message
+from dspy.adapters.chat_adapter import field_header_pattern
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
 
@@ -131,6 +133,52 @@ def last_reply_index(demos: list[dict[str, Any]], history: REPLHistory) -> int |
     return 2 * len(demos) + 2 * replies - 1 if replies else None
 
 
+# Replies that skip the field markers but say unambiguously what to run (ledger G34). Opus 5.5 at high effort opens
+# with a line of narration, then often writes one fenced block, or its native tool-call form, instead of the fields.
+INVOKE = re.compile(r'<invoke name="([^"]*)">(.*?)</invoke>', re.DOTALL)
+PARAMETER = re.compile(r'<parameter name="([^"]*)">(.*?)</parameter>', re.DOTALL)
+FENCE = re.compile(r"^[ \t]*```(?:python3?|py)?[ \t]*\n(.*?)\n[ \t]*```[ \t]*$", re.DOTALL | re.MULTILINE)
+
+
+def without_markers(text: str) -> str:
+    """``text`` without the lines that are field markers, which only the protocol's own replies may carry."""
+    return "\n".join(line for line in text.splitlines() if not field_header_pattern.match(line.strip())).strip()
+
+
+def recover_action(signature: type[dspy.Signature], completion: str) -> dict[str, Any] | None:
+    """The fields of an action reply that did not follow the field protocol, when what it meant is unambiguous:
+    exactly one ``<invoke>`` call, or for the code action space exactly one fenced block, with the text before it
+    as the reasoning. None when the reply is anything else, so that it fails as before."""
+    fields = set(signature.output_fields)
+    calls = list(INVOKE.finditer(completion))
+    if len(calls) > 1:
+        return None
+    if calls:
+        call = calls[0]
+        if FENCE.search(completion[: call.start()] + completion[call.end() :]):
+            return None  # a fenced block besides the call is a second action
+        params = {name: value.strip("\n") for name, value in PARAMETER.findall(call.group(2))}
+        reasoning = without_markers(completion[: call.start()])
+        if fields == {"reasoning", "code"} and set(params) == {"code"}:
+            return {"reasoning": reasoning, "code": f"```python\n{params['code']}\n```"}
+        if fields == {"reasoning", "tool", "args"}:
+            args: dict[str, Any] = {}
+            for name, value in params.items():
+                try:
+                    args[name] = json.loads(value)
+                except ValueError:
+                    args[name] = value
+            return {"reasoning": reasoning, "tool": call.group(1), "args": args}
+        return None
+    if fields != {"reasoning", "code"}:
+        return None
+    blocks = list(FENCE.finditer(completion))
+    if len(blocks) != 1:
+        return None
+    block = blocks[0]
+    return {"reasoning": without_markers(completion[: block.start()]), "code": f"```python\n{block.group(1)}\n```"}
+
+
 LAYOUTS = ("turns", "chat")
 
 
@@ -165,7 +213,12 @@ class FrondAdapter(dspy.ChatAdapter):
         except Exception:
             if self.metrics is not None:
                 self.metrics.bump("parse_failures")
-            raise
+            recovered = recover_action(signature, completion)
+            if recovered is None:
+                raise
+            if self.metrics is not None:
+                self.metrics.bump("parse_recovered")
+            return recovered
 
     def format_system_message(self, signature: type[dspy.Signature]) -> str:
         text = super().format_system_message(signature)

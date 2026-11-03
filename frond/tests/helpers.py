@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import unittest
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -74,7 +75,7 @@ class TurnUndo:
 
 def scripted_agent(
     case: WorkspaceCase,
-    steps: list[Step] | list[ToolStep] | list[Step | ToolStep],
+    steps: Sequence[Step | ToolStep | str],  # a str is a raw reply, as the engine takes it
     *,
     delay: float = 0.0,
     max_steps: int = 10,

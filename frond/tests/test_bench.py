@@ -238,6 +238,20 @@ class MatrixTest(BenchCase):
         with mock.patch("subprocess.run", side_effect=docker("0022")):
             self.assertFalse([p for p in matrix.preflight(s, None) if "umask" in p])
 
+    def test_a_stalled_harbor_install_is_retried_then_refused(self):  # a hung uvx download (G32)
+        stalled = subprocess.TimeoutExpired(["uvx"], 300)
+        ok = subprocess.CompletedProcess([], 0, stdout=b"0.25.0", stderr=b"")
+        with mock.patch("subprocess.run", side_effect=[stalled, ok]) as run:
+            self.assertTrue(matrix.harbor_ready())
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual(run.call_args.kwargs["timeout"], 300.0)
+        with mock.patch("subprocess.run", side_effect=stalled) as run:
+            self.assertFalse(matrix.harbor_ready())
+        self.assertEqual(run.call_count, 3)
+        s = spec.load(self.write_spec(SPEC.format(tasks='"t0"')))
+        with mock.patch.object(matrix, "harbor_ready", return_value=False), mock.patch("subprocess.run"):
+            self.assertTrue(any("Harbor's environment" in p for p in matrix.preflight(s, None)))
+
     def test_the_anthropic_key_may_be_stored_as_claude_api_key(self):  # the owner's name for it (REQ-1)
         env = matrix.with_aliases({"CLAUDE_API_KEY": "secret-value", "PATH": "/bin"})
         self.assertEqual(env["ANTHROPIC_API_KEY"], "secret-value")
@@ -267,6 +281,19 @@ class MatrixTest(BenchCase):
         self.assertEqual(run.call_count, 2)  # the other jobs still ran
         manifest = json.loads((self.dir / "jobs" / "matrix.json").read_text())
         self.assertEqual([r["exit"] for r in manifest["runs"]], [1, 0])
+
+    def test_a_source_edited_during_the_run_stops_it_before_the_next_job(self):  # each job builds its own wheel
+        path = self.write_spec(SPEC.format(tasks='"t0"'))
+        digests = iter(["c1", "c1", "c2"])  # provenance, first job, second job
+        with (
+            mock.patch.object(matrix, "preflight", return_value=[]),
+            mock.patch.object(matrix, "affordable", return_value=(True, "")),
+            mock.patch.object(matrix, "source_digest", side_effect=lambda: next(digests)),
+            mock.patch.object(matrix, "run_cell", return_value=0) as run,
+            mock.patch("builtins.print"),
+        ):
+            self.assertEqual(matrix.main([str(path), "--jobs", str(self.dir / "jobs")]), 2)
+        self.assertEqual(run.call_count, 1)
 
     def test_finished_trials_are_named_as_the_analysis_names_them(self):  # Devin, #23
         job = self.dir / "job"
@@ -454,7 +481,7 @@ class BudgetTest(BenchCase):
         planned = sum(
             budget_mod.job_estimate(c.arm, len(c.tasks) * e0.trials_of(c.arm), {}, budget) for c in matrix.cells(e0)
         )
-        self.assertLessEqual(planned, budget.usd)  # E0's estimate is $45-75; the guard must not stop it on guesses
+        self.assertLessEqual(planned, budget.usd)  # $76.50 (D48): the guard must not stop E0 on its guesses alone
 
     def test_a_frond_arms_sub_model_needs_a_price_too(self):  # Codex, #23
         body = SPEC.format(tasks='"t0"').replace('options = {{ layout = "chat" }}', 'options = {{ layout = "chat" }}')

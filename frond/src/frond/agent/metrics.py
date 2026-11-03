@@ -18,7 +18,9 @@ from typing import Any
 
 @dataclass
 class RunMetrics:
-    parse_failures: int = 0  # replies that did not parse into the step's output fields
+    parse_failures: int = 0  # replies that did not follow the field protocol (protocol adherence, B2)
+    parse_recovered: int = 0  # of those, replies whose action was recovered unambiguously (G34)
+    unparsed_steps: int = 0  # replies that could not be recovered: the step showed the model an error (G34)
     syntax_errors: int = 0  # code that did not compile
     stale_actions: int = 0  # edits, writes and deletes of files changed since the model read them (H3, B5)
     compactions: int = 0  # times early steps were folded or summarised to fit the budget (H4, A5)
@@ -55,6 +57,8 @@ class RunMetrics:
     def as_dict(self) -> dict[str, Any]:
         return {
             "parse_failures": self.parse_failures,
+            "parse_recovered": self.parse_recovered,
+            "unparsed_steps": self.unparsed_steps,
             "syntax_errors": self.syntax_errors,
             "stale_actions": self.stale_actions,
             "compactions": self.compactions,
