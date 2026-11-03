@@ -147,6 +147,18 @@ def exec_umask() -> str:
         subprocess.run(["docker", "rm", "-f", container], capture_output=True, check=False)
 
 
+def models_of(arm: Arm) -> list[str]:
+    """The models a frond arm calls: its own, and the sub-model it names or frond picks for it."""
+    if not arm.model:
+        return []
+    if not arm.agent.startswith("frond"):
+        return [arm.model]
+    from frond.agent.lm import resolve_models  # frond's own rule for the default sub-model
+
+    choice = resolve_models(arm.model, arm.options.get("sub_model"))
+    return list(dict.fromkeys([choice.main, choice.sub]))
+
+
 def preflight(spec: Spec, ca: Path | None) -> list[str]:
     """What would make every trial fail, or bias every arm alike, checked before spending anything."""
     problems: list[str] = []
@@ -166,8 +178,11 @@ def preflight(spec: Spec, ca: Path | None) -> list[str]:
             )
     budget, prices = load_budget(), load_prices()
     for arm in spec.arms:
-        if arm.model and call_cost(arm.model, {}, prices) is None:
-            problems.append(f"arm {arm.name}: no price for {arm.model} in bench/prices.toml, so its cost is unknown")
+        problems.extend(
+            f"arm {arm.name}: no price for {model} in bench/prices.toml, so its cost is unknown"
+            for model in models_of(arm)
+            if call_cost(model, {}, prices) is None
+        )
         if arm.model and not has_guess(arm.model, budget):
             problems.append(f"arm {arm.name}: no per-trial guess for {arm.model} in bench/budget.toml (D43)")
         for prefix, key in KEYS.items():
@@ -228,22 +243,23 @@ def _finished(job: Path) -> dict[str, int]:
             data = json.loads(result.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if data.get("finished_at"):
-            task = str(data.get("task_name") or "").split("/")[-1]
+        if data.get("finished_at"):  # named as load_trial names it
+            task = str((data.get("task_id") or {}).get("name") or data.get("task_name") or "").split("/")[-1]
             done[task] = done.get(task, 0) + 1
     return done
 
 
 def affordable(spec: Spec, cell: Cell, jobs: Path, budget: Budget) -> tuple[bool, str]:
-    """Whether the program's cap allows starting this cell's job, and the spending it was judged on."""
-    roots = [d for d in (FROND / "jobs").glob("*") if d.is_dir()]
-    if not jobs.resolve().is_relative_to((FROND / "jobs").resolve()):
-        roots.append(jobs)
-    spent, worst = spending(roots, load_prices())
+    """Whether the program's cap allows starting this cell's job, and the spending it was judged on. Every trial
+    under ``jobs/`` and under this run's jobs directory counts, wherever it is nested; a trial whose cost cannot be
+    told stops the run, since the cap could not be kept."""
+    spent = spending([FROND / "jobs", jobs], load_prices())
+    if spent.unknown:
+        return False, f"cannot count the cost of {len(spent.unknown)} trials ({', '.join(spent.unknown[:3])})"
     trials = remaining(jobs / cell.name(spec), cell.tasks, spec.trials_of(cell.arm))
-    estimate = job_estimate(cell.arm, trials, worst, budget)
-    text = f"spent ${spent:.2f} of ${budget.usd:.2f}; {cell.name(spec)} could cost up to ${estimate:.2f}"
-    return spent + estimate <= budget.usd, text
+    estimate = job_estimate(cell.arm, trials, spent.worst, budget)
+    text = f"spent ${spent.total:.2f} of ${budget.usd:.2f}; {cell.name(spec)} could cost up to ${estimate:.2f}"
+    return spent.total + estimate <= budget.usd, text
 
 
 def provenance(spec: Spec) -> dict[str, Any]:
@@ -336,28 +352,34 @@ def main(argv: list[str] | None = None) -> int:
             started = time.time()
             print(f"{time.strftime('%H:%M:%S')} {name} ({status}): {len(cell.tasks)} tasks", flush=True)
             trials = spec.trials_of(cell.arm)
+            run = {
+                "job": name,
+                "argv": argv,
+                "started": started,
+                "exit": None,  # recorded before Harbor starts, so a run killed midway still binds the directory
+                "source_sha256": current["source_sha256"],
+                "allowed_changed_source": args.allow_changed_source,
+            }
+            manifest["runs"].append(run)
+            manifest_path.write_text(json.dumps(manifest, indent=1) + "\n")
             code = run_cell(
                 argv,
                 env,
                 jobs / f"{name}.log",
                 lambda job=jobs / name, tasks=cell.tasks, k=trials: pending(job, tasks, k),
             )
-            manifest["runs"].append(
-                {
-                    "job": name,
-                    "argv": argv,
-                    "started": started,
-                    "seconds": round(time.time() - started),
-                    "exit": code,
-                    "source_sha256": current["source_sha256"],
-                    "allowed_changed_source": args.allow_changed_source,
-                }
-            )
+            run.update(seconds=round(time.time() - started), exit=code)
             if code != 0:
                 failed.append(name)
             manifest_path.write_text(json.dumps(manifest, indent=1) + "\n")
         batch_done = i + 1 == len(chosen) or chosen[i + 1].batch != cell.batch
-        if batch_done and spec.stop_early and decided(spec, jobs):
+        # an early stop reads a whole batch: never one where a job failed or left trials unfinished
+        complete = batch_done and all(
+            c.name(spec) not in failed and remaining(jobs / c.name(spec), c.tasks, spec.trials_of(c.arm)) == 0
+            for c in chosen
+            if c.batch == cell.batch
+        )
+        if complete and spec.stop_early and decided(spec, jobs):
             print(f"every pass-rate claim is decided after batch {cell.batch}: stopping (stop_early)")
             break
     if failed:  # Harbor exits 0 when a job finishes, whatever its trials did: a failure is the job's own

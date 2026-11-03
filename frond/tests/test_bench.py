@@ -261,6 +261,46 @@ class MatrixTest(BenchCase):
         manifest = json.loads((self.dir / "jobs" / "matrix.json").read_text())
         self.assertEqual([r["exit"] for r in manifest["runs"]], [1, 0])
 
+    def test_finished_trials_are_named_as_the_analysis_names_them(self):  # Devin, #23
+        job = self.dir / "job"
+        (job / "a__1").mkdir(parents=True)
+        (job / "a__1" / "result.json").write_text(json.dumps({"task_id": {"name": "a"}, "finished_at": "2026-11-03"}))
+        self.assertEqual(matrix.remaining(job, ["a"], 2), 1)
+
+    def test_no_early_stop_on_a_batch_with_a_failed_job(self):  # Devin, #23
+        names = [f"t{i}" for i in range(4)]
+        body = SPEC.format(tasks=", ".join(f'"{n}"' for n in names)).replace(
+            "concurrency = 2", "concurrency = 2\nstop_early = true"
+        )
+        path = self.write_spec(body)
+        with (
+            mock.patch.object(matrix, "preflight", return_value=[]),
+            mock.patch.object(matrix, "affordable", return_value=(True, "")),
+            mock.patch.object(matrix, "run_cell", side_effect=[1, 0, 0, 0]),
+            mock.patch.object(matrix, "decided", return_value=True) as decided,
+            mock.patch("builtins.print"),
+        ):
+            self.assertEqual(matrix.main([str(path), "--jobs", str(self.dir / "jobs")]), 1)
+        decided.assert_not_called()  # the failed batch is never read for a stop
+
+    def test_a_job_is_recorded_before_harbor_starts(self):  # a run killed midway still binds its directory (#23)
+        path = self.write_spec(SPEC.format(tasks='"t0"'))
+        seen: list[dict] = []
+
+        def run(*_args, **_kwargs):
+            seen.append(json.loads((self.dir / "jobs" / "matrix.json").read_text()))
+            return 0
+
+        with (
+            mock.patch.object(matrix, "preflight", return_value=[]),
+            mock.patch.object(matrix, "affordable", return_value=(True, "")),
+            mock.patch.object(matrix, "run_cell", side_effect=run),
+            mock.patch("builtins.print"),
+        ):
+            matrix.main([str(path), "--jobs", str(self.dir / "jobs")])
+        self.assertEqual(seen[0]["runs"][0]["exit"], None)
+        self.assertTrue(seen[0]["source_sha256"])
+
     def test_pending_tasks_are_those_short_of_finished_trials(self):
         job = self.dir / "job"
         for name, task, finished in (
@@ -301,12 +341,35 @@ class MatrixTest(BenchCase):
         sleeps: list[int] = []
         with (
             mock.patch.object(prune, "scan", side_effect=lambda: next(scans)),
+            mock.patch.object(prune, "created_between", return_value={}),
             mock.patch.object(prune.subprocess, "run", side_effect=rmi),
             mock.patch.object(prune.time, "sleep", side_effect=sleep),
             self.assertRaises(StopIteration),
         ):
             prune.prune_while(None, 0, str(self.dir / "prune.log"), pending=lambda: {"task-a"})
         self.assertEqual(removed, ["img-b"])
+
+    def test_the_pruner_learns_owners_from_containers_it_never_saw(self):  # created and removed between passes (#23)
+        from bench import prune
+
+        scans = iter([({"img-a"}, {}), ({"img-a"}, {}), ({"img-a"}, {})])  # never seen in use
+        removed: list[str] = []
+        sleeps: list[int] = []
+
+        def sleep(_):
+            if len(sleeps) == 2:
+                raise StopIteration
+            sleeps.append(1)
+
+        with (
+            mock.patch.object(prune, "scan", side_effect=lambda: next(scans)),
+            mock.patch.object(prune, "created_between", side_effect=[{"img-a": "task-a"}, {}, {}]),
+            mock.patch.object(prune.subprocess, "run", side_effect=lambda argv, **_: removed.append(argv[2])),
+            mock.patch.object(prune.time, "sleep", side_effect=sleep),
+            self.assertRaises(StopIteration),
+        ):
+            prune.prune_while(None, 0, str(self.dir / "prune.log"), pending=lambda: {"task-a"})
+        self.assertEqual(removed, [])
 
     def test_a_dry_run_prints_every_job_and_runs_nothing(self):
         path = self.write_spec(SPEC.format(tasks=", ".join(f'"t{i}"' for i in range(8))))
@@ -338,9 +401,33 @@ class BudgetTest(BenchCase):
         root = self.dir / "jobs" / "E9"
         fake_trial(root / "E9-a-b01", "t0", 0, reward=1.0, cost_tokens=1_000_000)  # $4 of Opus input
         fake_trial(root / "E9-a-b01", "t1", 0, reward=0.0, cost_tokens=500_000)
-        spent, worst = budget_mod.spending([root], analyze.load_prices())
-        self.assertAlmostEqual(spent, 6.0)
-        self.assertAlmostEqual(worst["anthropic/claude-opus-5-5"], 4.0)
+        nested = self.dir / "jobs" / "runs" / "E8" / "E8-a-b01"  # a --jobs directory nested deeper still counts
+        fake_trial(nested, "t0", 0, reward=1.0, cost_tokens=250_000)
+        reference = self.dir / "jobs" / "E9" / "E9-cc-b01" / "t2__0"  # another agent: Harbor's model and cost only
+        (reference / "agent").mkdir(parents=True)
+        result = {
+            "task_id": {"name": "t2"},
+            "config": {"agent": {"model_name": "anthropic/claude-opus-5-5"}},
+            "agent_execution": {"started_at": "2026-11-03T10:00:00Z"},
+            "verifier_result": {"rewards": {"reward": 1.0}},
+            "agent_result": {"cost_usd": 7.0},
+        }
+        (reference / "result.json").write_text(json.dumps(result))
+        spent = budget_mod.spending([self.dir / "jobs", nested.parent], analyze.load_prices())  # counted once each
+        self.assertAlmostEqual(spent.total, 4.0 + 2.0 + 1.0 + 7.0)
+        self.assertAlmostEqual(spent.worst["anthropic/claude-opus-5-5"], 7.0)  # the reference agent's trial too
+        self.assertEqual(spent.unknown, [])
+
+    def test_a_trial_whose_cost_cannot_be_told_stops_the_run(self):  # fail closed (Codex, #23)
+        path = self.write_spec(SPEC.format(tasks='"t0"'))
+        s = spec.load(path)
+        jobs = self.dir / "jobs"
+        fake_trial(jobs / "T1-control-b01", "t0", 0, reward=1.0, config=CONTROL)
+        calls = jobs / "T1-control-b01" / "t0__0" / "agent" / "frond" / "calls.jsonl"
+        calls.write_text(calls.read_text() + json.dumps({"model": "someone/unpriced", "usage": {"input": 5}}) + "\n")
+        allowed, text = matrix.affordable(s, matrix.cells(s)[0], jobs, budget_mod.load_budget())
+        self.assertFalse(allowed)
+        self.assertIn("cannot count the cost of 1 trials", text)
 
     def test_the_runner_stops_before_a_job_that_could_pass_the_cap(self):
         path = self.write_spec(SPEC.format(tasks='"t0", "t1"'))
@@ -361,6 +448,17 @@ class BudgetTest(BenchCase):
             budget_mod.job_estimate(c.arm, len(c.tasks) * e0.trials_of(c.arm), {}, budget) for c in matrix.cells(e0)
         )
         self.assertLessEqual(planned, budget.usd)  # E0's estimate is $45-75; the guard must not stop it on guesses
+
+    def test_a_frond_arms_sub_model_needs_a_price_too(self):  # Codex, #23
+        body = SPEC.format(tasks='"t0"').replace('options = {{ layout = "chat" }}', 'options = {{ layout = "chat" }}')
+        path = self.write_spec(
+            body.replace('options = { layout = "chat" }', 'options = { layout = "chat", sub_model = "someone/cheap" }')
+        )
+        s = spec.load(path)
+        self.assertEqual(matrix.models_of(s.arms[0]), ["anthropic/claude-opus-5-5", "someone/cheap"])
+        with mock.patch("subprocess.run", return_value=subprocess.CompletedProcess([], 1, stdout="", stderr="")):
+            problems = matrix.preflight(s, None)
+        self.assertTrue(any("no price for someone/cheap" in p for p in problems), problems)
 
     def test_an_arm_with_no_price_or_guess_cannot_spend(self):
         path = self.write_spec(SPEC.format(tasks='"t0"').replace("anthropic/claude-opus-5-5", "someone/new-model", 1))

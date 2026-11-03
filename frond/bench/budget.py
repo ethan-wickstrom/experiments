@@ -38,22 +38,31 @@ def _key(model: str, keys: list[str]) -> str | None:
     return max(matches, key=len) if matches else None
 
 
-def spending(experiments: list[Path], prices: dict[str, dict[str, float]]) -> tuple[float, dict[str, float]]:
-    """USD that every trial in these experiments' jobs directories cost (<experiment>/<job>/<trial>), and the most one
-    trial of each model cost, by the model frond recorded."""
-    total, worst = 0.0, {}
-    results = sorted({r.resolve() for root in experiments for r in root.glob("*/*/result.json")})
+@dataclass
+class Spending:
+    total: float  # USD every trial cost
+    worst: dict[str, float]  # model -> the most one trial cost
+    unknown: list[str]  # trials of a model whose cost cannot be told: a call with no price, or none reported
+
+
+def spending(roots: list[Path], prices: dict[str, dict[str, float]]) -> Spending:
+    """What every trial anywhere under ``roots`` cost (a trial is a directory with ``result.json`` and ``agent/``),
+    each counted once, and the most one trial of each model cost, by the model Harbor gave its agent, frond or not."""
+    out = Spending(0.0, {}, [])
+    results = sorted({r.resolve() for root in roots if root.is_dir() for r in root.rglob("result.json")})
     for result in results:
         if not (result.parent / "agent").is_dir():
-            continue  # not a trial
+            continue  # a job's result, not a trial's
         trial = load_trial(result.parent, "", prices)
-        if trial is None or trial.cost is None:
+        if trial is None:
             continue
-        total += trial.cost
-        model = str(trial.config.get("model") or "")
-        if model:
-            worst[model] = max(worst.get(model, 0.0), trial.cost)
-    return total, worst
+        if trial.cost is None:
+            if trial.model:  # spent something that cannot be counted: the cap cannot be kept (fail closed)
+                out.unknown.append(result.parent.name)
+            continue
+        out.total += trial.cost
+        out.worst[trial.model] = max(out.worst.get(trial.model, 0.0), trial.cost)
+    return out
 
 
 def has_guess(model: str, budget: Budget) -> bool:
@@ -67,5 +76,5 @@ def job_estimate(arm: Arm, trials: int, worst: dict[str, float], budget: Budget)
     steps = max(1.0, float(arm.options.get("max_steps", 40)) / 40)
     key = _key(arm.model, list(budget.guess))
     guess = budget.guess[key] * steps if key is not None else 0.0
-    measured = worst.get(arm.model, 0.0)
+    measured = max(worst.get(arm.model, 0.0), worst.get("", 0.0))  # "": a cost with no model named: assume it
     return trials * max(guess, measured) * budget.margin if measured else trials * guess

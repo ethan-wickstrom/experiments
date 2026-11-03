@@ -94,6 +94,7 @@ class Trial:
     counters: dict[str, float] = field(default_factory=dict)
     exception: str = ""
     config: dict[str, Any] = field(default_factory=dict)  # frond's recorded configuration, to check the arm's setup
+    model: str = ""  # the model Harbor gave the agent (its trial config), for any agent; "" for the oracle
 
 
 def load_prices(path: Path = BENCH / "prices.toml") -> dict[str, dict[str, float]]:
@@ -182,6 +183,7 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
         counters=counters,
         exception=str(exception.get("exception_type") or ""),
         config=config,
+        model=str(((result.get("config") or {}).get("agent") or {}).get("model_name") or config.get("model") or ""),
     )
 
 
