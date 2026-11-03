@@ -54,6 +54,21 @@ RETRY_ON = (  # failures before the agent runs (Harbor's "sandbox failed" class,
     "RuntimeError",
 )
 KEYS = {"anthropic/": "ANTHROPIC_API_KEY", "openai/": "OPENAI_API_KEY", "gemini/": "GEMINI_API_KEY"}
+# Other names a key may be stored under in the environment: the owner keeps the Anthropic key as CLAUDE_API_KEY (REQ-1)
+ALIASES = {"ANTHROPIC_API_KEY": ("CLAUDE_API_KEY",)}
+
+
+def with_aliases(env: dict[str, str]) -> dict[str, str]:
+    """``env`` with each provider key set from an alias when it is missing, under the name Harbor and frond read."""
+    out = dict(env)
+    for key, names in ALIASES.items():
+        if not out.get(key):
+            found = next((out[name] for name in names if out.get(name)), None)
+            if found is not None:
+                out[key] = found
+    return out
+
+
 PROBE_IMAGE = "mirror.gcr.io/library/alpine:3.20"
 SOURCES = ("src", "bench/frond_harbor.py", "pyproject.toml", "uv.lock")  # what a trial's frond is built from
 
@@ -120,7 +135,7 @@ def state(jobs: Path, name: str) -> str:
 
 
 def environment(ca: Path | None) -> dict[str, str]:
-    env = dict(os.environ)
+    env = with_aliases(dict(os.environ))
     env["PYTHONPATH"] = os.pathsep.join(p for p in (str(BENCH), env.get("PYTHONPATH", "")) if p)
     if ca is not None:
         env["FROND_EGRESS_CA"] = str(ca)
@@ -186,7 +201,7 @@ def preflight(spec: Spec, ca: Path | None) -> list[str]:
         if arm.model and not has_guess(arm.model, budget):
             problems.append(f"arm {arm.name}: no per-trial guess for {arm.model} in bench/budget.toml (D43)")
         for prefix, key in KEYS.items():
-            if arm.model and arm.model.startswith(prefix) and not os.environ.get(key):
+            if arm.model and arm.model.startswith(prefix) and not with_aliases(dict(os.environ)).get(key):
                 problems.append(f"arm {arm.name} needs {key} (ledger REQ-1)")
     if ca is None:
         print("note: no egress CA is set; on a host that re-terminates TLS, set FROND_EGRESS_CA (D27)", file=sys.stderr)

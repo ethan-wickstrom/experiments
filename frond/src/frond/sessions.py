@@ -30,24 +30,30 @@ class SessionStore:
         self.directory = (base or data_home()) / "sessions" / f"{workspace_root.name}-{digest}"
 
     def new_path(self) -> Path:
-        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        return self.directory / f"{stamp}-{os.getpid()}.json"
+        """A session file no other has used: to the microsecond, and never one that exists (F1)."""
+        while True:
+            stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            path = self.directory / f"{stamp}-{os.getpid()}.json"
+            if not path.exists() and not self.steps_path(path).exists():
+                return path
 
     @staticmethod
     def steps_path(session_file: Path) -> Path:
         """Where the session's step log lives: every message, step and answer, one JSON line each."""
         return session_file.with_name(session_file.stem + ".steps.jsonl")
 
-    def world_roots(self, *, max_age_days: float = 30.0) -> set[str]:
+    def world_roots(self, *, max_age_days: float = 30.0, keep: Path | None = None) -> set[str]:
         """The worlds this workspace's recent sessions name: their turns' and their steps' (ledger G21). Sessions
-        untouched for longer than ``max_age_days`` no longer hold theirs, so their undo history may be collected."""
+        untouched for longer than ``max_age_days`` no longer hold theirs, so their undo history may be collected;
+        ``keep``, the session being continued, always does, however old (F46)."""
         cutoff = time.time() - max_age_days * 86400
+        kept = {keep, self.steps_path(keep)} if keep is not None else set()
         roots: set[str] = set()
         if not self.directory.is_dir():
             return roots
         for path in self.directory.iterdir():
             try:
-                if path.stat().st_mtime < cutoff:
+                if path.stat().st_mtime < cutoff and path not in kept:
                     continue
                 if path.name.endswith(".steps.jsonl"):
                     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -61,12 +67,14 @@ class SessionStore:
         roots.discard("")
         return roots
 
-    def collect(self, store: Store, *, bound: int = 2 * 1024**3, grace: float = 3600.0) -> int:
-        """Past ``bound`` bytes, delete the store's objects that no recent session reaches and that have not been
-        used for ``grace`` seconds (objects a running session is still writing are newer); bytes freed."""
+    def collect(
+        self, store: Store, *, bound: int = 2 * 1024**3, grace: float = 3600.0, keep: Path | None = None
+    ) -> int:
+        """Past ``bound`` bytes, delete the store's objects that no recent session, nor ``keep``, reaches and that have
+        not been used for ``grace`` seconds (objects a running session is still writing are newer); bytes freed."""
         if store.size() <= bound:
             return 0
-        return store.sweep(store.reachable(self.world_roots()), older_than=time.time() - grace)
+        return store.sweep(store.reachable(self.world_roots(keep=keep)), older_than=time.time() - grace)
 
     def latest(self) -> Path | None:
         if not self.directory.is_dir():

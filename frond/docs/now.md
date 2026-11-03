@@ -1,22 +1,30 @@
 # Now
 
-Updated 2026-11-03, first session: every hypothesis H1–H6 has both arms and every experiment is pre-registered; E0a is rerunning under a fixed Docker daemon; 49 review findings are being verified and fixed; the owner granted $100 for E0 and the program.
+Updated 2026-11-03, end of the first session: the owner granted $100 and added the API key; every hypothesis H1–H6 has both arms and every experiment is pre-registered; the review findings that touch frond's default configuration are fixed.
 
 ## In flight
 
-E0a, the oracle sweep, is in its fourth run, started 10:30 UTC. The third run scored 55 of the 56 tasks that start in this VM (0.945) and found two environment faults: `docker exec` ran with umask 0 (G26, fixed by D39, so that run is void) and one task's browser sidecar cannot trust the egress CA (G25, excluded). The provisional exclusion list is `bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`. Resume the run with `FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt uv run python -m bench.matrix bench/experiments/e0a-oracle.toml`; then write its report with `uv run python -m bench.analyze bench/experiments/e0a-oracle.toml --out bench/results/2026-11-03-e0a-oracle` and the final list with `--failing oracle`, keeping the comments on each cause.
+Nothing runs. The next session starts the program's first model calls:
+
+1. `frond/scripts/dev-env.sh` (Docker with the umask-022 runtime, the mirror, the CA).
+2. The key: the owner stored it as `CLAUDE_API_KEY` (REQ-1). Never print it; `echo ${#CLAUDE_API_KEY}` shows that it is there. The runner passes it to Harbor as `ANTHROPIC_API_KEY`.
+3. A free check that it works from the VM and from inside a task container: `GET https://api.anthropic.com/v1/models` with the key, from the VM and through `docker run` with the egress CA mounted.
+4. `uv run python -m bench.matrix bench/experiments/smoke.toml` (one task, every flag), then check that the key's value appears in no file under `jobs/` (`grep -rlF "$CLAUDE_API_KEY" jobs | wc -l` must print 0) before anything is committed.
+5. E0: `uv run python -m bench.matrix bench/experiments/e0-pilot.toml`, about $45–75; the runner stops before any job that could pass $100 (D43).
+
+E0a's fourth run (under G26's fix) had finished 38 of 56 tasks when the session ended, its jobs lost with the VM. Of those, cad-model failed and vba-userform-port's verifier could not start, as in the third run; rs-archive-clone and medical-claims-processing had not started. The provisional exclusion list (`bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`) stands for E0. Rerun E0a after E0 to settle rs-archive-clone, which should pass under the fixed umask.
 
 ## Next, in order (research-first, D16)
 
-1. The review findings in the ledger (F1–F49), batch by batch. Done: the bench and the analysis (F2–F11, F47), freshness (F16–F21). Next, the rest of frond's default configuration, which E0 measures: the turn's snapshots and undo (F12–F15), the store's collection (F45, F46). Then each arm's mechanism: FORK and the forkable REPL (F22–F31), the tools arm (F32–F37, F48), scopes (F38–F40), and the rest.
-2. E0, as soon as REQ-1 arrives: `bench/experiments/e0-pilot.toml`. First run `smoke.toml` with the real key's environment (free: it stops at the first call only with a bad key; with a real one it is one short run).
+1. E0, as above.
+2. The rest of the review findings (ledger, F-rows still open), before the experiment whose arm they touch: FORK and the forkable REPL (F22–F31) before E2, the tools arm (F32–F37, F48) before E1, scopes (F38–F40) before E5, the startup check (F41–F44) and F49 any time. Closed: F1–F21 and F45–F47 (fixed, verified or declined).
 3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), sample sizes from the variance, and the program's budget (a new REQ).
 4. E1–E6 and E11 in the order in `research.md`.
 5. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner
 
-- REQ-1: the owner granted $100 and key creation on 2026-11-03; only the Console can create a key. Once `ANTHROPIC_API_KEY` is in this environment's settings (in a Console workspace with a $100 spend limit), a new session sees it: run `smoke.toml`, then E0. The runner stops before any job that could pass `bench/budget.toml`'s cap (D43).
+- REQ-1: the key is in the environment as `CLAUDE_API_KEY`, for sessions started after it was added; it closes with the smoke run.
 - REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12), visible only in the owner's Devin account. Low priority.
 
 ## Facts a fresh session needs

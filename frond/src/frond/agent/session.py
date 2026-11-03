@@ -686,7 +686,9 @@ class Agent:
             record.world_after = self.timeline.snapshot()
             record.head_moved = self.timeline.head() != head
             # the turn's net change, whoever made it: tools, commands, background jobs (requirement R2)
-            record.files = sorted({c.path for c in self.timeline.diff(record.world_before, record.world_after)})
+            if record.world_after:  # "" when snapshots stopped during the turn: no net change can be told
+                diff = self.timeline.diff(record.world_before, record.world_after)
+                record.files = sorted({c.path for c in diff})
         answer = record.response or record.error or f"(turn {record.status})"
         record.last_seq = self.steps.add("answer", turn=record.index, output=answer, error=record.status == "error")
         self.history.append(record)
@@ -1011,11 +1013,14 @@ class Agent:
             kinds = " → ".join(e.kind if e is not None else "absent" for e in (change.before, change.after))
             return FileChanged(change.path, kind, f"({kinds})", 0, 0, scope=scope)
         old_bytes, new_bytes = timeline.content(change.before) or b"", timeline.content(change.after) or b""
+        before, after = change.before, change.after
+        mode = f"(mode {before.mode:o} → {after.mode:o})" if before and after and before.mode != after.mode else ""
         if b"\0" in old_bytes or b"\0" in new_bytes:
-            return FileChanged(change.path, kind, "(binary file)", 0, 0, scope=scope)
+            return FileChanged(change.path, kind, "\n".join(filter(None, ["(binary file)", mode])), 0, 0, scope=scope)
         old, new = old_bytes.decode("utf-8", errors="replace"), new_bytes.decode("utf-8", errors="replace")
         diff = make_diff(old, new, change.path, created=kind == "create", deleted=kind == "delete")
-        return FileChanged(change.path, kind, diff.text, diff.added, diff.removed, scope=scope)
+        text = "\n".join(filter(None, [diff.text if old != new else "", mode]))  # a chmod alone shows (F15)
+        return FileChanged(change.path, kind, text, diff.added, diff.removed, scope=scope)
 
     def attach_log(self, path: Path) -> None:
         """Keep the step log in ``path`` (beside the session file), loading what an earlier session recorded."""

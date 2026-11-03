@@ -11,6 +11,7 @@ containers benchmarks run in.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -120,18 +121,35 @@ class Store:
         return seen
 
     def sweep(self, keep: set[str], *, older_than: float) -> int:
-        """Delete the objects outside ``keep`` last used before ``older_than`` (a timestamp); bytes freed."""
+        """Delete the objects outside ``keep`` last used before ``older_than`` (a timestamp); bytes freed.
+
+        Each candidate is first renamed aside, so a ``put`` from then on writes the object anew rather than marking
+        the one about to go; it is deleted only if, once aside, it still shows no use. A ``put`` that marked it in
+        between, for a tree being built, brings it back (F45). Leftovers of an interrupted sweep are put back first.
+        """
         freed = 0
         for directory in (self.root / "objects").iterdir():
             if not directory.is_dir():
                 continue
+            for aside in directory.glob(".gone-*"):
+                with contextlib.suppress(OSError):
+                    os.replace(aside, aside.with_name(aside.name.removeprefix(".gone-")))
             for path in directory.iterdir():
-                if path.name.startswith(".tmp-") or directory.name + path.name in keep:
+                if path.name.startswith((".tmp-", ".gone-")) or directory.name + path.name in keep:
                     continue
-                st = path.stat()
-                if st.st_mtime < older_than:
-                    path.unlink(missing_ok=True)
+                try:
+                    if path.stat().st_mtime >= older_than:
+                        continue
+                    aside = path.with_name(f".gone-{path.name}")
+                    os.rename(path, aside)
+                    st = aside.stat()
+                    if st.st_mtime >= older_than:  # put marked it before the rename: in use again
+                        os.replace(aside, path)
+                        continue
+                    aside.unlink()
                     freed += st.st_size
+                except FileNotFoundError:
+                    continue
         return freed
 
     def get(self, oid: str) -> tuple[str, bytes]:
@@ -244,7 +262,15 @@ class Worktree:
                     entries[name] = self._file_entry(item, key, started)
             except FileNotFoundError:
                 continue  # removed while the snapshot ran
+            except PermissionError:  # unreadable: kept by its signature, like a large file, and never restored (F13)
+                entries[name] = self._opaque(item)
         return self.store.put_tree(entries)
+
+    @staticmethod
+    def _opaque(item: os.DirEntry[str]) -> Entry:
+        st = item.stat(follow_symlinks=False)
+        mode = stat.S_IMODE(st.st_mode)
+        return Entry("large", object_id("large", repr((st.st_size, st.st_mtime_ns, st.st_ino, mode)).encode()), mode)
 
     def _file_entry(self, item: os.DirEntry[str], key: str, started: int) -> Entry:
         self._visited += 1

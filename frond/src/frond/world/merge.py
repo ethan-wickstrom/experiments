@@ -105,7 +105,9 @@ def revert(work: Worktree, before: str, after: str) -> Revert:
     result = Revert()
     current_tree = work.snapshot()
     current = dict(work.store.files(current_tree))
-    for change in work.store.diff(before, after):
+    # removals first, as in checkout: where the step replaced a directory with a file, the file must go before the
+    # directory's files come back (F12)
+    for change in sorted(work.store.diff(before, after), key=lambda c: c.before is not None):
         path, left, theirs_entry = change.path, change.after, change.before  # left: what the step left
         ours_entry = current.get(path)
         if _same(ours_entry, left):
@@ -127,6 +129,8 @@ def revert(work: Worktree, before: str, after: str) -> Revert:
             entry = Entry("file", work.store.put("blob", data), mode)
             work.apply(path, entry, ours_entry)
         result.restored.append(path)
+    for paths in (result.restored, result.conflicts, result.unrestorable):
+        paths.sort()  # reported by path, whatever order they were applied in
     return result
 
 
