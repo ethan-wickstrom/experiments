@@ -245,6 +245,21 @@ class AnalyzeTest(BenchCase):
         self.assertIn("| pass | superiority | 16 |", text)
         self.assertIn("Infrastructure failures in treatment", text)
 
+    def test_a_reference_agents_provider_failure_is_not_scored(self):
+        trial = self.dir / "job" / "t__1"
+        trial.mkdir(parents=True)
+        result = {
+            "task_id": {"name": "t"},
+            "agent_execution": {"started_at": "2026-11-03T10:00:00Z", "finished_at": "2026-11-03T10:00:01Z"},
+            "verifier_result": {"rewards": {"reward": 0.0}},
+            "exception_info": {"exception_type": "ApiRateLimitError"},
+            "agent_result": {"cost_usd": 0.0},
+        }
+        (trial / "result.json").write_text(json.dumps(result))
+        loaded = analyze.load_trial(trial, "claude-code", analyze.load_prices())
+        assert loaded is not None
+        self.assertIsNone(loaded.reward)
+
     def test_a_call_is_priced_by_its_own_model(self):
         prices = analyze.load_prices()
         usage = {"input": 1_000_000, "cache_read": 600_000, "cache_write": 100_000, "output": 10_000}

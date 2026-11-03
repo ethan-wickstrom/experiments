@@ -1,0 +1,44 @@
+# E2, hypothesis H2: forking up to three branches at the model's request, keeping the one its check passes, raises
+# pass rate; the shared cached prefix keeps cost under twice the single line's (D32).
+# The model is provisional: E0 picks the screening model by the rule in research.md, and any change is recorded in
+# decisions.md before the first trial. Sample size follows E0's variance; these are the planned upper bounds.
+id = "E2"
+title = "H2: FORK with check-based selection"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = "datasets/terminal-bench@4.0.0.txt"
+exclude = [
+  "datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt",
+  "results/2026-11-03-e0a-oracle/oracle-failures.txt",
+]
+trials = 3
+batch = 13
+seed = 2
+concurrency = 2
+stop_early = true
+
+[[arms]]
+name = "single"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-sonnet-5-5"
+options = { fork = "1", effort = "high" }
+
+[[arms]]
+name = "fork3"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-sonnet-5-5"
+options = { fork = "3", effort = "high" }
+
+[[claims]]
+id = "H2-pass"
+metric = "pass"
+treatment = "fork3"
+control = "single"
+kind = "superiority"
+
+[[claims]]
+id = "H2-cost"
+metric = "cost"
+treatment = "fork3"
+control = "single"
+kind = "ratio-below"
+bound = 2.0

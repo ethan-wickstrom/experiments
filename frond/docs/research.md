@@ -42,6 +42,8 @@ Each run records, in `frond -p --export` and on to Harbor:
 
 Every experiment is a spec in `bench/experiments/`, committed before its first trial: tasks, run order, arms, trials and claims, each claim with its test and margin. `bench/matrix.py` runs it and `bench/analyze.py` evaluates it from the same file (D28).
 
+Pre-registered specs (2026-11-03): `e0-pilot`, `e1-action-space` (H1), `e2-fork` (H2), `e3-freshness` (H3), `e4-context` (H4), `e5-scopes` (H5), `e6-layout` (H6) and `e11-references` (Claude Code, Terminus 2 and Harbor's stock `dspy-rlm` on Opus 5.5). E1-E5 name Sonnet 5.5 provisionally: E0 picks the screening model by the rule below, and a change is recorded in `decisions.md` before their first trial. E4 and E5 run on a 20-task sample of Long-Horizon TB 2.0 with 150 steps per arm, since those tasks need far more than TB's 40 and the context mechanisms act only once a turn outgrows the budget.
+
 - The population is the TB 4.0 tasks that can start in the VM: 56 of 66, since 10 declare more than 4 CPUs or a GPU (`bench/datasets/`, G20). Tasks the oracle fails in E0a are excluded too.
 - The task is the pairing unit. Each arm runs k trials per task, giving a per-task pass fraction. Only the first k valid trials of a task count, in start order. Trials whose environment failed before the agent started are reported and not scored.
 - Fixed-size test: the exact paired Wilcoxon signed-rank test on per-task differences (as in [AgentRewind](https://arxiv.org/abs/2608.14380)), one-sided against the claim's boundary, computed over all sign assignments so ties need no approximation. Effect sizes get bootstrap 95% intervals over tasks. Holm's correction applies across a spec's claims; a claim holds when its adjusted p is below 0.05.
@@ -75,6 +77,8 @@ uv run python -m bench.matrix bench/experiments/<spec>.toml --dry-run   # each H
 uv run python -m bench.matrix bench/experiments/<spec>.toml             # runs, resumes, prunes images (G8)
 uv run python -m bench.analyze bench/experiments/<spec>.toml --out bench/results/<date>-<id>
 ```
+
+Before a paid run, `bench/experiments/smoke.toml` with `ANTHROPIC_API_KEY=<anything>` checks the whole pipeline at no cost: the first model call fails with 401, after frond has installed, parsed every arm flag, and written its export.
 
 The runner adds the egress-CA overlay, without which every task whose agent, solution or tests reach the internet fails in this VM (G7). It retries only failures before the agent starts, because Harbor reruns a retried trial under the same name and would otherwise keep the better of two attempts. Jobs go to `jobs/<id>/` (ignored by git).
 

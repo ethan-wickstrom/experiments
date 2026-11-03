@@ -33,7 +33,9 @@ from .prune import prune_while
 from .spec import BENCH, Arm, Spec, load
 
 FROND = BENCH.parent
-HARBOR = ("uvx", "--from", "harbor==0.25.0", "harbor")
+# The dspy extra and pin serve Harbor's own dspy-rlm agent (E11), which runs in Harbor's process and still passes
+# max_iterations, which DSPy renamed in 3.3. frond installs its own pinned DSPy in the task container.
+HARBOR = ("uvx", "--from", "harbor[dspy]==0.25.0", "--with", "dspy>=3.1.3,<3.3", "harbor")
 OVERLAY = BENCH / "compose" / "egress-ca.yaml"
 RETRY_ON = (  # failures before the agent runs (Harbor's "sandbox failed" class, and docker compose errors)
     "EnvironmentStartTimeoutError",

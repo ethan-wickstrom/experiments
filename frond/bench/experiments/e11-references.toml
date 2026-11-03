@@ -1,0 +1,60 @@
+# E11 (D21): external references on the same model. Claude Code and Terminus 2 show where frond stands among
+# harnesses; Harbor's stock dspy-rlm agent shows what frond's mechanisms add to the same paradigm. The claims recast
+# R1 for research: frond is no worse than Claude Code by 5 points, at lower cost.
+id = "E11"
+title = "References: frond against Claude Code, Terminus 2 and stock DSPy RLM on Opus 5.5"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = "datasets/terminal-bench@4.0.0.txt"
+exclude = [
+  "datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt",
+  "results/2026-11-03-e0a-oracle/oracle-failures.txt",
+]
+sample = 22
+trials = 2
+batch = 11
+seed = 11
+concurrency = 2
+
+[[arms]]
+name = "frond"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { effort = "high" }
+
+[[arms]]
+name = "claude-code"
+agent = "claude-code"
+model = "anthropic/claude-opus-5-5"
+
+[[arms]]
+name = "terminus-2"
+agent = "terminus-2"
+model = "anthropic/claude-opus-5-5"
+
+[[arms]]
+name = "dspy-rlm"
+agent = "dspy-rlm"
+model = "anthropic/claude-opus-5-5"
+
+[[claims]]
+id = "R1-pass"
+metric = "pass"
+treatment = "frond"
+control = "claude-code"
+kind = "non-inferiority"
+margin = 0.05
+
+[[claims]]
+id = "R1-cost"
+metric = "cost"
+treatment = "frond"
+control = "claude-code"
+kind = "ratio-below"
+bound = 1.0
+
+[[claims]]
+id = "mechanisms-pass"
+metric = "pass"
+treatment = "frond"
+control = "dspy-rlm"
+kind = "superiority"

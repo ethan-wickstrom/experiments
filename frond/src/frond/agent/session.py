@@ -116,7 +116,21 @@ class TurnRecord:
     world_after: str = ""
     head_moved: bool = False  # the turn moved git's HEAD (a commit, a checkout): /undo leaves it to git
     undone: bool = False  # /undo reverted this turn's changes
+    error_kind: str = ""  # "provider" when the model provider failed (rate limit, outage, auth), else the type
     steers: list[str] = field(default_factory=list)  # messages the user sent while the turn ran
+
+
+# Failures of the model provider, not of the agent: a run that ends on one says nothing about the harness, so research
+# exports flag it and the analysis does not score it (ledger G22). A context overflow or an invalid request is the
+# harness's own doing and stays an ordinary failure.
+PROVIDER_ERRORS: tuple[type[Exception], ...] = (
+    dspy.LMAuthError,
+    dspy.LMBillingError,
+    dspy.LMRateLimitError,
+    dspy.LMTimeoutError,
+    dspy.LMServerError,
+    dspy.LMTransportError,
+)
 
 
 def _changed(record: TurnRecord) -> bool:
@@ -613,15 +627,16 @@ class Agent:
         attachments = attachments or {}
         self.control.reset()
         record = TurnRecord(next(self._turns), request)
-        record.first_seq = self.steps.add("user", turn=record.index, output=request)
+        head = ""
+        if self.timeline is not None:
+            record.world_before, head = self.timeline.begin_turn()
+        # the turn's first world goes into the log now, so a collection never takes what it needs (ledger G21)
+        record.first_seq = self.steps.add("user", turn=record.index, output=request, world=record.world_before)
         self._current, self._step, self._steps_taken = record, 0, 0
         with self._steer_lock:
             self._steers, self._accepting_steers = [], True
-        head = ""
         self.observations.reset()
         self.scopes.reset()
-        if self.timeline is not None:
-            record.world_before, head = self.timeline.begin_turn()
         started = time.monotonic()
         self.emit(TurnStarted(record.index, request, tuple(attachments)))
         inputs = {
@@ -638,6 +653,7 @@ class Agent:
             record.status = "cancelled"
         except Exception as exc:
             record.status, record.error = "error", describe_error(exc)
+            record.error_kind = "provider" if isinstance(exc, PROVIDER_ERRORS) else type(exc).__name__
             if not isinstance(exc, (dspy.LMError, ValueError)):
                 self.emit(Notice("error", "".join(traceback.format_exception(exc, limit=-4)).rstrip()))
         finally:

@@ -1,0 +1,45 @@
+# E6, hypothesis H6: frond's per-step layout (earlier steps as turns, the latest reply cache-marked, volatile fields
+# last) cuts cost at least threefold against DSPy's stock layout, without lowering pass rate. On Opus 5.5, whose
+# cache reads cost a twentieth of input, on a subset.
+id = "E6"
+title = "H6: the per-step cache layout"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = "datasets/terminal-bench@4.0.0.txt"
+exclude = [
+  "datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt",
+  "results/2026-11-03-e0a-oracle/oracle-failures.txt",
+]
+sample = 22
+trials = 2
+batch = 11
+seed = 6
+concurrency = 2
+stop_early = true
+
+[[arms]]
+name = "chat"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { layout = "chat", effort = "high" }
+
+[[arms]]
+name = "turns"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { layout = "turns", effort = "high" }
+
+[[claims]]
+id = "H6-cost"
+metric = "cost"
+treatment = "turns"
+control = "chat"
+kind = "ratio-below"
+bound = 0.3334
+
+[[claims]]
+id = "H6-pass"
+metric = "pass"
+treatment = "turns"
+control = "chat"
+kind = "non-inferiority"
+margin = 0.05

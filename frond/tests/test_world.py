@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import stat
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
+from frond.sessions import SessionStore
 from frond.world import Entry, Store, Worktree, merge3, revert
 
 
@@ -206,6 +209,49 @@ class RevertTest(WorldCase):
         after = work.snapshot()
         self.assertNotEqual(before, after)
         self.assertEqual(revert(work, before, after).unrestorable, ["big.bin"])
+
+
+class CollectionTest(WorldCase):
+    """The store sheds what no recent session reaches, and never what a session is still building (ledger G21)."""
+
+    def age(self, oid: str, seconds: float) -> None:
+        path = self.store._path(oid)
+        then = time.time() - seconds
+        os.utime(path, (then, then))
+
+    def test_unreachable_old_objects_go_and_everything_else_stays(self):
+        self.write("kept.txt", "kept\n")
+        root = self.work.snapshot()
+        orphan = self.store.put("blob", b"nobody points here")
+        young = self.store.put("blob", b"just written")
+        for oid in (root, orphan, *(e.oid for _, e in self.store.files(root))):
+            self.age(oid, 7200)
+        freed = self.store.sweep(self.store.reachable([root]), older_than=time.time() - 3600)
+        self.assertGreater(freed, 0)
+        self.assertFalse(self.store._path(orphan).exists())
+        self.assertTrue(self.store._path(young).exists())  # too new to collect: a session may be using it
+        self.work.checkout(root)  # everything the root needs is still there
+        self.assertEqual((self.root / "kept.txt").read_text(), "kept\n")
+
+    def test_storing_an_object_again_marks_it_in_use(self):
+        oid = self.store.put("blob", b"x")
+        self.age(oid, 7200)
+        self.store.put("blob", b"x")
+        self.assertGreater(self.store._path(oid).stat().st_mtime, time.time() - 60)
+
+    def test_sessions_name_their_worlds_and_old_sessions_let_go(self):
+        base = Path(tempfile.mkdtemp(prefix="frond-sessions-"))
+        self.addCleanup(shutil.rmtree, base, True)
+        sessions = SessionStore(self.root, base)
+        sessions.directory.mkdir(parents=True)
+        (sessions.directory / "a.json").write_text(json.dumps({"turns": [{"world_before": "w1", "world_after": "w2"}]}))
+        (sessions.directory / "a.steps.jsonl").write_text(json.dumps({"seq": 1, "world": "w3"}) + "\n")
+        old = sessions.directory / "old.json"
+        old.write_text(json.dumps({"turns": [{"world_before": "w9", "world_after": "w9"}]}))
+        then = time.time() - 40 * 86400
+        os.utime(old, (then, then))
+        self.assertEqual(sessions.world_roots(), {"w1", "w2", "w3"})
+        self.assertEqual(sessions.collect(self.store, bound=10**12), 0)  # under the bound: nothing is examined
 
 
 class EntryTest(unittest.TestCase):

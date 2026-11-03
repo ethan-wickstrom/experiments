@@ -7,6 +7,7 @@ import contextlib
 import logging
 import os
 import sys
+import threading
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -245,6 +246,10 @@ def main(argv: list[str] | None = None) -> int:
         return store.steps_path(current[0])
 
     world_dir = store.directory / "world"  # shared by the workspace's sessions, so --continue can still /undo
+    if world_dir.is_dir():  # past its bound, drop what no recent session reaches (ledger G21), in the background
+        from frond.world import Store
+
+        threading.Thread(target=store.collect, args=(Store(world_dir),), name="frond-world-gc", daemon=True).start()
     if not interactive:
         return run_headless(
             args, config, workspace, prompt, lm, persist, restored, store.steps_path(session_file), world_dir
@@ -332,7 +337,9 @@ def run_headless(
         if args.export is not None:
             export_run(agent, args.export)
         agent.close()
-    return 0 if record.status == "done" else 1
+    if record.status == "done":
+        return 0
+    return 75 if record.error_kind == "provider" else 1  # 75 (EX_TEMPFAIL): the provider failed, not the agent
 
 
 def export_run(agent: Agent, directory: Path) -> None:
@@ -367,6 +374,8 @@ def export_run(agent: Agent, directory: Path) -> None:
         "turns": len(this_run),
         "steps": sum(r.steps for r in this_run),
         "continued_after_seq": agent.steps.loaded,
+        "status": this_run[-1].status if this_run else "",
+        "error_kind": this_run[-1].error_kind if this_run else "",  # "provider": not the agent's failure (G22)
         "scopes": {"opened": agent.scopes.opened, "closed": agent.scopes.closed, "abandoned": agent.scopes.abandoned},
         **agent.metrics.as_dict(),
     }
