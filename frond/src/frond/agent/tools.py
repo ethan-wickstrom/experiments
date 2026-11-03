@@ -28,6 +28,7 @@ from frond.agent.diffing import make_diff
 from frond.agent.patch import FileOp, PatchError, apply_chunks, parse_patch
 from frond.agent.policy import Policy
 from frond.agent.shell import JobManager, ShellRunner, truncate_middle
+from frond.agent.steplog import StepLog
 from frond.agent.web import fetch_text
 from frond.events import Emit, FileChanged, FileViewed, PlanItem, PlanStatus, PlanUpdated, SearchRan
 from frond.workspace import SKIP_DIRS, Workspace, fuzzy_rank
@@ -157,9 +158,11 @@ class Toolbox:
         read_only: bool = False,
         delegate: Delegate | None = None,
         checkpoints: Checkpoints | None = None,
+        memory: StepLog | None = None,
     ) -> None:
         self.ws = workspace
         self.checkpoints = checkpoints
+        self.memory = memory
         self.emit = emit
         self.shell = shell
         self._jobs = jobs
@@ -188,6 +191,8 @@ class Toolbox:
             "plan",
             "fetch",
         ]
+        if self.memory is not None:
+            names += ["history_search", "history_step"]
         if self.delegate is not None:
             names += ["subagent", "subagent_batched"]
         if self.read_only:
@@ -846,6 +851,27 @@ class Toolbox:
         except KeyError as exc:
             raise ToolError(str(exc.args[0])) from None
         return f"job {job} stopped (exit code {code})"
+
+    # ── the conversation's record ────────────────────────────────────────────
+
+    def history_search(self, query: str, k: int = 8) -> list[dict[str, Any]]:
+        """Search everything earlier in this conversation, in every turn: the user's messages, your answers, and
+        each REPL step's reasoning, code and full output, including steps folded out of the prompt. Matches words
+        and identifiers (BM25), best first. Each hit: seq (pass it to history_step), kind ("user", "step" or
+        "answer"), turn, step, headline, and the best matching line."""
+        if self.memory is None:
+            raise ToolError("there is no conversation record in this session")
+        return self.memory.search(str(query), max(1, min(int(k), 50)))
+
+    def history_step(self, seq: int) -> dict[str, Any]:
+        """One record of the conversation exactly as it was, by seq: a user message, an answer, or a step with
+        its reasoning, code and full output."""
+        if self.memory is None:
+            raise ToolError("there is no conversation record in this session")
+        record = self.memory.get(int(seq))
+        if record is None:
+            raise ToolError(f"no record {seq}; seq runs from 1 to {self.memory.last_seq}")
+        return record.public()
 
     # ── planning, web, delegation ────────────────────────────────────────────
 

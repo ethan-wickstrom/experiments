@@ -21,7 +21,7 @@ from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnControl
 from frond.agent.patch import apply_chunks, parse_patch
 from frond.agent.prompts import CodingTurn
-from frond.agent.rlm import NOTE_CODE, FrondRLM, Hooks
+from frond.agent.rlm import INDEX_MARK, NOTE_CODE, FrondRLM, Hooks, LoggedEntry
 from frond.agent.scripted import Step
 from frond.agent.session import TurnRecord
 from frond.agent.tools import ToolError
@@ -140,20 +140,25 @@ class ApprovalQueueTest(WorkspaceCase):
         self.assertEqual(sorted(v for k, v in answers.items() if k != first_title), ["no", "no"])
 
 
-class CompactionKeepsSummariesTest(WorkspaceCase):
-    def test_earlier_summary_survives_a_second_compaction(self):
+class FoldingKeepsTheIndexTest(WorkspaceCase):
+    def test_an_earlier_index_survives_a_second_fold(self):
         class TinyBudget(Hooks):
             def history_budget(self) -> int:
                 return 3000
 
         rlm = FrondRLM(CodingTurn, hooks=TinyBudget(), keep_recent=2)
-        summary = "IMPORTANT FACT: edited src/app.py:42. " * 60  # ~2.3k chars, longer than any clip
-        entries = [REPLEntry(reasoning="(compacted)", code=NOTE_CODE, output=summary)]
-        entries += [REPLEntry(reasoning=f"step {i}", code=f"print({i})", output="x" * 900) for i in range(6)]
-        compacted = rlm._compact(REPLHistory(entries=entries))
-        note = compacted.entries[0]
+        earlier = f"{INDEX_MARK}\n- step 1 · seq 2 · IMPORTANT: edited src/app.py:42 → ok"
+        entries: list[REPLEntry] = [REPLEntry(reasoning="(folded)", code=NOTE_CODE, output=earlier)]
+        entries += [
+            LoggedEntry(reasoning=f"step {i}", code=f"print({i})", output="x" * 900, seq=i + 3, step=i + 2)
+            for i in range(6)
+        ]
+        folded = rlm._fold(REPLHistory(entries=entries))
+        note = folded.entries[0]
         self.assertEqual(note.code, NOTE_CODE)
-        self.assertIn(summary.strip(), note.output)
+        self.assertIn("IMPORTANT: edited src/app.py:42", note.output)
+        self.assertIn("- step 2 · seq 3 · step 0 → xxxx", note.output)
+        self.assertEqual(len(folded.entries), 3)
 
 
 class PatchEndOfFileTest(WorkspaceCase):

@@ -24,6 +24,8 @@ from dspy.adapters.base import _expand_legacy_custom_type_markers_in_chat_messag
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
 
+VOLATILE = ("iteration", "repl_variables")  # change every step, so they go after the cached prefix
+NOTE_CODE = "# folded"  # frond.agent.rlm.NOTE_CODE (not imported: rlm imports this module's users)
 HISTORY_NOTE = (
     "Your earlier steps in this turn follow as conversation messages: each reply of yours, then the REPL's output "
     "for it."
@@ -78,7 +80,7 @@ class FrondAdapter(dspy.ChatAdapter):
         history = inputs.get("repl_history")
         if not is_action(signature, inputs) or not isinstance(history, REPLHistory) or not history.entries:
             return super().format(signature, demos, inputs)
-        context = {k: v for k, v in inputs.items() if k not in ("repl_history", "iteration")}
+        context = {k: v for k, v in inputs.items() if k not in ("repl_history", *VOLATILE)}
         first = self.format_user_message_content(signature, context)
         messages: list[dict[str, Any]] = [{"role": "system", "content": self.format_system_message(signature)}]
         messages.extend(self.format_demos(signature, demos))
@@ -87,9 +89,10 @@ class FrondAdapter(dspy.ChatAdapter):
         for i, entry in enumerate(history.entries):
             reply = {"reasoning": entry.reasoning, "code": f"```python\n{entry.code}\n```"}
             messages.append({"role": "assistant", "content": self.format_assistant_message_content(signature, reply)})
-            output = f"=== Step {i + 1} output ===\n{REPLEntry.format_output(entry.output, history.max_output_chars)}"
+            title = "Folded steps" if entry.code == NOTE_CODE else f"Step {getattr(entry, 'step', 0) or i + 1} output"
+            output = f"=== {title} ===\n{REPLEntry.format_output(entry.output, history.max_output_chars)}"
             if i == last:  # what changes every step goes after the cached prefix
-                current = {k: v for k, v in inputs.items() if k == "iteration"}
+                current = {k: v for k, v in inputs.items() if k in VOLATILE}
                 output += "\n\n" + self.format_user_message_content(signature, current, main_request=True)
             messages.append({"role": "user", "content": output})
         return [_expand_legacy_custom_type_markers_in_chat_message(message) for message in messages]

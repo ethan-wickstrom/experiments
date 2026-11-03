@@ -93,6 +93,7 @@ class ReplSession:
         self._pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="frond-tool")
         self._closed = False
         self.restarts = 0
+        self.names: list[str] = []  # what the code has defined, as of the last step (see _worker.describe_names)
 
     @property
     def tools(self) -> dict[str, Callable[..., Any]]:
@@ -306,6 +307,7 @@ class ReplSession:
             self._send(reply)
 
     def _finish(self, message: dict[str, Any], reason: str) -> Any:
+        self.names = list(message.get("names") or [])
         status = message.get("status")
         stdout = message.get("stdout") or ""
         warning = message.get("warning")
@@ -362,6 +364,10 @@ class ReplLease:
 
     def execute(self, code: str, variables: dict[str, Any] | None = None) -> Any:
         return self._session.execute(code, variables)
+
+    @property
+    def names(self) -> list[str]:
+        return self._session.names
 
     def shutdown(self) -> None:
         if not self._released:

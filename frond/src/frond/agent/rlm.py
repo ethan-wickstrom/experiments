@@ -6,8 +6,11 @@ interactive coding agent needs around each iteration:
 * events for the UI (step started, action planned, execution started/finished, sub-query progress),
 * cooperative cancellation between and during steps,
 * a tool reference with real signatures and full docstrings,
-* previews sized per variable (the whole request and workspace; the tail of the conversation), and
-* compaction of the in-turn REPL history when it grows past a budget.
+* previews sized per variable (the whole request and workspace; the tail of the conversation),
+* a line per name the code has defined, shown with each step (the namespace outlives steps and turns),
+* a record of every step in the conversation's step log, and
+* folding of the in-turn history when it grows past a budget: early steps become one index line each, and
+  nothing is lost, because the step log keeps them whole for ``history_step`` and ``history_search``.
 """
 
 from __future__ import annotations
@@ -29,7 +32,24 @@ from dspy.utils.exceptions import format_error_for_lm
 from frond.agent.tools import display_signature
 
 ERROR_PREFIXES = ("[Error]", "[Type Error]")
-NOTE_CODE = "# compacted"
+NOTE_CODE = "# folded"
+INDEX_MARK = "Index of the folded steps (oldest first):"
+FOLD_GUIDE = (
+    "Earlier steps of this turn were folded to keep the prompt within budget. Nothing was lost: "
+    "history_step(seq) returns any step's reasoning, code and full output exactly as they were, and "
+    "history_search('words') finds anything said, written or printed earlier, in this turn or before."
+)
+REPL_VARIABLES_DESC = (
+    "Names your code has defined in the REPL so far, with their types and sizes. They persist across steps "
+    "and turns, so reuse them instead of recomputing."
+)
+
+
+class LoggedEntry(REPLEntry):
+    """A history entry that knows where the step log keeps it whole."""
+
+    seq: int | None = None
+    step: int = 0
 
 
 class Hooks:
@@ -54,11 +74,15 @@ class Hooks:
     def subquery_progress(self, query_id: int, total: int, done: int) -> None: ...
 
     def history_budget(self) -> int:
-        """Characters of REPL history to keep in the prompt before compacting."""
+        """Characters of REPL history to keep in the prompt before folding early steps into an index."""
         return 400_000
 
-    def summarize(self, text: str) -> str | None:
-        """Summarise compacted steps (None: fall back to mechanical truncation)."""
+    def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
+        """Keep a step in the step log; returns its sequence number (None: no log)."""
+        return None
+
+    def preview(self, name: str, value: Any) -> str | None:
+        """A custom preview for input variable ``name`` (None: the default)."""
         return None
 
     def compacted(self, steps: int, before: int, after: int) -> None: ...
@@ -108,11 +132,20 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             field_info = self.signature.input_fields.get(name)
             limit = self.preview_limits.get(name, 1000)
             var = REPLVariable.from_value(name, value, field_info=field_info, preview_chars=limit)
-            if name in self.tail_preview and isinstance(value, str) and len(value) > limit:
+            custom = self.hooks.preview(name, value)
+            if custom is not None:
+                var = var.model_copy(update={"preview": custom})
+            elif name in self.tail_preview and isinstance(value, str) and len(value) > limit:
                 preview = f"… (earlier text omitted; print({name}) for all of it)\n" + value[-limit:]
                 var = var.model_copy(update={"preview": preview})
             variables.append(var)
         return variables
+
+    def _action_signature_for_current_factory(self, factory: Any, sub_agent_rules: str) -> type[dspy.Signature]:
+        signature = super()._action_signature_for_current_factory(factory, sub_agent_rules)
+        if "repl_variables" in signature.input_fields:
+            return signature
+        return signature.append("repl_variables", dspy.InputField(desc=REPL_VARIABLES_DESC), type_=str)
 
     # ── sub-LLM tools with progress events ───────────────────────────────────
 
@@ -189,15 +222,17 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
     ) -> Prediction | REPLHistory:
         hooks = self.hooks
         hooks.check()
-        history = self._compact(history)
+        history = self._fold(history)
         step = iteration + 1
         hooks.step_started(step, self.max_iters)
         hooks.before_lm(step)
+        names = getattr(repl, "names", None)
         action = self.generate_action(
             signature=self._action_signature_for_current_factory(interpreter_factory, sub_agent_rules),
             variables_info=[v.format() for v in variables],
             repl_history=history,
             iteration=f"{step}/{self.max_iters}",
+            repl_variables="\n".join(names) if names else "(none yet)",
         )
         hooks.after_lm(step)
         reasoning = str(action.reasoning or "")
@@ -208,7 +243,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             hooks.step_planned(step, reasoning, code)
             error = f"[Error] {format_error_for_lm(exc)}"
             hooks.exec_finished(step, error, error, 0.0, False)
-            return self._process_execution_result(action, code, error, history, output_field_names)
+            outcome = self._process_execution_result(action, code, error, history, output_field_names)
+            return self._logged(outcome, step, reasoning, code)
         hooks.step_planned(step, reasoning, code)
         hooks.check()
         hooks.exec_started(step)
@@ -221,50 +257,67 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         else:
             output = outcome.entries[-1].output
             hooks.exec_finished(step, output, output if output.startswith(ERROR_PREFIXES) else None, duration, False)
-        return outcome
+        return self._logged(outcome, step, reasoning, code)
+
+    def _logged(self, outcome: Prediction | REPLHistory, step: int, reasoning: str, code: str) -> Any:
+        """Record the step in the step log, and tag its history entry with the record's sequence number."""
+        if isinstance(outcome, Prediction):
+            self.hooks.record_step(step, reasoning, code, "(the turn ended here: SUBMIT)", False)
+            return outcome
+        last = outcome.entries[-1]
+        seq = self.hooks.record_step(step, reasoning, code, last.output, last.output.startswith(ERROR_PREFIXES))
+        entry = LoggedEntry(reasoning=last.reasoning, code=last.code, output=last.output, seq=seq, step=step)
+        return REPLHistory(entries=[*outcome.entries[:-1], entry], max_output_chars=outcome.max_output_chars)
 
     def _extract_fallback(
         self, variables: list[REPLVariable], history: REPLHistory, output_field_names: list[str]
     ) -> Prediction:
         self.hooks.check()
         self.hooks.before_lm(None)
-        prediction = super()._extract_fallback(variables, self._compact(history), output_field_names)
+        prediction = super()._extract_fallback(variables, self._fold(history), output_field_names)
         self.hooks.after_lm(None)
         return prediction
 
-    def _compact(self, history: REPLHistory) -> REPLHistory:
+    def _fold(self, history: REPLHistory) -> REPLHistory:
+        """Past the budget, replace all but the latest steps with one index line each (seq, headline, outcome).
+
+        Folding instead of summarising keeps the prompt honest: the index says only what each step was and points
+        at the full record, and nothing the model has not seen is presented as fact. Steps are folded in bulk,
+        so the prompt's cached prefix is invalidated rarely.
+        """
         budget = self.hooks.history_budget()
         before = len(history.format())
         if before <= budget or len(history.entries) <= self.keep_recent:
             return history
-        entries = list(history.entries)
-        old, recent = entries[: -self.keep_recent], entries[-self.keep_recent :]
-        # Summaries from earlier compactions are kept whole: clipping them would silently drop what they carry.
-        shrunk = [
-            e
-            if e.code == NOTE_CODE
-            else REPLEntry(reasoning=_clip(e.reasoning, 600), code=_clip(e.code, 1500), output=_clip(e.output, 800))
-            for e in old
-        ]
-        compacted = REPLHistory(entries=shrunk + recent, max_output_chars=history.max_output_chars)
-        if len(compacted.format()) > budget:
-            earlier = [e.output for e in old if e.code == NOTE_CODE]
-            steps = [(i, e) for i, e in enumerate(old) if e.code != NOTE_CODE]
-            transcript = "\n".join(
-                ["Summary of even earlier steps:\n" + text for text in earlier]
-                + [e.format(index=i, max_output_chars=4000) for i, e in steps]
-            )
-            summary = self.hooks.summarize(transcript)
-            if summary is None:
-                summary = "\n".join(
-                    [*earlier]
-                    + [f"- step {i + 1}: {_clip(e.reasoning, 200)} → {_clip(e.output.strip(), 200)}" for i, e in steps]
-                )
-            note = REPLEntry(
-                reasoning=f"(steps 1-{len(old)} were compacted to save context)",
-                code=NOTE_CODE,
-                output="Summary of the earlier steps of this turn:\n" + summary,
-            )
-            compacted = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
-        self.hooks.compacted(len(old), before, len(compacted.format()))
-        return compacted
+        old, recent = list(history.entries[: -self.keep_recent]), list(history.entries[-self.keep_recent :])
+        lines: list[str] = []
+        for entry in old:
+            if entry.code == NOTE_CODE:
+                lines.extend(entry.output.split(INDEX_MARK, 1)[-1].strip().splitlines())
+            else:
+                lines.append(_index_line(entry))
+        note = REPLEntry(
+            reasoning=f"({len(lines)} earlier steps of this turn are folded into an index)",
+            code=NOTE_CODE,
+            output=f"{FOLD_GUIDE}\n{INDEX_MARK}\n" + "\n".join(lines),
+        )
+        folded = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
+        self.hooks.compacted(len(old), before, len(folded.format()))
+        return folded
+
+
+def _first_line(text: str, limit: int) -> str:
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith("Output ("):
+            return line if len(line) <= limit else line[: limit - 1] + "…"
+    return "(no output)"
+
+
+def _index_line(entry: REPLEntry) -> str:
+    seq = getattr(entry, "seq", None)
+    step = getattr(entry, "step", 0)
+    where = f"seq {seq}" if seq is not None else "not in the step log"
+    outcome = _first_line(entry.output, 100)
+    failed = " [failed]" if entry.output.startswith(ERROR_PREFIXES) else ""
+    return f"- step {step or '?'} · {where} · {_first_line(entry.reasoning, 120)} → {outcome}{failed}"

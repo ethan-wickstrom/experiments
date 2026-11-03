@@ -167,13 +167,14 @@ def main(argv: list[str] | None = None) -> int:
         store.save(session_file, records, model)
 
     if not interactive:
-        return run_headless(args, config, workspace, prompt, lm, persist, restored)
+        return run_headless(args, config, workspace, prompt, lm, persist, restored, store.steps_path(session_file))
 
     from frond.tui.app import App
     from frond.tui.style import detect_color_mode
 
     app = App(workspace, model=model, sub_model=sub_model, color_mode=detect_color_mode(), note=note)
     agent = Agent(config, workspace, app.emit, approver=app.approver, lm=lm, sub_lm=lm, persist=persist)
+    agent.attach_log(store.steps_path(session_file))
     app.attach(agent)
     if restored:
         agent.restore(restored)
@@ -212,6 +213,7 @@ def run_headless(
     lm: dspy.LM | None,
     persist: Callable[[list[TurnRecord]], None] | None = None,
     restored: list[TurnRecord] | None = None,
+    log_path: Path | None = None,
 ) -> int:
     from frond.agent.session import Agent
     from frond.printer import Printer
@@ -223,6 +225,8 @@ def run_headless(
         return 2
     printer = Printer(json_mode=args.json, verbose=args.verbose)
     agent = Agent(config, workspace, printer, lm=lm, sub_lm=lm, persist=persist)
+    if log_path is not None:
+        agent.attach_log(log_path)
     if restored:
         agent.restore(restored)
     try:

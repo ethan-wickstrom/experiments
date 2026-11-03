@@ -34,6 +34,7 @@ from frond.agent.prompts import CodingTurn, Investigation
 from frond.agent.repl import ReplPool
 from frond.agent.rlm import FrondRLM, Hooks
 from frond.agent.shell import JobManager, ShellRunner
+from frond.agent.steplog import StepLog
 from frond.agent.streaming import StreamSink, SubmitStreamer
 from frond.agent.tools import Delegate, Toolbox
 from frond.events import (
@@ -93,6 +94,8 @@ class TurnRecord:
     files: list[str] = field(default_factory=list)
     commands: list[str] = field(default_factory=list)
     error: str | None = None
+    first_seq: int = 0  # the turn's records in the step log: its message, steps and answer
+    last_seq: int = 0
 
 
 def format_history(records: list[TurnRecord]) -> str:
@@ -100,6 +103,8 @@ def format_history(records: list[TurnRecord]) -> str:
     for r in records:
         parts.append(f"### turn {r.index} · user\n{r.request}")
         meta = [r.status, f"{r.steps} step{'s' if r.steps != 1 else ''}"]
+        if r.last_seq:
+            meta.append(f"log seq {r.first_seq}-{r.last_seq}")
         if r.files:
             files = ", ".join(dict.fromkeys(r.files))
             meta.append(f"changed {files[:400]}")
@@ -111,6 +116,36 @@ def format_history(records: list[TurnRecord]) -> str:
         }.get(r.status, "(no reply)")
         parts.append(f"### turn {r.index} · frond ({' · '.join(meta)})\n{reply}")
     return "\n\n".join(parts)
+
+
+MAX_VERBATIM_REQUESTS = 8_000
+
+
+def history_preview(records: list[TurnRecord], formatted: str, limit: int) -> str | None:
+    """The conversation's preview: every user message verbatim, then as much of the latest turns as fits.
+
+    A summary or a tail-only window drops the user's instructions about how to work far more often than what to
+    build (arXiv 2610.31778), so the user's own words always stay in view, and frond's replies give way first.
+    """
+    if not records:
+        return None
+    requests = [f"[turn {r.index}] {r.request.strip()}" for r in records]
+    shown: list[str] = []
+    used = 0
+    for text in reversed(requests):
+        if used + len(text) > MAX_VERBATIM_REQUESTS and shown:
+            break
+        shown.insert(0, text)
+        used += len(text) + 1
+    head = "The user's messages so far, verbatim (oldest first):\n"
+    if len(shown) < len(requests):
+        head += f"({len(requests) - len(shown)} earlier ones are in `history` and history_search())\n"
+    head += "\n".join(shown)
+    room = max(0, limit - len(head) - 80)
+    tail = formatted[-room:] if room else ""
+    if len(formatted) > room:
+        tail = f"… (earlier turns omitted; print(history) for all of them)\n{tail}"
+    return f"{head}\n\nThe latest turns:\n{tail}"
 
 
 def describe_error(exc: BaseException) -> str:
@@ -161,8 +196,16 @@ class _RootHooks(Hooks):
         window = self.agent.window or 200_000
         return int(min(window * 0.45, 150_000) * 3.6)
 
-    def summarize(self, text: str) -> str | None:
-        return self.agent._summarize(text)
+    def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
+        turn = self.agent._current.index if self.agent._current else 0
+        return self.agent.steps.add(
+            "step", turn=turn, step=step, reasoning=reasoning, code=code, output=output, error=error
+        )
+
+    def preview(self, name: str, value: Any) -> str | None:
+        if name != "history" or not isinstance(value, str):
+            return None
+        return history_preview(self.agent.history, value, self.agent.rlm.preview_limits.get("history", 12_000))
 
     def compacted(self, steps: int, before: int, after: int) -> None:
         self.agent.emit(Compacted(steps, before, after))
@@ -184,6 +227,19 @@ class _SubHooks(Hooks):
     def step_planned(self, step: int, reasoning: str, code: str) -> None:
         first = next((line.strip() for line in reasoning.splitlines() if line.strip()), "working")
         self.agent.emit(SubAgentProgress(self.agent_id, step, first))
+
+    def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
+        turn = self.agent._current.index if self.agent._current else 0
+        return self.agent.steps.add(
+            "step",
+            turn=turn,
+            step=step,
+            scope=f"sub{self.agent_id}",
+            reasoning=reasoning,
+            code=code,
+            output=output,
+            error=error,
+        )
 
 
 class Agent:
@@ -224,6 +280,7 @@ class Agent:
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)
         self.jobs = JobManager(self.log_dir, self.emit)
         self.checkpoints = Checkpoints()
+        self.steps = StepLog()  # every message, step and answer; attach_log() keeps it on disk
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -232,6 +289,7 @@ class Agent:
             policy=self.policy,
             delegate=Delegate(self._run_subagent, self._run_subagents),
             checkpoints=self.checkpoints,
+            memory=self.steps,
         )
         self.pool = ReplPool(
             workspace.root,
@@ -347,6 +405,7 @@ class Agent:
         attachments = attachments or {}
         self.control.reset()
         record = TurnRecord(next(self._turns), request)
+        record.first_seq = self.steps.add("user", turn=record.index, output=request)
         self._current, self._step, self._steps_taken = record, 0, 0
         self.checkpoints.begin(record.index)
         started = time.monotonic()
@@ -371,6 +430,8 @@ class Agent:
             self._current = None
         record.steps = self._steps_taken
         record.duration = time.monotonic() - started
+        answer = record.response or record.error or f"(turn {record.status})"
+        record.last_seq = self.steps.add("answer", turn=record.index, output=answer, error=record.status == "error")
         self.history.append(record)
         self._save()
         self.workspace.invalidate()
@@ -407,6 +468,7 @@ class Agent:
             policy=self.policy,
             scope=scope,
             read_only=True,
+            memory=self.steps,
         )
         rlm = FrondRLM(
             Investigation,
@@ -451,21 +513,6 @@ class Agent:
         except Exception as exc:
             return f"[ERROR] {exc}"
 
-    def _summarize(self, transcript: str) -> str | None:
-        prompt = (
-            "Summarise these earlier steps of a coding agent's work so it can continue without them. Keep every "
-            "concrete fact it will need: files read or changed (with line numbers), commands run and their results, "
-            "errors seen, decisions made, and what remains to do. Be terse.\n\n" + transcript[-200_000:]
-        )
-        try:
-            with dspy.context(send_stream=None):
-                out = self.sub_lm(prompt)
-            first = out[0] if isinstance(out, list) and out else out
-            text = first.get("text") if isinstance(first, dict) else first
-            return str(text) if text else None
-        except Exception:
-            return None
-
     # ── housekeeping ─────────────────────────────────────────────────────────
 
     def undo(self) -> str:
@@ -496,6 +543,10 @@ class Agent:
         self.history.append(TurnRecord(next(self._turns), "/undo", f"(the user {summary})", "done"))
         self._save()
         return summary
+
+    def attach_log(self, path: Path) -> None:
+        """Keep the step log in ``path`` (beside the session file), loading what an earlier session recorded."""
+        self.steps.attach(path)
 
     def restore(self, records: list[TurnRecord]) -> None:
         """Continue an earlier conversation: the agent sees its turns (the REPL starts fresh)."""

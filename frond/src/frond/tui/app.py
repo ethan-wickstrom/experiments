@@ -392,8 +392,8 @@ class App:
                 self.add(
                     NoticeBlock(
                         "info",
-                        f"compacted {steps} earlier steps of this turn "
-                        f"({before // 1000}k → {after // 1000}k chars) to stay within context",
+                        f"folded {steps} earlier steps of this turn into an index "
+                        f"({before // 1000}k → {after // 1000}k chars); the step log keeps them whole",
                     )
                 )
             case ev.Notice(level=level, text=text):

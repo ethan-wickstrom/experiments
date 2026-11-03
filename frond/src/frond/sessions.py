@@ -30,6 +30,11 @@ class SessionStore:
         stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
         return self.directory / f"{stamp}-{os.getpid()}.json"
 
+    @staticmethod
+    def steps_path(session_file: Path) -> Path:
+        """Where the session's step log lives: every message, step and answer, one JSON line each."""
+        return session_file.with_name(session_file.stem + ".steps.jsonl")
+
     def latest(self) -> Path | None:
         if not self.directory.is_dir():
             return None

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+import inspect
 import io
 import itertools
 import json
@@ -32,6 +33,7 @@ import tempfile
 import threading
 import time
 import traceback
+import types
 from typing import Any
 
 PROTOCOL = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
@@ -44,6 +46,8 @@ os.close(_devnull)
 MAX_CAPTURE = 2_000_000
 STREAM_INTERVAL = 0.05
 REPR_LIMIT = 4000
+MAX_NAMES = 40
+RESERVED = {"SUBMIT", "ToolError"}
 _send_lock = threading.Lock()
 
 
@@ -390,10 +394,52 @@ class Session:
             sys.stdout, sys.stderr = _ORIGINAL_STREAMS
             capture.flush()
         result["stdout"] = capture.value()
+        result["names"] = self.describe_names(set(request.get("variables") or {}))
         leaked = [t.name for t in set(threading.enumerate()) - threads_before if t.is_alive() and not t.daemon]
         if leaked:
             result["warning"] = f"code left threads running: {', '.join(leaked)}; join them before a step ends"
         return result
+
+    def describe_names(self, inputs: set[str]) -> list[str]:
+        """One short line per name the code has defined: what later steps (and turns) can still use."""
+        lines: list[str] = []
+        names = [
+            name
+            for name, value in self.namespace.items()
+            if not name.startswith("_")
+            and name not in inputs
+            and name not in self.tool_names
+            and name not in RESERVED
+            and not isinstance(value, types.ModuleType)
+        ]
+        lines.extend(describe(name, self.namespace[name]) for name in names[:MAX_NAMES])
+        if len(names) > MAX_NAMES:
+            lines.append(f"… and {len(names) - MAX_NAMES} more (print(dir()) lists them)")
+        return lines
+
+
+def describe(name: str, value: Any) -> str:
+    kind = type(value).__name__
+    try:
+        if value is None or isinstance(value, (bool, int, float, complex)):
+            return f"{name} = {value!r}"
+        if isinstance(value, str):
+            return f"{name} = {value!r}" if len(value) <= 60 else f"{name}: str, {len(value):,} chars"
+        if inspect.isclass(value):
+            return f"{name}: class"
+        if inspect.isfunction(value) or inspect.ismethod(value):
+            return f"{name}{inspect.signature(value)}: function"
+        shape = getattr(value, "shape", None)
+        if isinstance(shape, tuple):
+            return f"{name}: {kind}, shape {shape}"
+        if isinstance(value, dict):
+            keys = ", ".join(repr(k) for k in list(value)[:4])
+            return f"{name}: dict, {len(value):,} keys ({keys}{', …' if len(value) > 4 else ''})"
+        if hasattr(value, "__len__"):
+            return f"{name}: {kind}, {len(value):,} items"
+    except Exception:  # a value whose len() or signature fails still gets a line
+        pass
+    return f"{name}: {kind}"
 
 
 def make_stub(session: Session, name: str, doc: str, signature: str) -> Any:
