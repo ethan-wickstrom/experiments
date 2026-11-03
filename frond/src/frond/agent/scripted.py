@@ -13,7 +13,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import dspy
 from dspy._vendor.lm15.types import StreamDeltaEvent, StreamEndEvent, StreamStartEvent, TextDelta
@@ -47,6 +47,13 @@ class ToolStep:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class CutOff:
+    """A scripted reply that stops at the output limit (finish reason "length"), as a runaway reply does (G38)."""
+
+    text: str
+
+
 def _request_text(request: Request) -> str:
     parts = []
     if request.system is not None:
@@ -62,14 +69,14 @@ def _request_text(request: Request) -> str:
 class ScriptedEngine:
     def __init__(
         self,
-        steps: Sequence[Step | ToolStep | str] | None = None,
+        steps: Sequence[Step | ToolStep | CutOff | str] | None = None,
         *,
         chunk: int = 7,
         delay: float = 0.0,
         sub_answer: Callable[[str], str] | None = None,
         after_script: Callable[[str], Step] | None = None,
     ) -> None:
-        self.steps: list[Step | ToolStep | str] = list(steps or [])
+        self.steps: list[Step | ToolStep | CutOff | str] = list(steps or [])
         self.chunk = max(1, chunk)
         self.delay = delay
         self.sub_answer = sub_answer or (lambda prompt: "OK")
@@ -77,11 +84,16 @@ class ScriptedEngine:
         self.requests: list[Request] = []
         self._lock = threading.Lock()
 
-    def add(self, *steps: Step | ToolStep | str) -> None:
+    def add(self, *steps: Step | ToolStep | CutOff | str) -> None:
         with self._lock:
             self.steps.extend(steps)
 
-    def _completion(self, request: Request) -> str:
+    def _reply(self, request: Request) -> tuple[str, Literal["stop", "length"]]:
+        """The completion for ``request`` and its finish reason."""
+        text = self._completion(request)
+        return (text.text, "length") if isinstance(text, CutOff) else (text, "stop")
+
+    def _completion(self, request: Request) -> str | CutOff:
         text = _request_text(request)
         with self._lock:
             self.requests.append(request)
@@ -92,7 +104,7 @@ class ScriptedEngine:
                     step = self.after_script(text)
                 else:
                     step = Step("The script is finished.", "SUBMIT(response='(end of script)')")
-                return step if isinstance(step, str) else step.render()
+                return step if isinstance(step, str | CutOff) else step.render()
             if "[[ ## repl_history ## ]]" in text:  # the extract fallback: answer its output fields directly
                 block = re.search(r"Your output fields are:\n((?:\d+\. `\w+`[^\n]*\n?)+)", text)
                 names = re.findall(r"`(\w+)`", block.group(1)) if block else ["response"]
@@ -111,23 +123,23 @@ class ScriptedEngine:
         )
 
     def complete(self, request: Request) -> Response:
-        text = self._completion(request)
+        text, finish = self._reply(request)
         return Response(
             id="scripted",
             model="frond-scripted",
             message=Message.assistant([TextPart(text)]),
-            finish_reason="stop",
+            finish_reason=finish,
             usage=self._usage(request, text),
         )
 
     def stream(self, request: Request) -> Iterator[object]:
-        text = self._completion(request)
+        text, finish = self._reply(request)
         yield StreamStartEvent(id="scripted", model="frond-scripted")
         for i in range(0, len(text), self.chunk):
             if self.delay:
                 time.sleep(self.delay)
             yield StreamDeltaEvent(delta=TextDelta(text=text[i : i + self.chunk]))
-        yield StreamEndEvent(finish_reason="stop", usage=self._usage(request, text))
+        yield StreamEndEvent(finish_reason=finish, usage=self._usage(request, text))
 
     def close(self) -> None:
         pass

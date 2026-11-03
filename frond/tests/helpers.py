@@ -11,7 +11,7 @@ from typing import Any, ClassVar
 
 from frond.agent.control import TurnControl
 from frond.agent.policy import Approver, Mode, Policy
-from frond.agent.scripted import ScriptedEngine, Step, ToolStep, scripted_lm
+from frond.agent.scripted import CutOff, ScriptedEngine, Step, ToolStep, scripted_lm
 from frond.agent.session import Agent, AgentConfig
 from frond.agent.shell import JobManager, ShellRunner
 from frond.agent.tools import Toolbox
@@ -75,7 +75,7 @@ class TurnUndo:
 
 def scripted_agent(
     case: WorkspaceCase,
-    steps: Sequence[Step | ToolStep | str],  # a str is a raw reply, as the engine takes it
+    steps: Sequence[Step | ToolStep | CutOff | str],  # a str is a raw reply, as the engine takes it
     *,
     delay: float = 0.0,
     max_steps: int = 10,

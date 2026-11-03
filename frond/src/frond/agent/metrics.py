@@ -21,10 +21,12 @@ class RunMetrics:
     parse_failures: int = 0  # replies that did not follow the field protocol (protocol adherence, B2)
     parse_recovered: int = 0  # of those, replies whose action was recovered unambiguously (G34)
     unparsed_steps: int = 0  # replies that could not be recovered: the step showed the model an error (G34)
+    cut_off_replies: int = 0  # of those, replies that had reached the output limit (G38)
     # the same three for sub-agents' replies, which come from the sub-model and so are kept apart (F51)
     sub_parse_failures: int = 0
     sub_parse_recovered: int = 0
     sub_unparsed_steps: int = 0
+    sub_cut_off_replies: int = 0
     syntax_errors: int = 0  # code that did not compile
     stale_actions: int = 0  # edits, writes and deletes of files changed since the model read them (H3, B5)
     compactions: int = 0  # times early steps were folded or summarised to fit the budget (H4, A5)
@@ -63,9 +65,11 @@ class RunMetrics:
             "parse_failures": self.parse_failures,
             "parse_recovered": self.parse_recovered,
             "unparsed_steps": self.unparsed_steps,
+            "cut_off_replies": self.cut_off_replies,
             "sub_parse_failures": self.sub_parse_failures,
             "sub_parse_recovered": self.sub_parse_recovered,
             "sub_unparsed_steps": self.sub_unparsed_steps,
+            "sub_cut_off_replies": self.sub_cut_off_replies,
             "syntax_errors": self.syntax_errors,
             "stale_actions": self.stale_actions,
             "compactions": self.compactions,
