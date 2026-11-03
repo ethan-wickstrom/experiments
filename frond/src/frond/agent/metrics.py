@@ -32,7 +32,8 @@ class RunMetrics:
     compactions: int = 0  # times early steps were folded or summarised to fit the budget (H4, A5)
     summaries: int = 0  # LLM summary calls made by the summary context policy (H4)
     provider_errors: int = 0  # provider failures in sub-agents and llm_query, which the turn survived (F47)
-    refusal: str = ""  # the category of the provider refusal that ended the turn, if one did (G43)
+    refusal: str = ""  # category of the provider refusal that ended the turn (G43); "uncategorized" if none (G46)
+    refusal_explanation: str = ""  # the provider's explanation of that refusal, if it gave one (G46)
     tool_calls: Counter[str] = field(default_factory=Counter)
     tool_failures: Counter[str] = field(default_factory=Counter)  # calls that raised: the model got an error back
     forks: list[list[dict[str, Any]]] = field(default_factory=list)  # each FORK's branches: outcome, steps (H2)
@@ -78,6 +79,7 @@ class RunMetrics:
             "summaries": self.summaries,
             "provider_errors": self.provider_errors,
             "refusal": self.refusal,
+            "refusal_explanation": self.refusal_explanation,
             "tool_calls": dict(sorted(self.tool_calls.items())),
             "tool_failures": dict(sorted(self.tool_failures.items())),
             "failed_edits": sum(self.tool_failures[n] for n in ("edit", "patch", "write")),

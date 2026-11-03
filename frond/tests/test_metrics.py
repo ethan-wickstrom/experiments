@@ -147,6 +147,25 @@ class RefusalTest(WorkspaceCase):
         self.assertEqual(agent.metrics.refusal, "reasoning_extraction")
         self.assertEqual(len(engine.requests), 1)
 
+    def test_a_streamed_refusal_keeps_its_category_and_explanation(self):  # G46: stop_details sits under delta
+        from types import SimpleNamespace
+
+        delta = {"stop_reason": "refusal", "stop_details": {"category": "general_harms", "explanation": "Declined."}}
+        refusal = SimpleNamespace(provider_data={"type": "message_delta", "delta": delta})
+        agent, _ = scripted_agent(self, ["", Step("Never reached.", "SUBMIT(response='ok')")])
+        with mock.patch("frond.agent.rlm._call_of", return_value=("content_filter", refusal)):
+            agent.run_turn("go")
+        self.assertEqual((agent.metrics.refusal, agent.metrics.refusal_explanation), ("general_harms", "Declined."))
+
+    def test_a_refusal_without_details_is_still_counted(self):  # G46
+        from types import SimpleNamespace
+
+        refusal = SimpleNamespace(provider_data={"type": "message_delta", "delta": {"stop_reason": "refusal"}})
+        agent, _ = scripted_agent(self, ["", Step("Never reached.", "SUBMIT(response='ok')")])
+        with mock.patch("frond.agent.rlm._call_of", return_value=("content_filter", refusal)):
+            record = agent.run_turn("go")
+        self.assertEqual((record.error_kind, agent.metrics.refusal), ("provider", "uncategorized"))
+
 
 class FenceTest(WorkspaceCase):
     def test_an_answer_with_a_code_block_is_not_cut_at_its_inner_fence(self):  # G42: seen on Opus, Sonnet and Haiku

@@ -234,10 +234,15 @@ def _call_of(completion: str) -> tuple[Any, Any]:
     return None, None
 
 
-def _refusal_category(response: Any) -> str:
+def _refusal_details(response: Any) -> tuple[str, str]:
+    """A refusal's category and explanation from the provider's ``stop_details``: on the message for a whole
+    response, under ``delta`` in the ``message_delta`` frame a stream ends with (G46)."""
     data = getattr(response, "provider_data", None)
-    details = data.get("stop_details") if isinstance(data, dict) else None
-    return str(details.get("category") or "") if isinstance(details, dict) else ""
+    for holder in (data, data.get("delta") if isinstance(data, dict) else None):
+        details = holder.get("stop_details") if isinstance(holder, dict) else None
+        if isinstance(details, dict):
+            return str(details.get("category") or ""), str(details.get("explanation") or "")
+    return "", ""
 
 
 def _finish_reason(response: Any, index: int) -> Any:
@@ -645,7 +650,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         completion = "" if empty_reply(exc) else str(exc.lm_response or "")
         finish, response = _call_of(completion)
         if finish == "content_filter":  # declined by the provider's classifier: retrying would be declined too (G43)
-            raise Refused(_refusal_category(response)) from exc
+            raise Refused(*_refusal_details(response)) from exc
         cut_off = finish == "length"
         hooks.reply_unparsed(step, cut_off)
         reply = _clip(without_markers(completion), 4_000) or "(an empty reply)"
