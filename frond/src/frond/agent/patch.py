@@ -30,6 +30,8 @@ class Chunk:
     ops: list[tuple[str, str]] = field(default_factory=list)  # (" " | "-" | "+", text)
     eof: bool = False
     line_hint: int | None = None  # unified diffs: the old start line, used to place pure insertions
+    old_no_newline: bool = False  # "\ No newline at end of file" after the old side's last line
+    new_no_newline: bool = False  # ... after the new side's last line
 
     @property
     def old(self) -> list[str]:
@@ -121,8 +123,10 @@ def _add_line(chunk: Chunk, line: str) -> None:
         chunk.ops.append((line[0], line[1:]))
     elif line == "":
         chunk.ops.append((" ", ""))
-    elif line.startswith("\\"):
-        pass  # "\ No newline at end of file"
+    elif line.startswith("\\"):  # "\ No newline at end of file" applies to the line just before it
+        last = chunk.ops[-1][0] if chunk.ops else " "
+        chunk.old_no_newline = chunk.old_no_newline or last in " -"
+        chunk.new_no_newline = chunk.new_no_newline or last in " +"
     else:
         raise PatchError(f"hunk line must start with ' ', '+' or '-': {line!r}")
 
@@ -158,7 +162,8 @@ def _parse_unified(text: str) -> list[FileOp]:
                 i += 1
             if src == "/dev/null":
                 body = [line for c in chunks for line in c.new]
-                ops.append(FileOp("add", _strip_prefix(dst), content="\n".join(body) + ("\n" if body else "")))
+                newline = bool(body) and not (chunks and chunks[-1].new_no_newline)
+                ops.append(FileOp("add", _strip_prefix(dst), content="\n".join(body) + ("\n" if newline else "")))
             elif dst == "/dev/null":
                 ops.append(FileOp("delete", _strip_prefix(src)))
             else:
@@ -200,6 +205,7 @@ def apply_chunks(original: str, chunks: list[Chunk], path: str) -> str:
         lines.pop()
     eol = "\r" if "\r\n" in original else ""  # added lines follow the file's line endings
     replacements: list[tuple[int, int, list[str]]] = []
+    ends_with_newline: bool | None = None  # set when a hunk at the end of the file says how it should end
     pos = 0
     for n, chunk in enumerate(chunks, 1):
         if chunk.anchor:
@@ -217,6 +223,8 @@ def apply_chunks(original: str, chunks: list[Chunk], path: str) -> str:
             else:
                 at = len(lines)
             replacements.append((at, 0, [text + eol for op, text in ops if op == "+"]))
+            if at == len(lines) and (chunk.old_no_newline or chunk.new_no_newline):
+                ends_with_newline = not chunk.new_no_newline
             pos = at
             continue
         idx = _seek(lines, old, pos, chunk.eof)
@@ -238,8 +246,17 @@ def apply_chunks(original: str, chunks: list[Chunk], path: str) -> str:
             else:
                 replacement.append(text + eol)
         replacements.append((idx, len(old), replacement))
+        if idx + len(old) == len(lines) and (chunk.old_no_newline or chunk.new_no_newline):
+            ends_with_newline = not chunk.new_no_newline
         pos = idx + len(old)
     for idx, length, new in sorted(replacements, key=lambda r: r[0], reverse=True):
         lines[idx : idx + length] = new
+    # Without a "\ No newline at end of file" marker the file keeps its own ending: patches written by a model
+    # rarely carry the marker, so its absence is not taken as a request to add a newline.
+    if ends_with_newline is None:
+        ends_with_newline = had_newline or not original
+    if eol and lines and lines[-1]:
+        last = lines[-1].removesuffix("\r")
+        lines[-1] = last + "\r" if ends_with_newline else last
     out = "\n".join(lines)
-    return out + "\n" if had_newline or not original else out
+    return out + "\n" if ends_with_newline else out

@@ -159,6 +159,7 @@ class ShellRunner:
         assert proc.stdout is not None
         fd = proc.stdout.fileno()
         exited_at: float | None = None
+        output_closed = False
         try:
             with open(log_path, "w", encoding="utf-8") as log:
                 while True:
@@ -171,11 +172,19 @@ class ShellRunner:
                         status = "timeout"
                         kill_group(proc)
                         break
+                    if output_closed:
+                        # EOF means nothing holds the pipe any more, not that the command has exited (it may
+                        # have closed or redirected its output); keep waiting, with cancel and timeout in force.
+                        if proc.poll() is not None:
+                            break
+                        time.sleep(0.05)
+                        continue
                     ready, _, _ = select.select([fd], [], [], 0.05)
                     if ready:
                         data = os.read(fd, 65536)
                         if not data:
-                            break
+                            output_closed = True
+                            continue
                         text = decoder.decode(data)
                         log.write(text)
                         if size < MAX_MEMORY_CHARS:
@@ -197,11 +206,10 @@ class ShellRunner:
                     chunks.append(tail)
                     pending += tail
         finally:
+            if proc.poll() is None:  # only after an unexpected error: every normal exit has reaped or killed it
+                kill_group(proc)
             with self._lock:
                 self._active.discard(proc)
-            if proc.poll() is None and status == "ok":
-                with contextlib.suppress(subprocess.TimeoutExpired):
-                    proc.wait(timeout=5)
             with contextlib.suppress(OSError):
                 proc.stdout.close()
         if pending:

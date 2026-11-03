@@ -64,6 +64,10 @@ class Policy:
         if not inside_workspace:
             self._ask("Write outside the workspace", str(path), key=f"write:{path}")
 
+    def check_delete_tree(self, path: Path, detail: str) -> None:
+        """Deleting a directory and its contents asks first, as ``rm -rf`` does."""
+        self._ask("Delete a directory and its contents", detail, key=f"rmtree:{path}")
+
     def check_command(self, command: str) -> None:
         if self.mode == "readonly":
             raise PermissionError("frond is in read-only mode: commands are disabled")

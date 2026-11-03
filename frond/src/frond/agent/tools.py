@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -229,8 +230,18 @@ class Toolbox:
         self.policy.check_write(p, self.ws.is_inside(p))
 
     def _remember(self, p: Path) -> None:
+        """Checkpoint the file a change writes to (through a symbolic link, the file it points to)."""
         if self.checkpoints is not None:
             self.checkpoints.record(p.resolve() if p.is_symlink() else p)
+
+    def _remember_entry(self, p: Path) -> None:
+        """Checkpoint ``p`` itself before it is deleted or moved away: a symbolic link as a link."""
+        if self.checkpoints is None:
+            return
+        if p.is_symlink():
+            self.checkpoints.record_link(p, os.readlink(p))
+        else:
+            self.checkpoints.record(p)
 
     def _commit(self, p: Path, display: str, old: str | None, new: str) -> tuple[int, int]:
         target = p.resolve() if p.is_symlink() else p
@@ -411,19 +422,50 @@ class Toolbox:
         if glob:
             args += ["--glob", glob]
         args += ["-e", pattern, "--", str(base)]
-        try:
-            proc = subprocess.run(
-                args, cwd=self.ws.root, capture_output=True, timeout=60, check=False, stdin=subprocess.DEVNULL
+        timed_out = threading.Event()
+        # ripgrep's output is read as it streams and the search is stopped at the limit: a broad pattern in a
+        # large repository prints far more than was asked for. stderr goes to a file so it cannot fill a pipe.
+        with tempfile.TemporaryFile() as errors:
+            proc = subprocess.Popen(
+                args, cwd=self.ws.root, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=errors
             )
-        except subprocess.TimeoutExpired:
-            raise ToolError("grep timed out after 60s; narrow the path or glob") from None
-        if proc.returncode == 2 and not proc.stdout:
-            raise ToolError(proc.stderr.decode(errors="replace").strip() or "ripgrep failed")
+
+            def expire() -> None:
+                timed_out.set()
+                proc.kill()
+
+            timer = threading.Timer(60, expire)
+            timer.start()
+            try:
+                items, truncated, saw_output = self._read_rg(proc, context, max_results)
+            finally:
+                timer.cancel()
+                if proc.poll() is None:
+                    proc.kill()
+                if proc.stdout is not None:
+                    proc.stdout.close()
+                proc.wait()
+            if timed_out.is_set():
+                raise ToolError("grep timed out after 60s; narrow the path or glob")
+            if proc.returncode == 2 and not saw_output:
+                errors.seek(0)
+                raise ToolError(errors.read().decode(errors="replace").strip() or "ripgrep failed")
+        return items, truncated
+
+    def _read_rg(
+        self, proc: subprocess.Popen[bytes], context: int, max_results: int
+    ) -> tuple[list[dict[str, Any]], bool, bool]:
+        """Collect matches from ripgrep's JSON stream. Returns (matches, stopped at the limit, any output)."""
         items: list[dict[str, Any]] = []
         pending_before: list[list[Any]] = []
-        truncated = False
-        for raw in proc.stdout.splitlines():
-            msg = json.loads(raw)
+        saw_output = False
+        assert proc.stdout is not None
+        for raw in proc.stdout:
+            saw_output = True
+            try:
+                msg = json.loads(raw)
+            except ValueError:
+                break  # a line cut short because the search was stopped
             kind = msg.get("type")
             if kind not in {"match", "context"}:
                 if kind == "end":
@@ -435,8 +477,7 @@ class Toolbox:
             line = data["line_number"]
             if kind == "match":
                 if len(items) >= max_results:
-                    truncated = True
-                    break
+                    return items, True, saw_output
                 items.append({"path": rel, "line": line, "text": text, "before": pending_before, "after": []})
                 pending_before = []
             elif (
@@ -449,7 +490,7 @@ class Toolbox:
                 items[-1]["after"].append([line, text])
             else:
                 pending_before = [*pending_before, [line, text]][-context:] if context else []
-        return items, truncated
+        return items, False, saw_output
 
     def _grep_py(
         self,
@@ -646,7 +687,7 @@ class Toolbox:
             for op, p, old, new in planned:
                 display = self.ws.rel(p)
                 if op.kind == "delete":
-                    self._remember(p)
+                    self._remember_entry(p)
                     p.unlink()
                     diff = make_diff(old or "", "", display, deleted=True)
                     self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))
@@ -655,7 +696,7 @@ class Toolbox:
                 assert new is not None
                 if op.move_to:
                     dest = self._path(op.move_to)
-                    self._remember(p)
+                    self._remember_entry(p)
                     self._remember(dest)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     os.replace(p, dest)
@@ -686,6 +727,8 @@ class Toolbox:
             if not recursive:
                 raise ToolError(f"{display} is a directory; pass recursive=True to delete it and its contents")
             count = sum(1 for _ in p.rglob("*"))
+            if count:
+                self.policy.check_delete_tree(p, f"{display}/ ({count} {'entry' if count == 1 else 'entries'})")
             if self.checkpoints is not None:
                 self.checkpoints.record_tree(p)
             shutil.rmtree(p)
@@ -716,7 +759,7 @@ class Toolbox:
             if s.is_dir():
                 self.checkpoints.record_move(s, d)
             else:
-                self._remember(s)
+                self._remember_entry(s)
                 self._remember(d)
         d.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(s), str(d))

@@ -464,7 +464,8 @@ class App:
                 found[rel] = f"(directory with {len(entries)} entries)\n" + "\n".join(entries[:300])
                 continue
             try:
-                data = path.read_bytes()[: min(budget, 200_000) + 1]
+                with path.open("rb") as f:  # never more than the cap, however large the file is
+                    data = f.read(min(budget, 200_000) + 1)
             except OSError:
                 continue
             if b"\0" in data[:8192]:

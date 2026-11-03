@@ -108,7 +108,7 @@ class WritingTest(WorkspaceCase):
         self.assertTrue((self.root / "pkg/mod.py").read_text().endswith("return 7\n"))
 
     def test_delete_and_move(self):
-        tools = self.toolbox()
+        tools = self.toolbox(approver=lambda title, detail: "yes")  # recursive deletes ask first
         tools.move("pkg/mod.py", "lib/mod.py")
         self.assertTrue((self.root / "lib/mod.py").exists())
         with self.assertRaisesRegex(ToolError, "recursive=True"):

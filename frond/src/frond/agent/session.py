@@ -257,6 +257,7 @@ class Agent:
         self._steps_taken = 0
         self._stream_step: int | None = None
         self._thread: threading.Thread | None = None
+        self._turn_over = threading.Event()  # set just before a turn emits TurnFinished
         self._closed = False
         if self.window is None:  # started last: the lookup thread reports through emit(), which needs the above
             threading.Thread(target=self._lookup_window, name="frond-window", daemon=True).start()
@@ -306,8 +307,14 @@ class Agent:
 
     def start_turn(self, request: str, attachments: dict[str, str] | None = None) -> None:
         """Run a turn on a background thread. Raises RuntimeError if one is already running."""
+        previous = self._thread
+        if previous is not None and self._turn_over.is_set() and previous is not threading.current_thread():
+            # TurnFinished is the last thing a turn emits, so a UI that starts the next queued turn on seeing it
+            # can get here before that thread has returned. It is moments from exiting; wait for it.
+            previous.join(timeout=2.0)
         if self.busy:
             raise RuntimeError("a turn is already running")
+        self._turn_over.clear()
         self._thread = threading.Thread(
             target=self.run_turn, args=(request, attachments or {}), name="frond-turn", daemon=True
         )
@@ -356,6 +363,7 @@ class Agent:
         self.history.append(record)
         self._save()
         self.workspace.invalidate()
+        self._turn_over.set()
         self.emit(
             TurnFinished(record.index, record.response, record.status, record.error, record.duration, record.steps)
         )

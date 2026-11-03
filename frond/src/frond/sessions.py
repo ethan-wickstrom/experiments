@@ -6,7 +6,6 @@ not the REPL's memory: variables do not survive a restart, but the agent knows w
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import datetime as dt
 import hashlib
@@ -49,9 +48,11 @@ class SessionStore:
             "saved": dt.datetime.now().isoformat(timespec="seconds"),
             "turns": [dataclasses.asdict(r) for r in records],
         }
-        path.parent.mkdir(parents=True, exist_ok=True)
+        # Conversations can contain code and secrets, so the folder and every file are private from the start.
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(fd, 0o600)  # a leftover .tmp from an older save keeps its mode otherwise
+            f.write(json.dumps(payload, indent=1))
         os.replace(tmp, path)
-        with contextlib.suppress(OSError):
-            path.chmod(0o600)  # conversations can contain code and secrets

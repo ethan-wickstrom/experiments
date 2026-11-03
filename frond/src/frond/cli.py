@@ -113,7 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         from frond.agent.scripted import ScriptedEngine, Step
 
         spec = json.loads(args.script.read_text())
-        steps = [Step(s["reasoning"], s["code"]) for s in spec.get("steps", spec if isinstance(spec, list) else [])]
+        entries = spec if isinstance(spec, list) else spec.get("steps", [])
+        steps = [Step(s["reasoning"], s["code"]) for s in entries]
         delay = float(spec.get("delay", 0.01)) if isinstance(spec, dict) else 0.01
         lm = scripted_lm(ScriptedEngine(steps, chunk=6, delay=delay if interactive else 0.0))
         model = sub_model = "frond/scripted"
