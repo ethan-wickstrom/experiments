@@ -153,6 +153,7 @@ class ReplSession:
         self._tools: dict[str, Callable[..., Any]] = {}
         self.output_fields: list[dict[str, Any]] | None = None
         self.max_branches = 1  # FORK is defined in the REPL when this is 2 or more (ledger B7)
+        self._copies: list[ReplSession] = []  # forked from this one: shut down with it (F22)
         self._proc: _Process | None = None
         self._forks: socket.socket | None = None  # where this session sends a forked worker its channel (B6)
         self._inbox: queue.Queue[dict[str, Any] | None] = queue.Queue()
@@ -250,6 +251,8 @@ class ReplSession:
                 stderr.close()
             raise CodeInterpreterError(f"Python worker failed to start: {detail or repr(ready)}")
         self.confinement = str(ready.get("sandbox") or "")
+        if ready.get("scratch"):  # a copy's own TMPDIR, removed at its shutdown however it ended (F23)
+            self._scratch = str(ready["scratch"])
 
     def _pump(self, proc: _Process) -> None:
         assert proc.stdout is not None
@@ -336,9 +339,14 @@ class ReplSession:
             )
             copy._tools = dict(self._tools)
             copy.output_fields = self.output_fields
+            # FORK stays defined, so a branch that follows its prompt (the main line's, kept whole for the cache)
+            # gets the host's refusal instead of a NameError (F31)
+            copy.max_branches = self.max_branches
             copy.names = list(self.names)
             copy.unconfined_reason = self.unconfined_reason
             copy._attach(_Forked(int(reply["pid"]), mine))
+            self._copies = [c for c in self._copies if not c._closed]
+            self._copies.append(copy)
             return copy
         finally:
             self._exec_lock.release()
@@ -352,6 +360,8 @@ class ReplSession:
         if self._closed:
             return
         self._closed = True
+        for copy in self._copies:  # copies run in process groups of their own, which killing this one misses (F22)
+            copy.shutdown()
         if self._proc is not None and self._proc.poll() is None:
             with contextlib.suppress(Exception):
                 self._send({"type": "shutdown"})

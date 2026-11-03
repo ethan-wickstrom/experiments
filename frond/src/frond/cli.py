@@ -381,7 +381,8 @@ def export_run(agent: Agent, directory: Path) -> None:
     with open(directory / "calls.jsonl", "w", encoding="utf-8") as f:
         roles = [("main", agent.lm)] + ([("sub", agent.sub_lm)] if agent.sub_lm is not agent.lm else [])
         for role, lm in roles:
-            for record in call_records(lm, role, agent.metrics.branch_calls if lm is agent.lm else None):
+            branches = agent.metrics.branch_calls if lm is agent.lm else agent.metrics.sub_branch_calls  # F30
+            for record in call_records(lm, role, branches):
                 f.write(redact.json(record) + "\n")
     this_run = [r for r in agent.history if r.first_seq > agent.steps.loaded]
     metrics = {

@@ -76,11 +76,67 @@ class ForkTest(test_containment.WorkerCase):
         self.assertFalse(_alive(pid))  # reaped by the original worker, not left a zombie
         self.assertEqual(session.execute("print(x)"), "1\n")
 
+    def test_the_original_takes_its_running_copies_down_with_it(self):  # Devin, #14 (F22)
+        session = self.start()
+        copy = self.fork(session)
+        pid = copy.pid
+        runner = threading.Thread(target=lambda: _quietly(copy.execute, "while True:\n    pass"), daemon=True)
+        runner.start()
+        time.sleep(0.3)
+        session.shutdown()
+        assert pid is not None
+        self.assertTrue(_gone(pid), "a copy outlived its original's shutdown")
+
+    def test_a_copy_dies_with_its_original_worker_even_if_the_host_does_not_ask(self):  # F22: the host crashed
+        if not sys.platform.startswith("linux"):
+            self.skipTest("PR_SET_PDEATHSIG is Linux's")
+        session = self.start()
+        copy = self.fork(session)
+        pid, original = copy.pid, session.pid
+        assert pid is not None and original is not None
+        os.kill(original, 9)
+        self.assertTrue(_gone(pid), "a copy outlived its original worker")
+
+    def test_a_copys_scratch_space_goes_when_it_does(self):  # Devin, #14 (F23)
+        session = self.start()
+        copy = self.fork(session)
+        scratch = Path(copy.execute("import tempfile\nprint(tempfile.gettempdir())").strip())
+        copy.execute(f"open({str(scratch / 'big.bin')!r}, 'wb').write(b'x' * 1000)")
+        self.assertTrue(scratch.is_dir())
+        copy.shutdown()
+        self.assertFalse(scratch.exists())
+        self.assertEqual(session.execute("print(1)"), "1\n")
+
+    def test_no_fork_while_the_agents_threads_run(self):  # Devin, #14 (F24): a lock they hold would stay held
+        session = self.start()
+        session.execute(
+            "import threading, time\n"
+            "t = threading.Thread(target=time.sleep, args=(30,), name='poller', daemon=True)\n"
+            "t.start()"
+        )
+        with self.assertRaisesRegex(Exception, "threads your code started are still running \\(poller\\)"):
+            session.fork()
+        self.assertEqual(session.execute("print(t.is_alive())"), "True\n")  # the original is untouched
+
     def test_a_copy_cannot_fork_again(self):
         session = self.start()
         copy = self.fork(session)
         with self.assertRaisesRegex(Exception, "cannot fork"):
             copy.fork()
+
+
+def _quietly(fn, *args) -> None:
+    try:
+        fn(*args)
+    except Exception:
+        pass
+
+
+def _gone(pid: int, wait: float = 5.0) -> bool:
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline and _alive(pid):
+        time.sleep(0.05)
+    return not _alive(pid)
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "the Linux sandboxes")
