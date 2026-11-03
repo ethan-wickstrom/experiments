@@ -425,3 +425,13 @@ Each stays closed unless new evidence reopens it:
 - Decision: a paid experiment runs from `git worktree add /home/user/run-<id> <merge commit>`, whose `frond/jobs` is a symlink to the main checkout's `frond/jobs`. Development goes on in the main checkout meanwhile.
 - Why: an experiment like E0 runs for hours, and each Harbor job builds frond from the tree it runs in. The runner now refuses a changed source between jobs (G35), but a refusal stops the experiment; a worktree no edit reaches lets work continue alongside it. The shared `jobs/` keeps every trial where the spending guard counts it (D43) and where the analysis and later sessions look.
 - Rejected: pausing development while an experiment runs (hours lost per experiment); a copy of the tree instead of a worktree (no commit to name in the results); a separate `jobs/` per worktree (the guard would not count the other's spending).
+
+## D47 · E0 runs one trial per model, cheapest first; the variance trials move to E0b on the screening model (2026-11-03, active)
+- Decision: E0 runs its 10 tasks once on each of Haiku 5.5, Sonnet 5.5 and Opus 5.5, in that order. The 2 further trials per task that measure variance (E0b) run on the screening model E0 picks, under a spec committed once the model is known. `bench/budget.toml`'s per-trial guesses rise to $5 (Opus), $2.50 (Sonnet) and $0.15 (Haiku) at 40 steps.
+- Why:
+  - the second paid smoke spent $0.70 on 3 Opus steps at high effort: 27k output tokens, 17.6k of them thinking, against the 2k a step `research.md` assumed. Even if later steps of a 40-step run are half that size, an Opus trial costs about $5, so E0's 30 Opus trials would have cost about $150 of a $100 grant;
+  - the old guess ($2) would have let the runner start that job, and the Console limit would have stopped it midway, with neither cheaper arm run (the failure D43 was written to prevent);
+  - E1–E5 run on the screening model, so it is that model's variance, not Opus's, that sizes them. Measuring it on Opus was the wrong model as well as the costliest;
+  - cheapest first: each arm's measured cost tightens the guard's estimate before the next, costlier arm starts.
+- Rejected: E0 as pre-registered (over the grant); lowering Opus's effort to fit (D26 fixes high effort; it would change the model being measured); fewer tasks per model (10 is already the least that tells a 20–80% pass rate from the ends); asking the owner for more money before any measurement (the request would rest on a guess; E0's costs are what the program's budget request needs).
+- Consequence: E0 plans $76.50 on the guesses. The program's budget request (now.md) follows E0, from measured costs; E0b may need it.

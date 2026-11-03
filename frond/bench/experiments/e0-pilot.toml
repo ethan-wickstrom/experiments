@@ -1,11 +1,13 @@
 # E0: the pilot (ledger E0, research.md). Descriptive, so no claims: it measures what the comparative experiments
-# need. Protocol adherence (parse failures, code that did not compile), real cache reads per call, failed edits,
-# within- and between-task variance of pass rate (to size E1-E6), cost per run, and pass rates on three models to
-# choose the screening model (the cheapest whose pass rate sits between 20% and 80%).
-# Budget (REQ-1, $100 cap): about $45 on Opus (30 runs), $8 on Sonnet, under $1 on Haiku; frond's 40-step cap
-# bounds the worst case near $85.
+# need. Protocol adherence (parse failures, recovered and unparsed replies, code that did not compile), real cache
+# reads per call, failed edits, cost per run, and pass rates on three models to choose the screening model (the
+# cheapest whose pass rate sits between 20% and 80%). The within-task variance that sizes E1-E6 comes from E0b, on
+# the screening model (D47).
+# Order: cheapest first, so each model's cost is measured before the next, costlier arm starts (D43, D47).
+# Budget: the second paid smoke cost $0.23 per Opus step at high effort (D47), so about $5 per 40-step Opus trial;
+# on the guesses in bench/budget.toml this spec plans $76.50 against the $100 grant.
 id = "E0"
-title = "Pilot: protocol adherence, cache reads, variance, and the screening model"
+title = "Pilot: protocol adherence, cache reads, cost, and the screening model"
 dataset = "terminal-bench/terminal-bench@4.0.0"
 tasks = "datasets/terminal-bench@4.0.0.txt"
 exclude = [
@@ -19,11 +21,10 @@ batch = 10
 concurrency = 2
 
 [[arms]]
-name = "opus"
+name = "haiku"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-opus-5-5"
-trials = 3
-options = { effort = "high" }
+model = "anthropic/claude-haiku-5-5"
+options = { effort = "default" }  # effort is not assumed supported on Haiku 5.5
 
 [[arms]]
 name = "sonnet"
@@ -32,7 +33,7 @@ model = "anthropic/claude-sonnet-5-5"
 options = { effort = "high" }
 
 [[arms]]
-name = "haiku"
+name = "opus"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-haiku-5-5"
-options = { effort = "default" }  # effort is not assumed supported on Haiku 5.5
+model = "anthropic/claude-opus-5-5"
+options = { effort = "high" }

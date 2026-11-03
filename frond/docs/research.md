@@ -51,7 +51,7 @@ Pre-registered specs (2026-11-03): `e0-pilot`, `e1-action-space` (H1), `e2-fork`
 - Sequential decisions: after every batch, each pass-rate claim's betting confidence sequence ([Waudby-Smith and Ramdas](https://arxiv.org/abs/2010.09686)) is read. It holds at all looks at once, so stopping as soon as a claim is decided keeps the error below alpha. A fixed-size test read after every batch would not. Specs opt in with `stop_early = true`, and then every claim is decided by a rule valid at the stop (D41): a pass-rate claim by its sequence, any other claim by its fixed-size p-value times the planned looks times the claims; the sequences use alpha split across the claims.
 - Validity: a trial whose recorded configuration contradicts its arm is not scored (D41). A jobs directory holds one version of its spec and of frond's source, and every trial installs the dependency versions in `uv.lock` (D42).
 - Batches alternate the order of arms (ABBA), so drift in the API or the VM falls on every arm alike.
-- Sample size comes from E0's within-task and between-task variance, which the analysis reports. Before E0, the estimate at 56 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
+- Sample size comes from E0b's within-task and between-task variance on the screening model, which the analysis reports (D47). Before E0, the estimate at 56 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
 
 ## Cost model and screening
 
@@ -63,9 +63,9 @@ List prices per million tokens (D24):
 | Sonnet 5.5 | $2 | $10 | $0.20 | $2.50 |
 | Haiku 5.5 | $0.10 | $0.50 | about $0.01 | about $0.13 |
 
-An estimated TB 4.0 run takes 25 steps. Each step reads about 30k cached tokens, writes about 1.5k and outputs about 2k. That is about $1.50 per run on Opus 5.5, $0.80 on Sonnet 5.5 and under $0.05 on Haiku 5.5. E0 replaces these estimates with measurements.
+An estimated TB 4.0 run takes 25 steps. Each step reads about 30k cached tokens, writes about 1.5k and outputs about 2k. That is about $1.50 per run on Opus 5.5, $0.80 on Sonnet 5.5 and under $0.05 on Haiku 5.5. The first measurement was higher: 3 Opus steps at high effort output 27k tokens, 17.6k of them thinking, for $0.70 (D47). E0 replaces these estimates with measurements.
 
-Screening protocol: run each hypothesis first on the cheapest model whose TB 4.0 pass rate sits between 20% and 80%, where differences are visible. Confirm the winners on Opus 5.5. E0 measures pass rates for all three models on a 10-task subset to choose the screening model.
+Screening protocol: run each hypothesis first on the cheapest model whose TB 4.0 pass rate sits between 20% and 80%, where differences are visible. Confirm the winners on Opus 5.5. E0 measures pass rates for all three models on a 10-task subset, one trial each, to choose the screening model.
 
 ## Running
 
