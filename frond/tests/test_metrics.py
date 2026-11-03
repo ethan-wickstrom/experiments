@@ -97,11 +97,15 @@ class ParseFailureTest(unittest.TestCase):
             # Codex, #27: a fenced action and an invoked one; running only the second would drop the first
             'Read it:\n```python\nread("app.py")\n```\n<invoke name="python"><parameter name="code">'
             'write("app.py", "x")</parameter></invoke>',
+            # Devin, #27 (F50): a repeated parameter, and text in the call that is no parameter, could hide an action
+            '<invoke name="python"><parameter name="code">write("a", "1")</parameter>'
+            '<parameter name="code">write("b", "2")</parameter></invoke>',
+            '<invoke name="python">write("a", "1")<parameter name="code">print(1)</parameter></invoke>',
         ]
         for reply in replies:
             with self.assertRaises(AdapterParseError, msg=reply):
                 adapter.parse(self.signature(), reply)
-        self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (5, 0))
+        self.assertEqual((metrics.parse_failures, metrics.parse_recovered), (7, 0))
 
 
 class UnparsedStepTest(WorkspaceCase):
@@ -121,6 +125,22 @@ class UnparsedStepTest(WorkspaceCase):
                 second = "\n".join(m.text or "" for m in engine.requests[1].messages)
                 self.assertIn("did not follow the step format", second)
                 self.assertIn("Let me think about this first.", second)  # its own words, in the right format
+
+    def test_a_sub_agents_replies_count_apart_from_the_main_models(self):  # Devin, #27 (F51): another model
+        steps: list[Step | ToolStep | str] = [
+            Step("Delegate.", "print(subagent('look around'))"),
+            "Let me check.",  # the sub-agent's first reply: nothing to run
+            "Looking now:\n```python\nprint(1)\n```",  # recovered
+            Step("The sub-agent reports.", "SUBMIT(report='seen')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, _ = scripted_agent(self, steps)
+        record = agent.run_turn("go")
+        self.assertEqual((record.status, record.response), ("done", "ok"))
+        counts = agent.metrics.as_dict()
+        self.assertEqual((counts["parse_failures"], counts["parse_recovered"], counts["unparsed_steps"]), (0, 0, 0))
+        sub = (counts["sub_parse_failures"], counts["sub_parse_recovered"], counts["sub_unparsed_steps"])
+        self.assertEqual(sub, (2, 1, 1))
 
 
 class UsageTotalsTest(unittest.TestCase):
