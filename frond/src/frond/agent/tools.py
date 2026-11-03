@@ -831,7 +831,11 @@ class Toolbox:
         self.ws.invalidate()
         if timeline is not None and before:
             self._show_command_changes(timeline, before, timeline.snapshot(new_ignored=True))
-        output = truncate_middle(result.output, MAX_OUTPUT_CHARS, note=f"; full output in {result.log_path}")
+        output = truncate_middle(
+            result.output,
+            MAX_OUTPUT_CHARS,
+            note=f"; the full output is in {result.log_path}: grep it, or view a range of it",
+        )
         return {
             "__frond__": "command",
             "command": command,
@@ -880,7 +884,11 @@ class Toolbox:
         result = self.shell.run(command, cwd=workdir, timeout=timeout, scope=self.scope, sandboxed=True)
         if result.exit_code == SANDBOX_UNAVAILABLE and result.output.startswith("frond-sandbox:"):
             raise PermissionError(result.output.strip())
-        output = truncate_middle(result.output, MAX_OUTPUT_CHARS, note=f"; full output in {result.log_path}")
+        output = truncate_middle(
+            result.output,
+            MAX_OUTPUT_CHARS,
+            note=f"; the full output is in {result.log_path}: grep it, or view a range of it",
+        )
         return {
             "__frond__": "command",
             "command": command,
