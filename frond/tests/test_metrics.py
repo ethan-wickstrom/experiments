@@ -205,6 +205,16 @@ class UnparsedStepTest(WorkspaceCase):
         self.assertEqual(_finish_reason(litellm, 1), "length")
         self.assertIsNone(_finish_reason(None, 0))
 
+    def test_a_reply_cut_off_before_any_text_is_named_and_counted(self):  # G45: Haiku, thinking until the limit
+        agent, engine = scripted_agent(self, [CutOff(""), Step("Smaller.", "SUBMIT(response='ok')")])
+        record = agent.run_turn("go")
+        self.assertEqual((record.status, record.response), ("done", "ok"))
+        second = "\n".join(m.text or "" for m in engine.requests[1].messages)
+        self.assertIn("reached the output limit and was cut off", second)
+        self.assertNotIn("None", second.split("reached the output limit")[0][-200:])  # no "None" for its words
+        counts = (agent.metrics.parse_failures, agent.metrics.unparsed_steps, agent.metrics.cut_off_replies)
+        self.assertEqual(counts, (1, 1, 1))
+
     def test_a_sub_agents_replies_count_apart_from_the_main_models(self):  # Devin, #27 (F51): another model
         steps: list[Step | ToolStep | str] = [
             Step("Delegate.", "print(subagent('look around'))"),

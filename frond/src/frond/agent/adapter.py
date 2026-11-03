@@ -26,6 +26,7 @@ from dspy.adapters.base import _expand_legacy_custom_type_markers_in_chat_messag
 from dspy.adapters.chat_adapter import field_header_pattern
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
+from dspy.utils.exceptions import AdapterParseError
 
 # The field in which each step's reply says what the step does: a short note for the user, not the model's thinking,
 # which stays in its thinking blocks. Asking for reasoning in the output is what Anthropic's classifiers decline as
@@ -149,6 +150,11 @@ PARAMETER = re.compile(r'<parameter name="([^"]*)">(.*?)</parameter>', re.DOTALL
 FENCE = re.compile(r"^[ \t]*```(?:python3?|py)?[ \t]*\n(.*?)\n[ \t]*```[ \t]*$", re.DOTALL | re.MULTILINE)
 
 
+def empty_reply(exc: AdapterParseError) -> bool:
+    """Whether DSPy raised for a reply with no text: it reports it as the string "None" (G45)."""
+    return str(exc.lm_response or "").strip() in ("", "None")
+
+
 def without_markers(text: str) -> str:
     """``text`` without the lines that are field markers, which only the protocol's own replies may carry."""
     return "\n".join(line for line in text.splitlines() if not field_header_pattern.match(line.strip())).strip()
@@ -257,7 +263,14 @@ class FrondAdapter(dspy.ChatAdapter):
             and (index := last_reply_index(demos, history)) is not None
         ):
             lm_kwargs = {**lm_kwargs, "prompt_cache": CacheConfig(prefix_until_index=index)}
-        return super().__call__(lm, lm_kwargs, signature, demos, inputs)
+        try:
+            return super().__call__(lm, lm_kwargs, signature, demos, inputs)
+        except AdapterParseError as exc:
+            # A reply with no text (cut off at the output limit while thinking, or refused) fails in DSPy before
+            # parse() is called; it is off the protocol all the same (G45)
+            if self.metrics is not None and empty_reply(exc):
+                self.metrics.bump(f"{self.counters}parse_failures")
+            raise
 
     def format(
         self,
