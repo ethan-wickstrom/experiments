@@ -50,11 +50,21 @@ _wheel: Path | None = None
 
 
 def build_wheel() -> Path:
-    """Build frond's wheel once per process."""
+    """Build frond's wheel once per process, with ``constraints.txt`` beside it: every dependency pinned to the version
+    in ``uv.lock``. Installing under those constraints gives every trial the same versions, where a plain install would
+    resolve them from PyPI at install time and could differ between trials of one experiment (G31)."""
     global _wheel
     if _wheel is None or not _wheel.exists():
         out = Path(tempfile.mkdtemp(prefix="frond-wheel-"))
         subprocess.run(["uv", "build", "--wheel", "--out-dir", str(out), str(PROJECT)], check=True, capture_output=True)
+        subprocess.run(
+            [
+                "uv", "export", "--project", str(PROJECT), "--frozen", "--no-dev", "--no-hashes", "--no-emit-project",
+                "--format", "requirements-txt", "--output-file", str(out / "constraints.txt"),
+            ],
+            check=True,
+            capture_output=True,
+        )  # fmt: skip
         _wheel = next(out.glob("frond-*.whl"))
     return _wheel
 
@@ -172,14 +182,16 @@ class Frond(BaseInstalledAgent):
     async def install(self, environment: BaseEnvironment) -> None:
         wheel = build_wheel()
         await self.ensure_system_dependencies(environment, ("curl", "ca_certificates"))
-        target = f"/tmp/{wheel.name}"
+        target, constraints = f"/tmp/{wheel.name}", "/tmp/frond-constraints.txt"
         await environment.upload_file(wheel, target)
+        await environment.upload_file(wheel.parent / "constraints.txt", constraints)
         await self.exec_as_agent(
             environment,
             command=(
                 "set -euo pipefail; "
                 "command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh; "
-                f"{PATH}; uv tool install --force --python 3.12 {shlex.quote(target)}; frond --version"
+                f"{PATH}; uv tool install --force --python 3.12 --constraints {constraints} {shlex.quote(target)}; "
+                "frond --version"
             ),
         )
 

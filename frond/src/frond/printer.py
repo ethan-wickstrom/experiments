@@ -51,7 +51,9 @@ class Printer:
     def __call__(self, event: ev.Event) -> None:
         if self.json_mode:
             payload = {"type": type(event).__name__, **dataclasses.asdict(event)}
-            print(self.redact(json.dumps(payload, default=str)), file=self.out, flush=True)
+            as_json = getattr(self.redact, "json", None)  # a Redactor redacts the data, not its JSON (F11)
+            line = as_json(payload) if as_json is not None else self.redact(json.dumps(payload, default=str))
+            print(line, file=self.out, flush=True)
             if isinstance(event, ev.TurnFinished):
                 self.final = event
             return

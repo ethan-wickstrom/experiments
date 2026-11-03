@@ -1,6 +1,6 @@
 # Now
 
-Updated 2026-11-03, first session: every hypothesis H1–H6 has both arms, every experiment is pre-registered, and E0a is rerunning under a fixed Docker daemon.
+Updated 2026-11-03, first session: every hypothesis H1–H6 has both arms and every experiment is pre-registered; E0a is rerunning under a fixed Docker daemon; 49 review findings are being verified and fixed; the owner granted $100 for E0 and the program.
 
 ## In flight
 
@@ -8,15 +8,16 @@ E0a, the oracle sweep, is in its fourth run, started 10:30 UTC. The third run sc
 
 ## Next, in order (research-first, D16)
 
-1. E0, as soon as REQ-1 arrives: `bench/experiments/e0-pilot.toml`. First run `smoke.toml` with the real key's environment (free: it stops at the first call only with a bad key; with a real one it is one short run).
-2. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), sample sizes from the variance, and the program's budget (a new REQ).
-3. E1–E6 and E11 in the order in `research.md`.
-4. B13 (a TUI world view of branches and scopes), B17 (stop latency).
+1. The review findings in the ledger (F1–F49), batch by batch. Done: the bench and the analysis (F2–F11, F47). Next, the ones in frond's default configuration, which E0 measures: freshness (F16–F21), the turn's snapshots and undo (F12–F15), the store's collection (F45, F46). Then each arm's mechanism: FORK and the forkable REPL (F22–F31), the tools arm (F32–F37, F48), scopes (F38–F40), and the rest.
+2. E0, as soon as REQ-1 arrives: `bench/experiments/e0-pilot.toml`. First run `smoke.toml` with the real key's environment (free: it stops at the first call only with a bad key; with a real one it is one short run).
+3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), sample sizes from the variance, and the program's budget (a new REQ).
+4. E1–E6 and E11 in the order in `research.md`.
+5. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner
 
-- REQ-1: an Anthropic API key with a $100 cap. It unblocks E0, estimated at $45–75.
-- REQ-3: Devin's unposted findings on PR #2. Low priority.
+- REQ-1: the owner granted $100 and key creation on 2026-11-03; only the Console can create a key. Once `ANTHROPIC_API_KEY` is in this environment's settings (in a Console workspace with a $100 spend limit), a new session sees it: run `smoke.toml`, then E0. The runner stops before any job that could pass `bench/budget.toml`'s cap (D43).
+- REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12), visible only in the owner's Devin account. Low priority.
 
 ## Facts a fresh session needs
 

@@ -40,6 +40,17 @@ class RedactorTest(unittest.TestCase):
         text = "def skip_tokens(sk): return sk  # AKIA is a prefix, not a key"
         self.assertEqual(Redactor({})(text), text)
 
+    def test_data_is_redacted_before_it_becomes_json(self):  # F11
+        quoted, accented = 'pa"ss\\word-long', "contraseña-secreta"
+        redact = Redactor({"SERVICE_TOKEN": "12345678", "DB_PASSWORD": quoted, "API_SECRET": accented})
+        record = {"input_tokens": 12345678, "note": f"{quoted} and {accented}", quoted: "as a key"}
+        text = redact.json(record)
+        loaded = json.loads(text)  # a number equal to a secret stays a number, and the JSON stays valid
+        self.assertEqual(loaded["input_tokens"], 12345678)
+        self.assertEqual(loaded["note"], "[redacted $DB_PASSWORD] and [redacted $API_SECRET]")  # escaped by json.dumps
+        self.assertNotIn(quoted, json.dumps(loaded, ensure_ascii=False))
+        self.assertIn("[redacted $DB_PASSWORD]", loaded)
+
 
 class ExportRedactionTest(WorkspaceCase):
     def test_a_key_printed_by_a_step_is_not_exported(self):
@@ -68,10 +79,12 @@ class PrinterRedactionTest(unittest.TestCase):
         printer(ev.TurnFinished(turn=1, response=f"done with {KEY}", status="done", error=None, duration=1.0, steps=1))
         self.assertNotIn(KEY, out.getvalue() + err.getvalue())
         json_out = io.StringIO()
-        Printer(json_out, io.StringIO(), json_mode=True, redact=Redactor({"ANTHROPIC_API_KEY": KEY}))(
-            ev.Notice("info", KEY)
-        )
+        secret = "ünïcode-pässword-1"  # json.dumps escapes it, so redacting the JSON text would miss it (F11)
+        Printer(
+            json_out, io.StringIO(), json_mode=True, redact=Redactor({"ANTHROPIC_API_KEY": KEY, "PASSWORD": secret})
+        )(ev.Notice("info", f"{KEY} {secret}"))
         self.assertNotIn(KEY, json_out.getvalue())
+        self.assertEqual(json.loads(json_out.getvalue())["text"], "[redacted $ANTHROPIC_API_KEY] [redacted $PASSWORD]")
 
 
 if __name__ == "__main__":

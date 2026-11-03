@@ -8,11 +8,12 @@
 #
 #   FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt harbor run ... --extra-docker-compose bench/compose/egress-ca.yaml
 #
-# bench/matrix.py adds it whenever FROND_EGRESS_CA (or, failing that, SSL_CERT_FILE) names a file.
+# Like bench/matrix.py, which adds it whenever one of them names a file, it takes FROND_EGRESS_CA or, failing that,
+# SSL_CERT_FILE (F3).
 services:
   main:
     volumes:
-      - ${FROND_EGRESS_CA:?set FROND_EGRESS_CA to the CA bundle file}:/etc/frond/egress-ca.crt:ro
+      - ${FROND_EGRESS_CA:-${SSL_CERT_FILE:?set FROND_EGRESS_CA or SSL_CERT_FILE to the CA bundle file}}:/etc/frond/egress-ca.crt:ro
     environment:
       SSL_CERT_FILE: /etc/frond/egress-ca.crt # OpenSSL (Python's ssl, curl), Go, uv
       REQUESTS_CA_BUNDLE: /etc/frond/egress-ca.crt # requests, and conda through it

@@ -1,0 +1,15 @@
+# The program's spending cap for model calls (ledger REQ-1, decision D43): the owner's grant of 2026-11-03.
+# The key's Console workspace has the same spend limit, which stops a job midway; bench/matrix.py refuses to start a
+# Harbor job that could take the total past it.
+usd = 100.0
+
+# A job's trials are assumed to cost the most one trial of their model has cost so far, times this margin.
+margin = 1.5
+
+# Before any trial of a model has been measured: USD per trial at frond's default of 40 steps, scaled by an arm's
+# max_steps / 40. From E0's estimate of $45-75 for 30 Opus trials and two calibration arms, and the list prices'
+# ratios (Sonnet half of Opus, Haiku a fortieth). Keys match models as in prices.toml.
+[guess]
+claude-opus-5-5 = 2.0
+claude-sonnet-5-5 = 1.0
+claude-haiku-5-5 = 0.05

@@ -2,12 +2,17 @@
 
     python -m bench.analyze bench/experiments/e6-layout.toml --jobs jobs/E6 --out bench/results/2026-11-20-e6
 
-Each claim compares a treatment arm with a control arm on one metric, task by task. The decision rule, fixed here
-before any data: a claim holds when its one-sided p-value, Holm-adjusted across the spec's claims, is below alpha.
-Pass-rate claims also get a confidence sequence, which says after each batch whether the claim is already decided
-(``stats.betting_cs``). Trials that failed before their agent started are infrastructure failures: they are
-reported and left out, never counted as the agent's failures. Only the first ``trials`` valid trials of a task
-count, in the order they started, so a retry can never pick the better of two outcomes.
+Each claim compares a treatment arm with a control arm on one metric, task by task. The decision rules, fixed here
+before any data:
+- a spec that runs to its end decides each claim by its one-sided fixed-size p-value, Holm-adjusted across the spec's
+  claims, against alpha;
+- a spec that may stop early (``stop_early``) stops at a batch the data choose, where a fixed-size test is not valid,
+  so it decides a pass-rate claim by its confidence sequence (``stats.betting_cs``) and any other claim by its
+  fixed-size p-value times the number of planned looks, both at alpha split across the claims (Bonferroni).
+Trials that failed before their agent started are infrastructure failures, and trials whose recorded configuration
+contradicts their arm are misconfigured: both are reported and left out, never counted as the agent's failures. Only
+the first ``trials`` valid trials of a task count, in the order they started, so a retry can never pick the better of
+two outcomes.
 """
 
 from __future__ import annotations
@@ -24,8 +29,8 @@ from pathlib import Path
 from statistics import fmean, pvariance, variance
 from typing import Any
 
-from .spec import BENCH, BOUNDED, Claim, Spec, load
-from .stats import bootstrap, bootstrap_interval, difference_cs, holm, wilcoxon
+from .spec import BENCH, BOUNDED, Arm, Claim, Spec, load
+from .stats import bootstrap_interval, bootstrap_t_below, difference_cs, holm, wilcoxon
 
 TOKEN_KEYS = ("input", "cache_read", "cache_write", "output")
 # Harbor's exception types for a model provider's failure (its error_policy.py, "model provider failed"), raised for
@@ -52,7 +57,28 @@ PROVIDER_EXCEPTIONS = frozenset(
         "AuthenticationError",
     }
 )
-COUNTERS = ("failed_edits", "stale_actions", "parse_failures", "syntax_errors", "compactions", "summaries", "steps")
+COUNTERS = (
+    "failed_edits",
+    "stale_actions",
+    "parse_failures",
+    "syntax_errors",
+    "compactions",
+    "summaries",
+    "steps",
+    "provider_errors",  # failed model calls inside sub-agents and llm_query, which the turn survived (F47)
+)
+# How frond records each arm option in its metrics.json config, so the analysis can check every trial's setup (F9)
+CONFIG_OPTIONS: dict[str, Any] = {
+    "max_steps": int,
+    "fork": int,
+    "effort": lambda value: None if value == "default" else value,
+    "layout": str,
+    "arm": str,
+    "context": str,
+    "sub_model": str,
+    "freshness": lambda value: value == "on",
+    "scopes": lambda value: value == "on",
+}
 
 
 @dataclass
@@ -68,6 +94,7 @@ class Trial:
     counters: dict[str, float] = field(default_factory=dict)
     exception: str = ""
     config: dict[str, Any] = field(default_factory=dict)  # frond's recorded configuration, to check the arm's setup
+    model: str = ""  # the model Harbor gave the agent (its trial config), for any agent; "" for the oracle
 
 
 def load_prices(path: Path = BENCH / "prices.toml") -> dict[str, dict[str, float]]:
@@ -156,11 +183,39 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
         counters=counters,
         exception=str(exception.get("exception_type") or ""),
         config=config,
+        model=str(((result.get("config") or {}).get("agent") or {}).get("model_name") or config.get("model") or ""),
     )
 
 
-def load_arm(job_dirs: list[Path], arm: str, trials: int, prices: dict[str, dict[str, float]]) -> list[Trial]:
-    """Every trial of an arm, keeping only the first ``trials`` valid ones per task, by start time."""
+def expected_config(arm: Arm) -> dict[str, Any]:
+    """The configuration frond should record for this arm's trials: its model and the options it sets."""
+    expected = {key: CONFIG_OPTIONS[key](value) for key, value in arm.options.items() if key in CONFIG_OPTIONS}
+    if arm.model:
+        expected["model"] = arm.model
+    return expected
+
+
+def misconfigured(config: dict[str, Any], expected: dict[str, Any]) -> list[str]:
+    """How a trial's recorded configuration contradicts its arm; nothing when it recorded none (another agent)."""
+    if not config:
+        return []
+    missing = object()
+    return [
+        f"{key}={config.get(key, '(not recorded)')!r}, spec {want!r}"
+        for key, want in expected.items()
+        if config.get(key, missing) != want
+    ]
+
+
+def load_arm(
+    job_dirs: list[Path],
+    arm: str,
+    trials: int,
+    prices: dict[str, dict[str, float]],
+    expected: dict[str, Any] | None = None,
+) -> list[Trial]:
+    """Every trial of an arm, keeping only the first ``trials`` valid ones per task, by start time. A trial whose
+    recorded configuration contradicts ``expected`` is not valid: it did not run the arm."""
     found = [
         trial
         for job in job_dirs
@@ -168,11 +223,15 @@ def load_arm(job_dirs: list[Path], arm: str, trials: int, prices: dict[str, dict
         if directory.is_dir() and (trial := load_trial(directory, arm, prices)) is not None
     ]
     found.sort(key=lambda t: t.started)
+    for trial in found:
+        wrong = misconfigured(trial.config, expected or {})
+        if wrong and trial.reward is not None:
+            trial.reward, trial.exception = None, "misconfigured: " + "; ".join(wrong)
     kept: list[Trial] = []
     valid: dict[str, int] = {}
     for trial in found:
         if trial.reward is None:
-            kept.append(trial)  # reported as an infrastructure failure, never scored
+            kept.append(trial)  # reported as an infrastructure failure or a misconfigured trial, never scored
         elif valid.get(trial.task, 0) < trials:
             valid[trial.task] = valid.get(trial.task, 0) + 1
             kept.append(trial)
@@ -202,7 +261,7 @@ def task_means(trials: list[Trial], metric: str) -> dict[str, float]:
     return {task: fmean(values) for task, values in by_task.items()}
 
 
-def evaluate(claim: Claim, spec: Spec, arms: dict[str, list[Trial]], sequential_claims: int) -> dict[str, Any]:
+def evaluate(claim: Claim, spec: Spec, arms: dict[str, list[Trial]], sequence_alpha: float) -> dict[str, Any]:
     treated, control = task_means(arms[claim.treatment], claim.metric), task_means(arms[claim.control], claim.metric)
     tasks = [t for t in spec.tasks if t in treated and t in control]  # paired, in the pre-registered order
     out: dict[str, Any] = {"claim": asdict(claim), "tasks": len(tasks)}
@@ -216,9 +275,10 @@ def evaluate(claim: Claim, spec: Spec, arms: dict[str, list[Trial]], sequential_
             return sum(t for t, _ in sample) / denominator if denominator else math.inf
 
         estimate = ratio(rows)
-        low, high = bootstrap_interval(rows, ratio, seed=spec.seed)
-        resampled = bootstrap(rows, ratio, seed=spec.seed + 1)
-        p = (1 + sum(r >= claim.bound for r in resampled)) / (len(resampled) + 1)  # H0: ratio >= bound
+        low, high = bootstrap_interval(rows, ratio, seed=spec.seed)  # descriptive
+        # The ratio of the totals is below the bound exactly when the mean of (treated - bound x control) is below
+        # zero, so H0 (ratio >= bound) is tested on those per-task values, with the null imposed (F5)
+        p = bootstrap_t_below([t - claim.bound * c for t, c in rows], seed=spec.seed + 1)
         return {**out, "estimate": estimate, "interval": [low, high], "p": p}
     sign = -1.0 if claim.lower_is_better else 1.0
     diffs = [sign * (treated[t] - control[t]) for t in tasks]
@@ -227,7 +287,7 @@ def evaluate(claim: Claim, spec: Spec, arms: dict[str, list[Trial]], sequential_
     low, high = bootstrap_interval(diffs, fmean, seed=spec.seed)
     out.update(estimate=fmean(diffs), interval=[low, high], p=p, nonzero=nonzero)
     if claim.metric in BOUNDED:
-        sequence = difference_cs(diffs, alpha=spec.alpha / max(1, sequential_claims))
+        sequence = difference_cs(diffs, alpha=sequence_alpha)
         decided = next(
             (
                 (i + 1, "holds" if lo > boundary else "fails")
@@ -244,14 +304,18 @@ def evaluate(claim: Claim, spec: Spec, arms: dict[str, list[Trial]], sequential_
     return out
 
 
-def arm_summary(trials: list[Trial], spec: Spec) -> dict[str, Any]:
+def arm_summary(trials: list[Trial], spec: Spec, arm: Arm) -> dict[str, Any]:
     scored = [t for t in trials if t.reward is not None]
     passes = task_means(trials, "pass")
+    planned = spec.trials_of(arm)
     costs = [t.cost for t in scored if t.cost is not None]
     solved = sum(t.reward or 0.0 for t in scored)
     out: dict[str, Any] = {
         "tasks": len(passes),
         "trials": len(scored),
+        "planned_trials": planned * len(spec.tasks),
+        # tasks short of their planned valid trials: a job that failed or has not run yet (F6)
+        "incomplete_tasks": sorted(task for task in spec.tasks if sum(t.task == task for t in scored) < planned),
         "infrastructure_failures": [f"{t.task} ({t.exception})" for t in trials if t.reward is None],
         "pass_rate": fmean(passes.values()) if passes else None,
         "pass_rate_interval": list(bootstrap_interval(list(passes.values()), fmean, seed=spec.seed))
@@ -289,13 +353,30 @@ def _within_variance(trials: list[Trial]) -> float | None:
 
 
 def analyze(spec: Spec, jobs: dict[str, list[Path]], prices: dict[str, dict[str, float]]) -> dict[str, Any]:
-    arms = {arm.name: load_arm(jobs.get(arm.name, []), arm.name, spec.trials_of(arm), prices) for arm in spec.arms}
-    sequential = sum(1 for c in spec.claims if c.metric in BOUNDED and c.kind != "ratio-below")
-    claims = {c.id: evaluate(c, spec, arms, sequential) for c in spec.claims}
-    adjusted = holm({cid: result["p"] for cid, result in claims.items()})
-    for cid, result in claims.items():
-        result["p_holm"] = adjusted[cid]
-        result["holds"] = adjusted[cid] < spec.alpha
+    arms = {
+        arm.name: load_arm(jobs.get(arm.name, []), arm.name, spec.trials_of(arm), prices, expected_config(arm))
+        for arm in spec.arms
+    }
+    if spec.stop_early:
+        # The run may stop at a batch the data choose, where a fixed-size test is not valid (F10). Each claim keeps one
+        # rule valid at any stopping time: a bounded metric's confidence sequence, or else the fixed-size p-value
+        # times the planned looks (a union bound over them), each at alpha split across the claims.
+        looks, count = len(spec.batches()), max(1, len(spec.claims))
+        claims = {c.id: evaluate(c, spec, arms, spec.alpha / count) for c in spec.claims}
+        for result in claims.values():
+            sequence = result.get("sequence")
+            if sequence is not None:
+                result.update(rule="confidence sequence", p_adjusted=None, holds=sequence["decision"] == "holds")
+            else:
+                adjusted_p = min(1.0, result["p"] * looks * count)
+                result.update(rule=f"p x {looks} looks x {count} claims", p_adjusted=adjusted_p)
+                result["holds"] = adjusted_p < spec.alpha
+    else:
+        sequential = sum(1 for c in spec.claims if c.metric in BOUNDED and c.kind != "ratio-below")
+        claims = {c.id: evaluate(c, spec, arms, spec.alpha / max(1, sequential)) for c in spec.claims}
+        adjusted = holm({cid: result["p"] for cid, result in claims.items()})
+        for cid, result in claims.items():
+            result.update(rule="Holm", p_adjusted=adjusted[cid], holds=adjusted[cid] < spec.alpha)
     digest = hashlib.sha256(spec.path.read_bytes()).hexdigest()[:12] if spec.path else ""
     return {
         "experiment": spec.id,
@@ -304,7 +385,7 @@ def analyze(spec: Spec, jobs: dict[str, list[Path]], prices: dict[str, dict[str,
         "spec_sha256": digest,
         "alpha": spec.alpha,
         "excluded_tasks": list(spec.excluded),
-        "arms": {name: arm_summary(trials, spec) for name, trials in arms.items()},
+        "arms": {arm.name: arm_summary(arms[arm.name], spec, arm) for arm in spec.arms},
         "claims": claims,
         "per_task": {name: dict(sorted(task_means(trials, "pass").items())) for name, trials in arms.items()},
     }
@@ -344,21 +425,31 @@ def report(summary: dict[str, Any]) -> str:
             f"{_fmt(arm['failed_edits_per_trial'], 2)} |"
         )
     if summary["claims"]:
-        lines += ["", "| Claim | Kind | Tasks | Estimate (95% CI) | p | Holm p | Holds | Sequence |"]
-        lines.append("|---|---|---|---|---|---|---|---|")
+        lines += ["", "| Claim | Kind | Tasks | Estimate (95% CI) | p | Rule | Adjusted p | Holds | Sequence |"]
+        lines.append("|---|---|---|---|---|---|---|---|---|")
         for cid, c in summary["claims"].items():
             interval = c.get("interval") or [None, None]
             estimate = f"{_fmt(c.get('estimate'))} ({_fmt(interval[0])} to {_fmt(interval[1])})"
             seq = c.get("sequence")
             seq_text = f"{seq['decision']} after {seq['decided_after_tasks']} tasks" if seq else "–"
             lines.append(
-                f"| {cid} | {c['claim']['kind']} | {c['tasks']} | {estimate} | {_fmt(c['p'], 4)} | "
-                f"{_fmt(c['p_holm'], 4)} | {'yes' if c['holds'] else 'no'} | {seq_text} |"
+                f"| {cid} | {c['claim']['kind']} | {c['tasks']} | {estimate} | {_fmt(c['p'], 4)} | {c['rule']} | "
+                f"{_fmt(c['p_adjusted'], 4)} | {'yes' if c['holds'] else 'no'} | {seq_text} |"
             )
     for name, arm in summary["arms"].items():
+        if arm["incomplete_tasks"]:
+            missing = arm["incomplete_tasks"]
+            lines += [
+                "",
+                f"Incomplete: {name} has {arm['trials']} of {arm['planned_trials']} planned valid trials; "
+                f"{len(missing)} tasks are short: {', '.join(missing)}.",
+            ]
         if arm["infrastructure_failures"]:
             failures = ", ".join(arm["infrastructure_failures"])
-            lines += ["", f"Infrastructure failures in {name}, not scored: {failures}."]
+            lines += ["", f"Infrastructure failures and misconfigured trials in {name}, not scored: {failures}."]
+        if arm.get("provider_errors_per_trial"):
+            rate = _fmt(arm["provider_errors_per_trial"], 2)
+            lines += ["", f"Model calls that failed inside sub-agents or llm_query in {name}: {rate} per trial."]
         if arm["never_passed"]:
             lines += ["", f"Never passed in {name}: {', '.join(arm['never_passed'])}."]
     return "\n".join(lines) + "\n"

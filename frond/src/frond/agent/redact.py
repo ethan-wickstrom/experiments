@@ -10,9 +10,11 @@ The interactive TUI is not redacted: it shows the user their own machine.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from collections.abc import Mapping
+from typing import Any
 
 from frond.agent.shell import CREDENTIAL_IN_URL, CREDENTIAL_NAME
 
@@ -32,6 +34,23 @@ class Redactor:
         env = os.environ if environ is None else environ
         found = {v: name for name, v in env.items() if CREDENTIAL_NAME.search(name) and len(v) >= MIN_SECRET}
         self._secrets = sorted(found.items(), key=lambda item: -len(item[0]))  # longest first, so none is left half
+
+    def data(self, value: Any) -> Any:
+        """``value`` with every string in it redacted, keys included, and other scalars kept. Redact data, never its
+        serialized JSON: there a number equal to a secret would turn into invalid JSON, and a secret JSON escapes (a
+        quote, a backslash, non-ASCII text) would not match and would leak (F11)."""
+        if isinstance(value, str):
+            return self(value)
+        if isinstance(value, dict):
+            return {self(k) if isinstance(k, str) else k: self.data(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self.data(v) for v in value]
+        return value
+
+    def json(self, value: Any, **dumps: Any) -> str:
+        """``value`` as JSON, its strings redacted first; other objects become strings (``default=str``) beforehand."""
+        plain = json.loads(json.dumps(value, default=str))
+        return json.dumps(self.data(plain), **dumps)
 
     def __call__(self, text: str) -> str:
         for value, name in self._secrets:
