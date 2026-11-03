@@ -1,10 +1,10 @@
 # Now
 
-Updated 2026-11-03, first session: every hypothesis H1–H6 has both arms, every experiment is pre-registered, and E0a is finishing.
+Updated 2026-11-03, first session: every hypothesis H1–H6 has both arms, every experiment is pre-registered, and E0a is rerunning under a fixed Docker daemon.
 
 ## In flight
 
-E0a, the oracle sweep, has scored 52 of the 56 TB 4.0 tasks that start in this VM (G20); the oracle failed three (`bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`, provisional until it finishes). Resume or rerun it with `uv run python -m bench.matrix bench/experiments/e0a-oracle.toml`; then write its report with `uv run python -m bench.analyze bench/experiments/e0a-oracle.toml --out bench/results/2026-11-03-e0a-oracle` and the final list with `--failing oracle`.
+E0a, the oracle sweep, is in its fourth run, started 10:40 UTC. The third run scored 55 of the 56 tasks that start in this VM (0.945) and found two environment faults: `docker exec` ran with umask 0 (G26, fixed by D39, so that run is void) and one task's browser sidecar cannot trust the egress CA (G25, excluded). The provisional exclusion list is `bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`. Resume the run with `FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt uv run python -m bench.matrix bench/experiments/e0a-oracle.toml`; then write its report with `uv run python -m bench.analyze bench/experiments/e0a-oracle.toml --out bench/results/2026-11-03-e0a-oracle` and the final list with `--failing oracle`, keeping the comments on each cause.
 
 ## Next, in order (research-first, D16)
 
@@ -20,7 +20,7 @@ E0a, the oracle sweep, has scored 52 of the 56 TB 4.0 tasks that start in this V
 
 ## Facts a fresh session needs
 
-- Docker: `frond/scripts/dev-env.sh` starts dockerd and serves Docker Hub pulls from mirror.gcr.io, because Docker Hub rate-limits this VM's IP.
+- Docker: `frond/scripts/dev-env.sh` starts dockerd and serves Docker Hub pulls from mirror.gcr.io, because Docker Hub rate-limits this VM's IP. It also makes Docker's default runtime runc behind a wrapper that sets umask 022, because dockerd 29 runs with umask 0 and `docker exec` inherits it (G26, D39). Start dockerd only through the script; the matrix runner refuses a daemon whose `docker exec` umask is not 0022.
 - TLS: this VM re-terminates outbound TLS. Every Harbor run here needs `--extra-docker-compose bench/compose/egress-ca.yaml` with `FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt`, or tasks that reach the internet fail for every agent (D27).
 - Disk: task images reach 15 GB and Harbor keeps pulled ones. The matrix runner prunes safely; never run `docker image prune` during a sweep (G8).
 - Tasks: every TB 4.0 task allows its agent 8 hours. frond's `--max-steps` (40) bounds its cost per task.

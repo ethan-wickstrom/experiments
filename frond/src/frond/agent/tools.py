@@ -249,7 +249,7 @@ class Toolbox:
         if stale is None:
             return None
         if self.metrics is not None:
-            self.metrics.stale_actions += 1
+            self.metrics.bump("stale_actions")
         if self.freshness and replaces:
             raise ToolError(
                 f"{display} changed since you read it at step {stale.step}. Read it again before replacing or "

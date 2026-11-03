@@ -45,6 +45,7 @@ RETRY_ON = (  # failures before the agent runs (Harbor's "sandbox failed" class,
     "RuntimeError",
 )
 KEYS = {"anthropic/": "ANTHROPIC_API_KEY", "openai/": "OPENAI_API_KEY", "gemini/": "GEMINI_API_KEY"}
+PROBE_IMAGE = "mirror.gcr.io/library/alpine:3.20"
 
 
 @dataclass(frozen=True)
@@ -116,11 +117,40 @@ def environment(ca: Path | None) -> dict[str, str]:
     return env
 
 
+def exec_umask() -> str:
+    """The umask of a process started by ``docker exec``, which is how Harbor runs agents, solutions and tests.
+
+    It is the daemon's umask, not the container's; "unknown" when no probe container could start (G26).
+    """
+    started = subprocess.run(
+        ["docker", "run", "-d", "--rm", PROBE_IMAGE, "sleep", "60"], capture_output=True, text=True, check=False
+    )
+    if started.returncode != 0:
+        return "unknown"
+    container = started.stdout.strip()
+    try:
+        shown = subprocess.run(
+            ["docker", "exec", container, "sh", "-c", "umask"], capture_output=True, text=True, check=False
+        )
+        return shown.stdout.strip() or "unknown"
+    finally:
+        subprocess.run(["docker", "rm", "-f", container], capture_output=True, check=False)
+
+
 def preflight(spec: Spec, ca: Path | None) -> list[str]:
-    """What would make every trial fail, checked before spending anything."""
+    """What would make every trial fail, or bias every arm alike, checked before spending anything."""
     problems: list[str] = []
     if subprocess.run(["docker", "info"], capture_output=True, check=False).returncode != 0:
         problems.append("Docker is not running: run scripts/dev-env.sh")
+    else:
+        umask = exec_umask()
+        if umask == "unknown":
+            print(f"note: could not check the umask of docker exec ({PROBE_IMAGE} did not start)", file=sys.stderr)
+        elif umask != "0022":
+            problems.append(
+                f"docker exec runs with umask {umask}, not 0022, so files agents and tests create get other modes "
+                "than on a standard host (G26): stop dockerd and run scripts/dev-env.sh"
+            )
     for arm in spec.arms:
         for prefix, key in KEYS.items():
             if arm.model and arm.model.startswith(prefix) and not os.environ.get(key):

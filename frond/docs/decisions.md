@@ -298,7 +298,7 @@ Each stays closed unless new evidence reopens it:
   - equal step caps: they would test a budget, not the action space; the step caps are pre-registered in E1's spec, and cost is measured either way.
 - Evidence: `tests/test_tools_arm.py`: a turn of single calls edits, checks and answers; past calls appear as turns in the call format; no code field or REPL variables reach the prompt; unknown tools and bad arguments come back as errors; the cache mark lands on the latest call.
 
-## D34 · H4's control arm summarises with the main model and offers no way back (2026-11-03, active)
+## D34 · H4's control arm summarises with the main model and offers no way back (2026-11-03, active; its rule on the user's messages superseded by D38)
 - Decision:
   - `--context summary` keeps the fold's trigger and budget, so compaction happens at the same points in both arms. It replaces the early steps, any earlier summary and the user's mid-turn messages among them with a summary the main model writes (`prompts.Compaction`), escaped like any tool-derived text;
   - in that arm `history_search` and `history_step` are not offered, and no index points back to the steps. The step log still records everything for the export;
@@ -337,3 +337,28 @@ Each stays closed unless new evidence reopens it:
 - Rejected: reference counting (every snapshot would write counts for thousands of entries); deleting whole old sessions' stores (objects are shared across sessions by design); collecting while a session snapshots without the in-use rule (a reused old blob could vanish from under a new tree); a size bound that drops reachable objects (undo history within 30 days is kept whole).
 - Evidence: `tests/test_world.py::CollectionTest`.
 
+## D38 · The summary arm keeps the user's words verbatim, and every loop of an arm follows its context policy (2026-11-03, active)
+- Decision:
+  - under `--context summary`, the user's mid-turn messages among the compacted steps stay verbatim and in order, ahead of the summary; the summariser still sees them. Earlier summaries go into the new one, and when the summary call fails they are kept, followed by a clipped trace of the steps since;
+  - neither policy compacts again when only notes and the user's words are left past the budget, so a long message cannot cause a summary call at every step;
+  - the context policy holds for every loop of an arm: under `--context summary`, FORK branches (with the main model, billed to the branch) and sub-agents (with the sub-model) summarise too, no loop is given `history_search` or `history_step`, and every loop's compactions are counted.
+- Why:
+  - D34 asks for the best version of what products ship. Codex keeps the user's messages verbatim, newest first within 20,000 tokens, and puts the summary after them ([`compact.rs`](https://github.com/openai/codex/blob/main/codex-rs/core/src/compact.rs), `build_compacted_history`), so D34's reason for rejecting this, that it is "not the products'", was wrong. Claude Code instead asks its summariser to list every user message;
+  - the fold keeps the user's words verbatim too (D14), so the arms now differ only in how the agent's own steps are compacted, which is the question H4 asks;
+  - a summary arm whose sub-agents and branches could search the step log was partly a fold arm, which would bias H4 toward no difference (G27).
+- Rejected:
+  - the summariser restating the user's messages (Claude Code's way): a restatement can drop or soften a constraint, the failure W8 cites, so it is the weaker of the two product practices;
+  - Codex's 20,000-token cap: the fold never shortens the user's words, and the arms must treat them alike;
+  - keeping the user's messages inside the summary note: the next compaction rewrites the note, and they would be summarised away then.
+- Consequence: headless benchmark runs have no mid-turn messages, so E4 measures the same contrast under D34 and D38; the message rule matters for interactive use and any later steering experiment.
+- Evidence: `tests/test_summary_arm.py` (`EveryLoopTest`, `SummaryCompactionTest`); G27–G29.
+
+## D39 · Docker's default runtime here is runc behind a wrapper that sets umask 022 (2026-11-03, active)
+- Decision: `scripts/dev-env.sh` installs `/usr/local/bin/frond-runc` (`umask 022`, then `exec runc "$@"`) and makes it dockerd's default runtime in `daemon.json`. The script and the matrix runner's preflight measure the umask of a `docker exec` process in a probe container; the runner refuses to start unless it is 0022.
+- Why: Harbor runs agents, reference solutions and tests through `docker exec`, whose processes inherit the umask of the runtime chain (dockerd, containerd, the shim, runc), not the container's. dockerd 29.9.2 sets its own umask to 0, so every file those processes created here was world-writable, and `rs-archive-clone`'s reference solution failed 41 of 57 tests on file modes. A standard host gives 0022. Left alone, the difference would touch every agent's runs wherever modes matter (tests of permissions, ssh refusing a private key others can read).
+- Rejected:
+  - starting dockerd with umask 022: it resets its umask to 0 (tried);
+  - a separately started containerd with umask 022: a second daemon to manage, and the image store would move;
+  - setting the umask in the commands Harbor runs: Harbor is pinned and unpatched, and the reference agents' and verifiers' commands go through it too;
+  - excluding `rs-archive-clone`: the confound would remain on every other task.
+- Evidence: `docker exec` printed umask 0000 before and 0022 after; `tests/test_bench.py::MatrixTest::test_preflight_refuses_a_daemon_whose_exec_umask_is_not_022`; G26.
