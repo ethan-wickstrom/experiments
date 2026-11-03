@@ -1,13 +1,20 @@
 # frond: problem space and design space
 
-Written on 2026-11-03 against commit 2726a56 of `claude/frond-context-engine`. This file applies the separation of problem space, design space and solution space to frond itself. It states environment facts W, requirements R and constraints C in the sense of Zave and Jackson's `W, S ⊢ R` ([Four Dark Corners of Requirements Engineering](https://dl.acm.org/doi/10.1145/237432.237434)), and it traces in both directions. It records the reasoning. The work that follows from it is tracked with stable IDs in [open-items.md](open-items.md), which cites the R, W, C and U IDs used here. Code references are relative to `frond/`.
+A living document. The first version was written on 2026-11-03 against commit 2726a56. It applies the separation of problem space, design space and solution space to frond, stating environment facts W, requirements R and constraints C in the sense of Zave and Jackson's `W, S ⊢ R` ([Four Dark Corners of Requirements Engineering](https://dl.acm.org/doi/10.1145/237432.237434)), traced in both directions. Code references are relative to `frond/`.
 
-## Decisions taken after the analysis
+The other documents:
+- [decisions.md](decisions.md): every decision, with the alternatives rejected (D-IDs);
+- [ledger.md](ledger.md): every open and closed item;
+- [research.md](research.md): the experiment protocol (H-IDs);
+- [now.md](now.md): the current focus.
 
-- U1 is answered: frond is a research vehicle (the user, 2026-11-03).
-- The work order is the daily-driver order, as the user instructed on 2026-11-03: P1, P2, P4, P6a, P6b, then P3 and P5. P0 runs whenever an API key and Docker or Daytona are available. Item ORDER in open-items.md asks for confirmation, because the analysis tied this order to daily-driver use.
-- A step 0 was added: a live pilot on 5–10 Terminal-Bench tasks (see Plan).
-- Step 1 lands inside PR #3 before it leaves draft, because PR #3 is the change that gives mid-turn messages priority over the original request.
+This file holds the analysis and the traceability matrix. It is updated in the same commit as any change that moves a requirement's status.
+
+## Since the first version (2026-11-03)
+
+- frond is a research vehicle, and the agent owns every decision (D16). Constraints C1 and C2 below were the brief's. They are now choices that the agent keeps for reasons and tests as hypotheses: H1 tests C1's RLM premise.
+- The architecture moves to worlds (D22, "Architecture: worlds" below).
+- The plan lives in the ledger and `now.md`. The section "Plan" below keeps only the order.
 
 ## Summary
 
@@ -200,6 +207,90 @@ The random marker with escaping is chosen now, because it is deterministic and t
 | Self-improvement | Offline prompt optimization (GEPA) behind a regression gate, once evaluation exists | Online self-editing: nothing gates it | Gains hold on held-out tasks (A11) |
 | DSPy coupling | Pin the minor version; a startup check that the three overridden methods keep their signatures; propose upstream hooks | Copying the RLM loop into frond: breaks C1 as written | — |
 
+## Architecture: worlds (D22)
+
+The thesis: an agent's state is a value, not a place. frond keeps every state it passes through as an immutable, content-addressed world, and compiles every prompt as a pure function of a path through those worlds. Undo, rewind, fork, merge, freshness and prompt caching then stop being separate features with separate failure modes. Each becomes one operation on one data structure.
+
+### Objects
+
+- **Blob:** file bytes, addressed by H(bytes), where H is BLAKE2b-256 from `hashlib`. Each blob is stored once, compressed.
+- **Tree:** a sorted map from path to (mode, blob id or link target), addressed by H of its canonical encoding. A workspace snapshot is a tree id. Snapshots that differ in d files share every other entry, so k snapshots cost O(Σd) storage, not O(k·n).
+- **World:** a tree id, a REPL image, a view head and a set of observations. The REPL image is a forked live process (B6). Failing that, it is a replay recipe: the code of earlier steps, together with their recorded tool results.
+- **Step:** an edge from one world to the next. It holds the model's reasoning and code, every tool call with its inputs and outputs, usage, cost and verifier results. Steps are the lossless log (D08), and worlds index it.
+- **Observation:** what the model has seen of a file: the path, H(bytes) at read time, and the step. At world w, an observation is fresh if and only if tree(w)[path] equals its hash.
+
+A run is a rooted tree of worlds. In interactive use, the user's working directory is one more world, u, observed on demand.
+
+### Operations, and what each replaces
+
+- **snapshot(dir) → tree.** It is incremental: a stat cache (size, mtime_ns, inode) skips unchanged files, as git's index does. It replaces the edit journal and the per-command git snapshots (D05, D10), and it also covers non-git workspaces and ignored files, up to a size cap.
+- **checkout(tree, dir)** writes exactly the symmetric difference.
+- **diff(a, b)** lists the paths whose entries differ. A turn's net change is diff(start, end), which meets R2.
+- **revert(n → a)** on the user's tree u is merge3(base = n, ours = u, theirs = a). Undo becomes a revert. The agent's changes are taken back, and changes anyone else made since are kept. Overlapping changes become conflicts shown to the user, never silent overwrites. This meets R3 by construction rather than by bookkeeping. merge3 is a line-level diff3 built on the stdlib's `SequenceMatcher`; a binary file conflicts unless one side left it unchanged.
+- **rewind(n → a)** moves the agent to an ancestor world: checkout(a), the view cut back to a's path plus a note saying why (AgentRewind's rewind memory), and the REPL restored from a's image. This meets R7.
+- **fork(n, k)** creates k children that share n's path. Each has its own directory (a checkout of n's tree), its own forked REPL, and the same view prefix.
+- **select and merge:** verifiers score the children, the parent continues from the best child, and that child's tree merges into the parent's line.
+
+### Views are compiled, and caching follows from immutability
+
+The prompt for world w is View(w) = render(policy(path(root → w))).
+- **Append-only:** paths are immutable, so View only grows along a path. The one exception is collapsing a closed scope, and a closed scope is always the tail, so the collapse keeps the prefix.
+- **Shared prefix:** siblings share their parent's view as an exact prefix.
+
+With prefix caching, the k children of a world whose view is P tokens cost
+
+    k · P · r + Σ new_i    (r = cache-read price ÷ input price: 0.05 on Opus 5.5, 0.1 on Sonnet 5.5)
+
+in place of k · P. Forking three ways from a 50k-token prefix on Opus 5.5 costs 3 × 50k × $0.20/M = $0.03 in prefix reads, against $0.60 uncached. That turns parallel exploration from a luxury into a routine operation.
+
+### Freshness is truth maintenance
+
+Every read records an observation. At each step the compiler checks every observation against the current tree, one dictionary lookup each, and marks the stale ones in the view: "you read src/x.py at step 3; it changed at step 7 (your sed)" or "…changed outside frond". The model then sees that it is about to edit a file from an out-of-date picture at the moment that matters (H3). The observation set is also what [CarryOn](https://arxiv.org/abs/2610.18784) calls continuation carriers, except that their validity is checked mechanically rather than by a model.
+
+### Provenance
+
+Every fragment of a view has one of three sources:
+- the user, marked (D14);
+- the model, in the assistant role;
+- the world, escaped tool output.
+
+The compiler alone renders views, so the marker discipline is enforced in one place.
+
+### Search
+
+At a fork, children run until a verifier gives a signal or a budget runs out. With per-branch success probability p and independent branches, best-of-k succeeds with probability 1 − (1 − p)^k, for example 0.875 when k = 3 and p = 0.5. Correlated branches do worse, which E2 measures. Children run in parallel, so wall-clock time follows the slowest branch, not the sum of all branches.
+
+### What it removes
+
+| Before | After |
+|---|---|
+| An edit journal plus git snapshots around commands: two mechanisms, git-only | One store with snapshot, checkout and diff, in any directory |
+| Undo overwrites concurrent edits (R3 fails) | Revert is merge3: concurrent edits are kept and conflicts shown |
+| The agent cannot rewind (R7) | Rewind moves to an ancestor world |
+| Sub-agents re-read context from scratch | Forks share the cached prefix |
+| Stale reads are invisible | Stale observations are marked in the view |
+| REPL state dies with the process | A REPL image: a forked process, or a replay recipe |
+
+Build order (ledger): B4 (store and merge) → B5 (freshness) → B6 (forkable REPL) → B7 (fork, select, merge) → B9 (scopes) → B13 (world view).
+
+## Traceability matrix
+
+Requirements to design, code, tests and status. Design commitments without a requirement behind them are the calibrations K1–K15. Every decision in `decisions.md` names the requirement or evidence it rests on.
+
+| Req | Decisions | Code | Tests | Status (2026-11-03) | Ledger |
+|---|---|---|---|---|---|
+| R1 | D20, D21 | `bench/frond_harbor.py` | — | unmeasured | E1, E11 |
+| R2 | D10, D22 | `agent/snapshots.py`, `agent/tools.py` | `test_command_undo` | per-change diffs only; no net view | R2, B4 |
+| R3 | D22 | — | — | fails: undo overwrites later edits | R3, B4 |
+| R4 | D09 | `tui/app.py`, `agent/session.py` | `test_steering`, `test_app` | steer and queue done; stop latency unmeasured | B17 |
+| R5 | D14 | `agent/adapter.py`, `agent/rlm.py`, `agent/session.py` | `test_provenance` | done (3c188c9) | — |
+| R6 | D06, D13 | `agent/_sandbox.py`, `agent/repl.py`, `agent/_worker.py`, `agent/shell.py` | `test_sandbox`, `test_containment` | worker and read-only agents done; main agent's commands deferred | R6, G1 |
+| R7 | D22 | — | — | missing | B4, B9 |
+| R8 | D07 | `agent/adapter.py` | `test_caching` (simulated) | simulated | E0 |
+| R9 | — | — | — | missing | B11 |
+| R10 | D11 | `cli.py` (`--export`), `bench/frond_harbor.py` | `test_memory` | done; Harbor pipeline verified with the oracle agent | E0 |
+| R11 | D25 | — | — | Linux only, by decision | closed |
+
 ## Traceability
 
 Requirements with no design behind them at 2726a56: R3 (post-images), R5 (the marker), R6 for the worker and the main agent's commands, R7 (rewind), R9 (the startup check), and R2's net-change view.
@@ -240,17 +331,4 @@ Beyond those, the vocabulary stays loose.
 
 ## Plan
 
-Work order (the user's instruction of 2026-11-03): P1 → P2 → P4 → P6a → P6b → P3 → P5. P0 runs as soon as an API key and Docker or Daytona are available. Each step's done-when check is in open-items.md.
-
-- P0. Live pilot on 5–10 Terminal-Bench tasks: read the provider's real `cache_read_input_tokens`, check that the model keeps to the RLM protocol, and measure per-task variance to size P3.
-- P1. Close R5 and R6 for the worker, inside PR #3 and before it leaves draft:
-  - scrub its environment and confine it;
-  - block the socket audit events;
-  - add the random marker with escaping;
-  - add tests that forge a mid-turn message and attempt an exfiltration.
-- P2. Add post-images and the check before undo, with a concurrent-edit test.
-- P3. Probe the sandbox inside a Harbor task container, then run the paired Terminal-Bench comparison with Codex CLI.
-- P4. Add the sandbox for the main agent's commands (writes inside the workspace only, network off), with approval only to escape.
-- P5. Add scopes as savepoints (begin, end, abandon) behind a flag, measured on a long-horizon set.
-- P6a. Add pairing rules for state outside the workspace.
-- P6b. Add the DSPy startup check.
+The plan lives in [ledger.md](ledger.md), with the current order in [now.md](now.md). That order is research-first (D16): the measurement and experiment infrastructure (B1–B3), then worlds (B4–B7), then the experiments as soon as REQ-1 arrives.
