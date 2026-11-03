@@ -51,6 +51,12 @@ class CompatTest(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertIn("RLM._execute_code", found[0])
 
+    def test_a_signature_that_cannot_be_read_fails_closed(self):  # Devin, #28 (F53)
+        with mock.patch("inspect.signature", side_effect=ValueError("no signature")):
+            found = compat.problems()
+        self.assertTrue(found)
+        self.assertTrue(all("cannot be read" in f for f in found), found)
+
     def test_the_pattern_reply_recovery_matches_with_is_checked(self):  # D46
         from dspy.adapters import chat_adapter
 

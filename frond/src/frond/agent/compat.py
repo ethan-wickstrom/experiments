@@ -75,7 +75,8 @@ def problems() -> list[str]:
             continue
         try:
             params = list(inspect.signature(target).parameters.values())
-        except (TypeError, ValueError):
+        except (TypeError, ValueError):  # unchecked is not compatible (Devin, #28)
+            found.append(f"{name}: its signature cannot be read, so its parameters cannot be checked")
             continue
         # F42: frond passes these by position or keyword, so a parameter made keyword- or positional-only, or turned
         # into *args, breaks its calls even with the same names
