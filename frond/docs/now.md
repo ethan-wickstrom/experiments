@@ -12,7 +12,7 @@ Nothing runs. The next session starts the program's first model calls:
 4. `uv run python -m bench.matrix bench/experiments/smoke.toml` (one task, every flag), then check that the key's value appears in no file under `jobs/` (`grep -rlF "$CLAUDE_API_KEY" jobs | wc -l` must print 0) before anything is committed.
 5. E0: `uv run python -m bench.matrix bench/experiments/e0-pilot.toml`, about $45–75; the runner stops before any job that could pass $100 (D43).
 
-E0a's fourth run (under G26's fix) had finished 38 of 56 tasks when the session ended, its jobs lost with the VM. Of those, cad-model failed and vba-userform-port's verifier could not start, as in the third run; rs-archive-clone and medical-claims-processing had not started. The provisional exclusion list (`bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`) stands for E0. Rerun E0a after E0 to settle rs-archive-clone, which should pass under the fixed umask.
+E0a is done: 53 of the 55 tasks that start pass under the reference solutions, and the three that fail here are excluded (`bench/results/2026-11-03-e0a-oracle/`).
 
 ## Next, in order (research-first, D16)
 
