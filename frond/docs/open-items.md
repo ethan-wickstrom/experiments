@@ -118,7 +118,7 @@ The rest of the item:
   - still has a temp directory whose files commands can read.
 
   Also, a step output containing the marker and frond's framing renders with the marker removed; all tests, ruff and ty pass; and the commit is on PR #3.
-- Status: done (this commit). Tests: `tests/test_containment.py`, `tests/test_provenance.py` · Blocked on: nothing · Source: R5, R6; design.md "Containment and provenance"; your instruction of 2026-11-03.
+- Status: done in 3c188c9. Tests: `tests/test_containment.py`, `tests/test_provenance.py` · Blocked on: nothing · Source: R5, R6; design.md "Containment and provenance"; your instruction of 2026-11-03.
 
 #### P2 · Undo leaves later edits alone
 Record a hash of what frond left in each path, and have `/undo` skip and report any path whose content changed since.
@@ -181,11 +181,11 @@ Esc halts the turn within a second, and no tool runs after the stop is acknowled
 
 #### R5 · Your words cannot be confused with tool output
 - Done when: P1's marker test passes.
-- Status: done (this commit), with P1 · Blocked on: nothing · Source: design.md R5; [Compaction Laundering](https://arxiv.org/abs/2610.29869).
+- Status: done in 3c188c9, with P1 · Blocked on: nothing · Source: design.md R5; [Compaction Laundering](https://arxiv.org/abs/2610.29869).
 
 #### R6 · No unapproved writes outside the workspace, network use or credential use
 - Done when: P1 and P4 are done.
-- Status: holds for the REPL worker (P1, this commit) and for read-only agents' commands. The main agent's commands still run with your permissions and credentials, which P4 closes. See I13 for Landlock's limits · Blocked on: P4 · Source: design.md R6.
+- Status: holds for the REPL worker (P1, 3c188c9) and for read-only agents' commands. The main agent's commands still run with your permissions and credentials, which P4 closes. See I13 for Landlock's limits · Blocked on: P4 · Source: design.md R6.
 
 #### R7 · The agent can rewind its context and the workspace together
 - Done when: P5's rewind test passes.
@@ -266,7 +266,7 @@ PR #3's layout was chosen for caching; nothing yet shows its effect on success.
 #### A12 · Confining the worker costs no capability
 Every effect of REPL code already goes through host tools, so a read-only worker without network access loses nothing.
 - Done when: P1's suite passes with the worker confined, and P0's runs show no task where REPL code needed network access or writes outside temp.
-- Status: half done; all 143 tests and `frond --demo` pass with the worker confined (this commit). The live half waits on P0 · Blocked on: P0 · Source: design.md "Containment and provenance".
+- Status: half done; all 143 tests and `frond --demo` pass with the worker confined (3c188c9). The live half waits on P0 · Blocked on: P0 · Source: design.md "Containment and provenance".
 
 #### A13 · Native tool-call rendering for provenance
 Rendering past steps as native tool calls and results would let provider roles show where text came from, but it changes what the model sees itself doing.
@@ -400,7 +400,7 @@ PR2 is under Waiting on you.
 #### PR3 · PR #3 stays draft until P1 lands
 [PR #3](https://github.com/ethan-wickstrom/experiments/pull/3) (`claude/frond-context-engine`, stacked on PR #2) is a draft with no reviews. It leaves draft only after P1 is committed to it.
 - Done when all of these hold:
-  - P1 is on the branch (done, this commit);
+  - P1 is on the branch (done in 3c188c9);
   - the description cites AgentRewind precisely: 62.2% with no rewind, 43.9% with the context rewound alone, 87.8% with both;
   - the description ends with the PR attribution lines;
   - the PR is marked ready.
