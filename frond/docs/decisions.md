@@ -403,3 +403,12 @@ Each stays closed unless new evidence reopens it:
 - Why: the runner sees only finished trials, so it cannot stop a job that runs over; the Console limit can, but it fails a job halfway, after money is spent on trials that may be unusable. Checking before each job keeps the runner from starting what the cap cannot pay for.
 - Rejected: the Console limit alone (a job that hits it leaves a half-run batch); a check inside each trial (Harbor runs trials in parallel containers with no shared ledger); a guess with the margin applied too (it would put E0's plan, $45-75 by its own estimate, above the cap before any measurement).
 - Evidence: `tests/test_bench.py::BudgetTest`, including that E0 fits the cap on the guesses alone ($70.50).
+
+## D44 · E1–E3 run their 53 tasks in four batches of up to 14 (2026-11-03, active)
+- Decision: E0a's final list leaves 53 TB 4.0 tasks, and E1, E2 and E3 take batches of 14 (14, 14, 14, 11), amended before any trial.
+- Why: the batch count is the number of planned looks. Under `stop_early` (E1, E2) a cost claim's p-value is multiplied by it (D41), and each batch is one round of the ABBA order. Batches of 13 would have made five looks, the fifth for a single task.
+- Rejected:
+  - 13 tasks per batch: a fifth look raises the cost claims' multiplier from 4 to 5 for one task, and a one-task batch costs a full ABBA round;
+  - dropping one task to keep 52 in batches of 13: an exclusion with no cause in the task;
+  - 18 per batch (three looks): fewer chances for the confidence sequences to stop a decided experiment early.
+- Evidence: `python -m bench.matrix bench/experiments/e1-action-space.toml --dry-run` (and e2, e3) shows 53 tasks in 4 batches.
