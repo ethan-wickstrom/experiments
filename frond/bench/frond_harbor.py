@@ -69,9 +69,20 @@ def build_wheel() -> Path:
     return _wheel
 
 
-def step_call(code: str) -> tuple[str, dict[str, Any]]:
+def run_config(export: Path) -> dict[str, Any]:
+    """The configuration frond recorded for the run (``metrics.json``), or nothing when it wrote none."""
+    try:
+        config = json.loads((export / "metrics.json").read_text(encoding="utf-8")).get("config")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return config if isinstance(config, dict) else {}
+
+
+def step_call(code: str, tools_arm: bool) -> tuple[str, dict[str, Any]]:
     """A step's action as a tool call: the tools arm logs its call as JSON with ``tool`` and ``args`` (F35), the code
-    arm logs Python, run by the ``python`` tool."""
+    arm logs Python, run by the ``python`` tool, whatever it looks like (a dict literal is still code, F54)."""
+    if not tools_arm:
+        return "python", {"code": code}
     try:
         call = json.loads(code)
     except ValueError:
@@ -85,6 +96,7 @@ def trajectory(export: Path, *, version: str, model: str | None) -> Trajectory:
     """frond's exported record as an ATIF trajectory: messages, then one tool call per REPL step."""
     usage = _read_json(export / "usage.json")
     steps: list[Step] = []
+    tools_arm = run_config(export).get("arm") == "react"
     lines = (
         (export / "steps.jsonl").read_text(encoding="utf-8").splitlines() if (export / "steps.jsonl").is_file() else []
     )
@@ -104,7 +116,7 @@ def trajectory(export: Path, *, version: str, model: str | None) -> Trajectory:
             steps.append(Step(step_id=step_id, source="agent", message=record.get("output", ""), extra=extra))
         else:
             call = f"step-{record.get('seq')}"
-            function, arguments = step_call(record.get("code", ""))
+            function, arguments = step_call(record.get("code", ""), tools_arm)
             steps.append(
                 Step(
                     step_id=step_id,

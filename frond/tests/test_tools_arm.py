@@ -125,6 +125,7 @@ class ToolsArmTest(WorkspaceCase):
         hint = narrowing_hint(signature, 7, history_tools=True)
         self.assertNotIn("history_step", hint)
         self.assertIn("narrower range", hint)
+        self.assertIn("sub-agent or fetch()", hint)  # Devin, #30 (F56): not every cut result is a file
 
     def test_the_scripted_playground_replays_tool_calls(self):  # Devin, #16 (F37)
         import contextlib
@@ -139,6 +140,11 @@ class ToolsArmTest(WorkspaceCase):
             code = cli.main(["-p", "--script", str(script), "--arm", "react", "--cwd", str(self.root), "go"])
         self.assertEqual(code, 0)
         self.assertIn("replayed", out.getvalue())
+        err = io.StringIO()  # Devin, #30 (F55): a script of the other arm's shape is refused, not replayed as errors
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = cli.main(["-p", "--script", str(script), "--arm", "rlm", "--cwd", str(self.root), "go"])
+        self.assertEqual(code, 2)
+        self.assertIn("every script entry must be {reasoning, code}", err.getvalue())
 
 
 def agent_signature(case: WorkspaceCase):

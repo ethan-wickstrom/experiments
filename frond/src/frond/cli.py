@@ -181,8 +181,13 @@ def main(argv: list[str] | None = None) -> int:
 
         spec = json.loads(args.script.read_text())
         entries = spec if isinstance(spec, list) else spec.get("steps", [])
+        tools_arm = args.arm == "react"
+        if any(("tool" in s) != tools_arm for s in entries):  # a reply the arm cannot parse would replay as errors
+            shape = "{reasoning, tool, args}" if tools_arm else "{reasoning, code}"
+            print(f"frond: with --arm {args.arm}, every script entry must be {shape}", file=sys.stderr)
+            return 2
         steps: list[Step | ToolStep] = [  # {reasoning, tool, args} for the tools arm (F37)
-            ToolStep(s["reasoning"], s["tool"], s.get("args", {})) if "tool" in s else Step(s["reasoning"], s["code"])
+            ToolStep(s["reasoning"], s["tool"], s.get("args", {})) if tools_arm else Step(s["reasoning"], s["code"])
             for s in entries
         ]
         delay = float(spec.get("delay", 0.01)) if isinstance(spec, dict) else 0.01
