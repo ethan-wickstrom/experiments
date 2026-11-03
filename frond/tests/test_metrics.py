@@ -20,7 +20,7 @@ from frond.agent.lm import usage_totals
 from frond.agent.metrics import RunMetrics, normalize_usage
 from frond.agent.prompts import CodingTurn
 from frond.agent.rlm import FrondRLM
-from frond.agent.scripted import Step, ToolStep
+from frond.agent.scripted import CutOff, Step, ToolStep
 from frond.cli import export_run
 from tests.helpers import WorkspaceCase, scripted_agent
 
@@ -125,6 +125,29 @@ class UnparsedStepTest(WorkspaceCase):
                 second = "\n".join(m.text or "" for m in engine.requests[1].messages)
                 self.assertIn("did not follow the step format", second)
                 self.assertIn("Let me think about this first.", second)  # its own words, in the right format
+
+    def test_a_reply_cut_off_at_the_output_limit_is_named_as_such(self):  # G38
+        steps: list[Step | ToolStep | CutOff | str] = [
+            CutOff("I'll write the whole solver now:\n```python\nfor i in range(10"),  # stopped mid-block
+            Step("Smaller.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = scripted_agent(self, steps)
+        record = agent.run_turn("go")
+        self.assertEqual((record.status, record.response), ("done", "ok"))
+        second = "\n".join(m.text or "" for m in engine.requests[1].messages)
+        self.assertIn("reached the output limit and was cut off", second)
+        self.assertNotIn("did not follow the step format", second)
+        self.assertEqual((agent.metrics.unparsed_steps, agent.metrics.cut_off_replies), (1, 1))
+
+    def test_a_cut_off_is_read_from_either_response_shape(self):  # Codex, #31: the LiteLLM route's choices
+        from types import SimpleNamespace
+
+        from frond.agent.rlm import _finish_reason
+
+        self.assertEqual(_finish_reason(SimpleNamespace(finish_reason="length"), 0), "length")
+        litellm = SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop"), {"finish_reason": "length"}])
+        self.assertEqual(_finish_reason(litellm, 1), "length")
+        self.assertIsNone(_finish_reason(None, 0))
 
     def test_a_sub_agents_replies_count_apart_from_the_main_models(self):  # Devin, #27 (F51): another model
         steps: list[Step | ToolStep | str] = [
