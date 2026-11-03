@@ -409,8 +409,9 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             try:
                 with dspy.context(send_stream=None):
                     response = target(prompt)
-            except PROVIDER_ERRORS:
+            except PROVIDER_ERRORS as exc:
                 hooks.provider_error()  # the turn goes on, but a run that saw them is not like one that did not
+                exc.frond_counted = True  # ty: ignore[unresolved-attribute] - so a sub-agent does not count it again
                 raise
             if isinstance(response, dspy.lm15.Response):
                 return response.text or ""

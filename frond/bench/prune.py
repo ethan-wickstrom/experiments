@@ -7,7 +7,9 @@ uses and that were already unused at the previous pass, one ``docker rmi`` at a 
 in the seconds between its pull and the creation of its container. Images of tasks the job has yet to finish are
 kept too: a later trial of the same task needs them, and idleness alone does not show that none will (F2). An image
 pulled by digest has no tag to name its task, so the task is learned from the containers created from it, whose
-compose project Harbor names after the trial (``<task>__<id>__env``), and remembered after they are gone.
+compose project Harbor names after the trial (``<task>__<id>__env``), and remembered after they are gone. Containers
+are read both as they stand and from Docker's event log since the previous pass, so one created and removed between
+two passes is not missed.
 
     python -m bench.prune --while-pid <harbor pid> [--interval 60] [--log prune.log]
 """
@@ -41,6 +43,23 @@ def scan() -> tuple[set[str], dict[str, str]]:
     return images, used
 
 
+def created_between(since: float, until: float) -> dict[str, str]:
+    """Each image a Harbor trial's container was created from in [since, until), with that trial's task."""
+    shown = '{{.Actor.Attributes.image}}\t{{index .Actor.Attributes "com.docker.compose.project"}}'
+    events = _docker(
+        "events", "--since", f"{since:.3f}", "--until", f"{until:.3f}",
+        "--filter", "type=container", "--filter", "event=create", "--format", shown,
+    )  # fmt: skip
+    tasks: dict[str, str] = {}
+    for line in events.splitlines():
+        reference, _, project = line.partition("\t")
+        if "__" in project:
+            image = _docker("image", "inspect", "--format", "{{.Id}}", reference).strip()
+            if image:
+                tasks[image] = project.split("__")[0]
+    return tasks
+
+
 def unused_images() -> set[str]:
     """Images no container (running or stopped) was created from."""
     images, used = scan()
@@ -64,7 +83,11 @@ def prune_while(
     previous: set[str] = set()
     tasks: dict[str, str] = {}  # image -> the task whose trial last used it, remembered after its containers go
     out = open(log, "a", encoding="utf-8") if log else sys.stderr  # noqa: SIM115 - lives as long as the loop
+    since = time.time()
     while pid is None or alive(pid):
+        now = time.time()
+        tasks.update(created_between(since, now))
+        since = now
         images, used = scan()
         tasks.update((image, task) for image, task in used.items() if task)
         keep = pending() if pending is not None else set()

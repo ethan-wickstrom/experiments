@@ -173,6 +173,18 @@ class ProviderFailureTest(WorkspaceCase):
         self.assertEqual(agent.metrics.provider_errors, 1)
         self.assertEqual(agent.metrics.as_dict()["provider_errors"], 1)
 
+    def test_a_sub_agents_provider_failure_is_counted_once(self):  # Devin, #23
+        agent, _ = scripted_agent(self, [Step("Done.", "SUBMIT(response='ok')")])
+        counted = dspy.LMRateLimitError("already counted by llm_query")
+        counted.frond_counted = True  # ty: ignore[unresolved-attribute]
+        for error, expected in ((counted, 0), (dspy.LMRateLimitError("its own call"), 1)):
+            with (
+                mock.patch("frond.agent.session.FrondRLM.__call__", side_effect=error),
+                self.assertRaisesRegex(RuntimeError, "sub-agent failed"),
+            ):
+                agent._run_subagent("look")
+            self.assertEqual(agent.metrics.provider_errors, expected)
+
     def test_an_agent_error_stays_the_agents(self):
         agent, engine = scripted_agent(self, [Step("Go.", "print(1)")])
         with mock.patch.object(engine, "_completion", side_effect=ValueError("bad output")):

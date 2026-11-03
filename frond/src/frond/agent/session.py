@@ -939,7 +939,7 @@ class Agent:
             report = "(cancelled)"
             raise
         except Exception as exc:
-            if isinstance(exc, PROVIDER_ERRORS):
+            if isinstance(exc, PROVIDER_ERRORS) and not getattr(exc, "frond_counted", False):
                 self.metrics.bump("provider_errors")
             report = f"sub-agent failed: {describe_error(exc)}"
             raise RuntimeError(report) from exc
