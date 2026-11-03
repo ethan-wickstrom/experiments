@@ -311,3 +311,17 @@ Each stays closed unless new evidence reopens it:
   - keeping the user's mid-turn messages verbatim outside the summary: frond's provenance design, not the products', and the known failure the fold exists to fix (`steplog.py`, arXiv 2610.31778).
 - Evidence: `tests/test_summary_arm.py`: past the budget the summary replaces early steps, with no index and no history tools, and the summary call is counted; the fold arm keeps the index and the tools.
 
+## D35 · Scopes are tools whose effect lands on the next step's history (2026-11-03, active)
+- Decision:
+  - `open_scope(goal)` records a savepoint: the step, the world and the REPL's names digest. `close_scope(result)` and `abandon_scope(reason)` end the innermost scope; the loop applies the change to the history at the start of the next step;
+  - closing replaces the scope's entries (the tail of the history) with one entry, goal and result, pointing at the steps' log sequence numbers; abandoning reverts the scope's workspace changes with `Timeline.revert` (a three-way merge), cuts the entries away, and adds a note with the reason, what was reverted, what was kept, and the REPL names changed since, now stale;
+  - the user's messages from inside a scope are kept; scopes end with the turn; a FORK branch cannot open or end the main line's scopes;
+  - a volatile `open_scopes` field lists the open scopes; `--scopes` defaults to off until E5; counts go to `metrics.json` (A1).
+- Why: H5 asks whether letting the model fold its own finished subtasks, and rewind failed ones, beats the budget fold on long tasks. A closed scope is always the tail, so collapsing it leaves the cached prefix intact, unlike the budget fold, which rewrites from its index onward. AgentRewind found the note on a failed attempt necessary (51.2% without it), so the reason is kept. Abandoning needs the workspace and the context rewound together, which worlds (D29) provide; that also meets R7.
+- Rejected:
+  - REPL built-ins (like SUBMIT) instead of tools: scopes must work in the tools arm too (H1 and H5 cross);
+  - rewinding the REPL by forking it at each open: a copy cannot fork again (D31), so FORK would stop working after the first abandon, and every open would cost a process;
+  - restoring the world at open by checkout: it would discard edits made by others meanwhile; the revert keeps them;
+  - collapsing the user's messages with the scope: their words are never shortened (D14).
+- Evidence: `tests/test_scopes.py`: a closed scope becomes goal and result while its steps stay in the log; an abandoned scope reverts the workspace, cuts the context, notes the reason and the stale names; the prefix before a scope is unchanged; ending a scope that is not open is an error the model sees; with scopes off there are no tools or field.
+

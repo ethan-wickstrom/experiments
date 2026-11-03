@@ -84,7 +84,7 @@ class Printer:
                 self.log(self.c(_RED, "    " + error.strip().splitlines()[-1][:300]))
             case ev.SubAgentStarted(task=task):
                 self.log(self.c(_CYAN, "  ◇ subagent: ") + task.splitlines()[0][:160])
-            case ev.Compacted(steps=steps):
+            case ev.Folded(steps=steps):
                 self.log(self.c(_DIM, f"  (folded {steps} earlier steps into an index)"))
             case ev.Notice(level=level, text=text):
                 self.log(self.c(_YELLOW if level != "error" else _RED, text))

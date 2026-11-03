@@ -1,6 +1,6 @@
 # Now
 
-Updated 2026-11-03, first session, after B10 (the summary arm) while the third E0a run finishes.
+Updated 2026-11-03, first session, after B9 (scopes): every hypothesis H1–H6 now has both arms.
 
 ## In flight
 
@@ -10,8 +10,10 @@ E0a, the oracle sweep, runs through the matrix runner on the 56 TB 4.0 tasks tha
 
 ## Next, in order (research-first, D16)
 
-1. B9 (scopes as savepoints, H5), the last hypothesis without both arms.
-2. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`, each as a spec in `bench/experiments/`.
+1. When E0a finishes: its summary in `bench/results/`, the oracle-failure exclusion list, and the E0 spec.
+2. Specs for E1–E6 and E11 in `bench/experiments/`, pre-registered before any key arrives.
+3. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`.
+4. B13 (a TUI world view of branches and scopes), B11 (pin DSPy), G21 (world store GC).
 
 ## Waiting on the owner
 

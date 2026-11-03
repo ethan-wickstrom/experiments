@@ -94,6 +94,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "them with a summary the main model writes (an experiment arm, H4)",
     )
     p.add_argument(
+        "--scopes",
+        choices=["on", "off"],
+        default="off",
+        help="give the model scopes: open a subtask, close it into one entry, or abandon it and rewind the "
+        "workspace (default off; an experiment arm, H5)",
+    )
+    p.add_argument(
         "--fork",
         type=int,
         default=1,
@@ -204,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         fork=max(1, args.fork),
         arm=args.arm,
         context=args.context,
+        scopes=args.scopes == "on",
     )
     prompt = " ".join(args.prompt).strip()
 
@@ -351,6 +359,7 @@ def export_run(agent: Agent, directory: Path) -> None:
         "turns": len(this_run),
         "steps": sum(r.steps for r in this_run),
         "continued_after_seq": agent.steps.loaded,
+        "scopes": {"opened": agent.scopes.opened, "closed": agent.scopes.closed, "abandoned": agent.scopes.abandoned},
         **agent.metrics.as_dict(),
     }
     (directory / "metrics.json").write_text(redact(json.dumps(metrics, indent=1)))

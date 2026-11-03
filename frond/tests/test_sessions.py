@@ -13,7 +13,7 @@ from unittest import mock
 from frond import cli
 from frond.agent.scripted import Step
 from frond.agent.session import TurnRecord
-from frond.events import Compacted
+from frond.events import Folded
 from frond.sessions import SessionStore
 from frond.workspace import Workspace
 from tests.helpers import WorkspaceCase, scripted_agent
@@ -74,7 +74,7 @@ class CompactionTest(WorkspaceCase):
         agent.window = 1_000  # a tiny window forces compaction after a few steps
         record = agent.run_turn("go")
         self.assertEqual(record.response, "finished")
-        compactions = [e for e in self.events if isinstance(e, Compacted)]
+        compactions = [e for e in self.events if isinstance(e, Folded)]
         self.assertTrue(compactions)
         self.assertLess(compactions[-1].after_chars, compactions[-1].before_chars)
 

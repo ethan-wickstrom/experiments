@@ -204,7 +204,7 @@ class UsageUpdated:
 
 
 @dataclass(frozen=True, slots=True)
-class Compacted:
+class Folded:
     steps: int
     before_chars: int
     after_chars: int
@@ -272,7 +272,7 @@ type Event = (
     | SubAgentFinished
     | PlanUpdated
     | UsageUpdated
-    | Compacted
+    | Folded
     | SteerDelivered
     | SteersReturned
     | TurnFinished

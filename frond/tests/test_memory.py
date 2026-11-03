@@ -16,7 +16,7 @@ from frond import cli
 from frond.agent.scripted import Step
 from frond.agent.session import TurnRecord, format_history, history_preview
 from frond.agent.steplog import StepLog, tokens
-from frond.events import Compacted, ExecFinished
+from frond.events import ExecFinished, Folded
 from tests.helpers import WorkspaceCase, scripted_agent
 
 
@@ -61,6 +61,13 @@ class StepLogTest(unittest.TestCase):
         self.assertEqual(len(StepLog(directory / "a.steps.jsonl")), 1)
         self.assertEqual(len(StepLog(directory / "b.steps.jsonl")), 1)
 
+    def test_a_log_written_before_the_rename_still_loads(self):
+        path = Path(tempfile.mkdtemp(prefix="frond-log-")) / "s.steps.jsonl"
+        path.write_text('{"seq": 1, "kind": "step", "turn": 1, "step": 1, "scope": "sub2", "output": "old"}\n')
+        record = StepLog(path).get(1)
+        assert record is not None
+        self.assertEqual((record.agent, record.output), ("sub2", "old"))
+
     def test_tokens_split_identifiers(self):
         self.assertEqual(
             tokens("parseConfig max_tokens"), ["parseconfig", "parse", "config", "max_tokens", "max", "tokens"]
@@ -82,7 +89,7 @@ class FoldingTest(WorkspaceCase):
         agent.window = 1_000  # a tiny window forces folding after a few steps
         record = agent.run_turn("go")
         self.assertEqual(record.response, "finished")
-        self.assertTrue(self.of_type(Compacted))
+        self.assertTrue(self.of_type(Folded))
         recovered = [e.output for e in self.of_type(ExecFinished) if "MARKER-42" in (e.output or "")]
         self.assertTrue(any("step MARKER-42 MAR" in o and "\n2" in o for o in recovered), recovered)
         last_prompt = "\n".join(m.text or "" for m in engine.requests[-1].messages)

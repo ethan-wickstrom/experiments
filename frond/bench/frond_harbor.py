@@ -73,8 +73,9 @@ def trajectory(export: Path, *, version: str, model: str | None) -> Trajectory:
             continue
         step_id = len(steps) + 1
         extra = {"seq": record.get("seq"), "turn": record.get("turn")}
-        if record.get("scope"):
-            extra["scope"] = record["scope"]  # a sub-agent's step
+        agent = record.get("agent") or record.get("scope")  # "scope" before ledger N2
+        if agent:
+            extra["agent"] = agent  # a sub-agent's or a FORK branch's step
         if record.get("kind") == "user":
             steps.append(Step(step_id=step_id, source="user", message=record.get("output", ""), extra=extra))
         elif record.get("kind") == "answer":
@@ -142,6 +143,9 @@ class FrondOptions(InstalledAgentOptions):
     context: Annotated[str | None, Cli("--context")] = Field(
         default=None,
         description="fold: early steps folded into a searchable index (default); summary: an LLM summary; H4",
+    )
+    scopes: Annotated[str | None, Cli("--scopes")] = Field(
+        default=None, description="on: open, close and abandon scopes; off: none (frond's default); H5"
     )
     fork: Annotated[int | None, Cli("--fork")] = Field(
         default=None, description="most branches a FORK may explore; 1 turns FORK off (frond's default); H2"
