@@ -24,7 +24,7 @@ from dspy.adapters.base import _expand_legacy_custom_type_markers_in_chat_messag
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
 
-VOLATILE = ("iteration", "repl_variables")  # change every step, so they go after the cached prefix
+VOLATILE = ("iteration", "repl_variables", "stale_reads")  # change every step: after the cached prefix
 NOTE_CODE = "# folded"  # the code shown for a FoldEntry
 STEER_CODE = "# user message"  # the code shown for a UserEntry
 MARKER_REMOVED = "<marker removed>"

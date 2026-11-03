@@ -132,6 +132,9 @@ class FrondOptions(InstalledAgentOptions):
     layout: Annotated[str | None, Cli("--layout")] = Field(
         default=None, description="how each step sees the history: turns (frond's) or chat (DSPy's); H6"
     )
+    freshness: Annotated[str | None, Cli("--freshness")] = Field(
+        default=None, description="on: mark stale reads and guard overwrites; off: only count stale actions; H3"
+    )
 
 
 class Frond(BaseInstalledAgent):

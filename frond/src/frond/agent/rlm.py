@@ -43,6 +43,10 @@ REPL_VARIABLES_DESC = (
     "Names your code has defined in the REPL so far, with their types and sizes. They persist across steps "
     "and turns, so reuse them instead of recomputing."
 )
+STALE_READS_DESC = (
+    "Files you read this turn that changed afterwards, through your own commands or someone else's. What you saw "
+    "of them is out of date: read them again before editing them or relying on them."
+)
 
 
 class LoggedEntry(REPLEntry):
@@ -81,6 +85,10 @@ class Hooks:
         """Keep a step in the step log; returns its sequence number (None: no log)."""
         return None
 
+    def stale_reads(self, step: int) -> str:
+        """Files the model read this turn that changed since (freshness, H3); "(none)" when all still hold."""
+        return "(none)"
+
     def take_messages(self, step: int) -> list[str]:
         """Messages the user sent while the turn ran, to show the model before ``step`` (and forget)."""
         return []
@@ -112,9 +120,11 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         tail_preview: frozenset[str] = frozenset(),
         keep_recent: int = 4,
         marker: str = "",
+        freshness: bool = False,
         **kwargs: Any,
     ) -> None:
         self.hooks = hooks or Hooks()
+        self.freshness = freshness  # show the model which of its reads went stale (H3; hooks.stale_reads)
         self.preview_limits = preview_limits or {}
         self.tail_preview = tail_preview
         self.keep_recent = keep_recent
@@ -156,9 +166,11 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
 
     def _action_signature_for_current_factory(self, factory: Any, sub_agent_rules: str) -> type[dspy.Signature]:
         signature = super()._action_signature_for_current_factory(factory, sub_agent_rules)
-        if "repl_variables" in signature.input_fields:
-            return signature
-        return signature.append("repl_variables", dspy.InputField(desc=REPL_VARIABLES_DESC), type_=str)
+        if "repl_variables" not in signature.input_fields:
+            signature = signature.append("repl_variables", dspy.InputField(desc=REPL_VARIABLES_DESC), type_=str)
+        if self.freshness and "stale_reads" not in signature.input_fields:
+            signature = signature.append("stale_reads", dspy.InputField(desc=STALE_READS_DESC), type_=str)
+        return signature
 
     # ── sub-LLM tools with progress events ───────────────────────────────────
 
@@ -244,12 +256,14 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         hooks.step_started(step, self.max_iters)
         hooks.before_lm(step)
         names = getattr(repl, "names", None)
+        volatile = {"stale_reads": escape_marker(hooks.stale_reads(step), self.marker)} if self.freshness else {}
         action = self.generate_action(
             signature=self._action_signature_for_current_factory(interpreter_factory, sub_agent_rules),
             variables_info=[v.format() for v in variables],
             repl_history=history,
             iteration=f"{step}/{self.max_iters}",
             repl_variables=escape_marker("\n".join(names), self.marker) if names else "(none yet)",
+            **volatile,
         )
         hooks.after_lm(step)
         reasoning = str(action.reasoning or "")

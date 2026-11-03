@@ -237,3 +237,20 @@ Each stays closed unless new evidence reopens it:
   - undoing a turn that committed, file by file: it would leave HEAD at a commit whose content the working tree no longer holds.
 - Evidence: `tests/test_command_undo.py` (commands with and without git, ignored paths, un-ignoring mid-turn, a commit left to git, a background job, a concurrent edit kept, same-line conflicts reported, the net diff, a world per step, the file limit) and the undo tests in `test_regressions` and `test_agent` pass on worlds.
 
+## D30 · Freshness: per-file observations, a stale-read field, and compare-and-swap writes (2026-11-03, active)
+- Decision:
+  - every `view` and `read` by the main agent records an observation: the path, the blob id of the bytes seen (`world.object_id`), and the step. Observations last for the turn;
+  - before each step, the prompt's volatile `stale_reads` field names the reads whose files changed since;
+  - a whole-file `write`, a `delete` or a patch's delete over a stale read is refused until the model reads the file again. A stale `edit` or patch update applies where its old text still matches, and the result says the file had changed. The model's own changes keep its observation fresh, unless it was stale already;
+  - `--freshness off` removes the field, the refusals and the notes, and keeps the count (`stale_actions`): the H3 control arm;
+  - sub-agents record nothing: their reads inform their reports, not the main agent's picture.
+- Why: an edit made from an out-of-date picture either fails (a failed edit, the H3 metric) or, worse, silently overwrites a change the model never saw: a formatter's, a background job's, the user's. Marking staleness addresses the first; compare-and-swap on whole-file writes removes the second outright, as git refuses to overwrite unmerged work.
+- Rejected:
+  - observations per line range (`view` shows a window): finer, but a change outside the window can still invalidate the model's plan, and file level is one dictionary lookup;
+  - warning on stale writes instead of refusing: the overwrite has already happened by the time the model reads the warning;
+  - a `force=True` parameter for writes: it would change the tool's documented signature in both arms; reading the file again is the one way through;
+  - tracking reads made through `sh("cat …")`: parsing shell commands is unreliable, and `view`/`read` are what the prompt directs the model to use;
+  - keeping observations across turns: earlier turns reach the prompt only as summaries, so their reads are not the model's current picture;
+  - attributing each change to a step ("changed at step 7 by your sed"): needs a world lookup per stale path per step; deferred until E3 shows whether the bare mark helps.
+- Evidence: `tests/test_freshness.py` (a read going stale and cleared by a new read in the prompt; refusal and recovery; a stale edit's note; a patch refused before writing anything; the off arm's counts).
+
