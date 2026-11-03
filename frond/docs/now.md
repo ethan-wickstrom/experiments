@@ -4,7 +4,7 @@ Updated 2026-11-03, second session: the program's first model calls. The key wor
 
 ## In flight
 
-E0, the pilot: `uv run python -m bench.matrix bench/experiments/e0-pilot.toml`, run from the worktree `/home/user/run-e0` (merge of PR #27), whose `frond/jobs` links to this checkout's `frond/jobs`. One trial per model on 10 tasks, Haiku, then Sonnet, then Opus (D48): $76.50 on the guesses; the runner stops before any job that could pass $100 (D43). Its log is `frond/jobs/E0/run.log`. If the session ended with E0 unfinished, its trials are lost with the VM unless they were analysed: rerun it, which resumes nothing across VMs.
+E0, the pilot: `uv run python -m bench.matrix bench/experiments/e0-pilot.toml`, run from a worktree of `main` at the merge of the G36 fix (`/home/user/run-e0`, D47), whose `frond/jobs` links to this checkout's `frond/jobs`. One trial per model on 10 tasks, Haiku, then Sonnet, then Opus (D48): $76.50 on the guesses; the runner stops before any job that could pass $100 (D43). Its log is `frond/jobs/E0/run.log`. The first start was stopped in its Haiku job by G36 (DSPy's 64 KiB SSE line limit); its jobs are `frond/jobs/E0-aborted-1`. If the session ended with E0 unfinished, its trials are lost with the VM: rerun it.
 
 E0a is done: 53 of the 55 tasks that start pass under the reference solutions, and the three that fail here are excluded (`bench/results/2026-11-03-e0a-oracle/`).
 

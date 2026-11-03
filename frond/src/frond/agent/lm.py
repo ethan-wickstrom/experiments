@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+import functools
 import os
 import threading
 from dataclasses import dataclass
 from typing import Any
 
 import dspy
+from dspy._vendor.lm15 import sse
+from dspy._vendor.lm15.providers import async_base, base
 from dspy.lm15 import CacheConfig
 
 from frond.agent.metrics import normalize_usage
+
+# DSPy's stream parser refuses an SSE line over 64 KiB, but one event's line can carry a whole text delta, and at
+# frond's 32,000 output tokens that reaches about 130 KB: E0's first Haiku trial ended on a 100,754-byte line (G36).
+# The providers look the parser up by name at each call, so the wider limits apply to every model call frond makes.
+SSE_LINE_BYTES = 16 * 1024 * 1024
+SSE_EVENT_BYTES = 32 * 1024 * 1024
+base.parse_sse = functools.partial(sse.parse_sse, max_line_bytes=SSE_LINE_BYTES, max_event_bytes=SSE_EVENT_BYTES)
+async_base.aparse_sse = functools.partial(
+    sse.aparse_sse, max_line_bytes=SSE_LINE_BYTES, max_event_bytes=SSE_EVENT_BYTES
+)
 
 # (environment variable, main model, sub model): the first key present picks the defaults.
 PROVIDER_DEFAULTS: tuple[tuple[str, str, str], ...] = (
