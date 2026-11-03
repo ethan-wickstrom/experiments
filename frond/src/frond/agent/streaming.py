@@ -294,11 +294,13 @@ class StreamSink:
     ) -> None:
         self.control = control
         self.parser = ReplyStreamParser(on_field)
+        self.call = JsonFieldStreamParser(on_field)  # a native tool call's arguments: its note, and submit's reply
         self.on_thinking = on_thinking
         self.active = True
 
     def arm(self) -> None:
         self.parser.reset()
+        self.call.reset()
 
     async def send(self, chunk: Any) -> None:
         if self.control.cancelled():
@@ -313,6 +315,10 @@ class StreamSink:
             self.on_thinking(thinking)
         if content:
             self.parser.feed(content)
+        for call in _get(delta, "tool_calls") or []:  # native tool calls (B19): the first is the step's
+            arguments = _get(_get(call, "function") or {}, "arguments")
+            if arguments and (_get(call, "index") or 0) == 0:
+                self.call.feed(arguments)
 
 
 def _get(obj: Any, key: str) -> Any:

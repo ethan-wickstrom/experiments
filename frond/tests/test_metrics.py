@@ -207,7 +207,8 @@ class UnparsedStepTest(WorkspaceCase):
                 self.assertEqual((record.status, record.response), ("done", "ok"))
                 self.assertEqual((agent.metrics.parse_failures, agent.metrics.unparsed_steps), (1, 1))
                 second = "\n".join(m.text or "" for m in engine.requests[1].messages)
-                self.assertIn("did not follow the step format", second)
+                why = "was not one tool call" if arm == "react" else "did not follow the step format"  # B19
+                self.assertIn(why, second)
                 self.assertIn("Let me think about this first.", second)  # its own words, in the right format
 
     def test_a_reply_cut_off_at_the_output_limit_is_named_as_such(self):  # G38

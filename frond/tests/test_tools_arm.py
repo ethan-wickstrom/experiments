@@ -9,14 +9,24 @@ from typing import ClassVar
 from dspy.lm15 import CacheConfig
 
 from frond.agent.adapter import FrondAdapter
-from frond.agent.scripted import ToolStep
-from frond.events import FileChanged
+from frond.agent.scripted import CutOff, ToolStep
+from frond.events import FileChanged, ReasoningDelta, ResponseDelta
 from tests.helpers import WorkspaceCase, scripted_agent
 from tests.test_caching import anthropic_payload
 
 
 def text_of(request) -> str:
-    return "\n".join(m.text or "" for m in request.messages)
+    """A request's messages as text, native tool calls and results included (B19)."""
+    out = []
+    for message in request.messages:
+        for part in message.parts:
+            if part.type == "text":
+                out.append(part.text)
+            elif part.type == "tool_call":
+                out.append(json.dumps({"tool": part.name, "args": part.input}))
+            elif part.type == "tool_result":
+                out.extend(getattr(c, "text", "") for c in part.content)
+    return "\n".join(out)
 
 
 class ToolsArmTest(WorkspaceCase):
@@ -35,19 +45,58 @@ class ToolsArmTest(WorkspaceCase):
         self.assertEqual((self.root / "app.py").read_text(), "def f():\n    return 2\n")
         self.assertEqual([e.path for e in self.of_type(FileChanged)], ["app.py"])
         last = text_of(engine.requests[3])
-        self.assertIn("[[ ## tool ## ]]\nview", last)  # earlier calls are turns in the tool-call format
-        self.assertIn('[[ ## args ## ]]\n{"path": "app.py"}', last)
+        # earlier calls are the provider's own tool calls and results (B19)
+        self.assertIn('{"tool": "view", "args": {"note": "Look.", "path": "app.py"}}', last)
+        calls = [p for m in engine.requests[3].messages for p in m.parts if p.type == "tool_call"]
+        self.assertEqual([c.id for c in calls], ["step_1", "step_2", "step_3"])  # stable, so the prefix caches
         self.assertRegex(
             last, r"\$ python3 -c 'import app; print\(app.f\(\)\)'  \[exit 0, [\d.]+s\]\n2"
         )  # as in the REPL
         system = engine.requests[0].system or ""
         system = system if isinstance(system, str) else "".join(getattr(p, "text", "") for p in system)
         self.assertIn("- submit(response: str)", system)
+        tools = {t.name: getattr(t, "parameters", {}) for t in engine.requests[0].tools}
+        self.assertEqual(tools["submit"]["required"], ["note", "response"])
+        self.assertEqual(tools["view"]["required"], ["note", "path"])  # a parameter with a default may be left out
+        self.assertFalse(tools["view"]["additionalProperties"])
         self.assertIn("- edit(", system)
         self.assertNotIn("[[ ## code ## ]]", system + last)  # no code anywhere: the model cannot write any
         self.assertNotIn("repl_variables", system + last)
         steps_logged = [r.code for r in agent.steps.records() if r.kind == "step"]
         self.assertEqual(json.loads(steps_logged[0]), {"tool": "view", "args": {"path": "app.py"}})  # F35
+
+    def test_a_reply_without_a_call_is_an_error_step(self):  # B19: off the protocol, as an unreadable code reply
+        steps = ["I will look at app.py first.", ToolStep("Done.", "submit", {"response": "ok"})]
+        agent, engine = scripted_agent(self, steps, arm="react")
+        self.assertEqual(agent.run_turn("go").response, "ok")
+        self.assertIn("Your reply was not one tool call, so nothing ran.", text_of(engine.requests[1]))
+        counts = (agent.metrics.parse_failures, agent.metrics.unparsed_steps)
+        self.assertEqual(counts, (1, 1))
+
+    def test_an_empty_reply_counts_once(self):  # Codex, #48: parse_native and the adapter both counted it
+        steps = [CutOff(""), ToolStep("Done.", "submit", {"response": "ok"})]
+        agent, _ = scripted_agent(self, steps, arm="react")
+        self.assertEqual(agent.run_turn("go").response, "ok")
+        counts = (agent.metrics.parse_failures, agent.metrics.unparsed_steps, agent.metrics.cut_off_replies)
+        self.assertEqual(counts, (1, 1, 1))
+
+    def test_the_note_and_the_reply_stream_from_the_call(self):  # Codex, #48: native arguments are streamed
+        steps = [
+            ToolStep("Looking at app.py now.", "view", {"path": "app.py"}),
+            ToolStep("Done.", "submit", {"response": "f returns 1"}),
+        ]
+        agent, _ = scripted_agent(self, steps, arm="react")
+        record = agent.run_turn("look")
+        notes = "".join(e.text for e in self.of_type(ReasoningDelta))
+        self.assertIn("Looking at app.py now.", notes)
+        self.assertEqual("".join(e.text for e in self.of_type(ResponseDelta)), record.response)
+
+    def test_the_markers_protocol_keeps_the_field_format(self):
+        steps = [ToolStep("Look.", "view", {"path": "app.py"}), ToolStep("Done.", "submit", {"response": "ok"})]
+        agent, engine = scripted_agent(self, steps, arm="react", protocol="markers")
+        self.assertEqual(agent.run_turn("look").response, "ok")
+        self.assertIn("[[ ## tool ## ]]\nview", text_of(engine.requests[1]))
+        self.assertEqual(engine.requests[0].tools, ())
 
     def test_unknown_tools_and_bad_arguments_are_errors_the_model_sees(self):
         steps = [
