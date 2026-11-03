@@ -124,6 +124,9 @@ class FrondOptions(InstalledAgentOptions):
     sub_model: Annotated[str | None, Cli("--sub-model")] = Field(
         default=None, description="model for sub-queries and sub-agents (default: a smaller sibling)"
     )
+    effort: Annotated[str | None, Cli("--effort")] = Field(
+        default=None, description="the main model's reasoning effort: low, medium, high, xhigh, max (frond: high)"
+    )
 
 
 class Frond(BaseInstalledAgent):

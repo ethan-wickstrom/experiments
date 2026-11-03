@@ -65,7 +65,7 @@ Only what the agent cannot get itself (D16).
 
 | ID | Item | Check | Status | Resolution / source |
 |---|---|---|---|---|
-| B1 | Claude 5.5 compatibility and effort: send no sampling parameters, set `output_config.effort` from `--effort` (default high) | a payload test on `claude-opus-5-5` shows no temperature, no disabled thinking, and the chosen effort | next | D24; without it Opus 5.5 runs at its default `medium` (G3) |
+| B1 | Claude 5.5 compatibility and effort: send no sampling parameters, set `output_config.effort` from `--effort` (default high) | a payload test on `claude-opus-5-5` shows no temperature, no disabled thinking, and the chosen effort | closed (this commit) | `build_lm(effort=…)`, `tests/test_lm.py`; D26 |
 | B2 | Measurement: per-call input, cache read, cache write and output tokens; protocol violations; failed edits; stale actions | `--export` writes them; tests cover each counter | next | `research.md`, Measurements |
 | B3 | Arms and runner: `--arm`, `--layout`, `--context`, `--fork`, `--freshness` and `--scopes` flags passed through Harbor options; `bench/matrix.py` (tasks × arms × trials, resumable); `bench/analyze.py` (Wilcoxon, bootstrap, Holm, cost per solved) | a dry run of the matrix, and analysis on synthetic results | next | `research.md` |
 | B4 | Worlds: a content-addressed store with snapshot, checkout and diff, and a three-way merge; undo becomes a revert by merge; it replaces `Checkpoints` and `GitSnapshots` | tests for byte-exact restore, ignored files, non-git workspaces, and an edit made between a change and its undo surviving | next | D22, `design.md` "Worlds"; closes P2, R2 and R3 |
@@ -130,7 +130,9 @@ Only what the agent cannot get itself (D16).
 |---|---|---|---|---|
 | G1 | Under Landlock alone, the worker can read frond's environment through `/proc` and send it over UDP using ctypes (was I13) | decided | deferred | In research containers the key already sits in frond's own environment, and the container is the boundary. Revisit for daily use, with `PR_SET_DUMPABLE` as the candidate fix |
 | G2 | In TB containers the worker runs under Landlock, not namespaces | — | closed: accepted | U6 |
-| G3 | frond never sets reasoning effort, so Opus 5.5 would run at `medium` | B1 | next | the claude-api reference |
+| G3 | frond never sets reasoning effort, so Opus 5.5 would run at `medium` | B1 | closed (this commit) | D26 |
+| G4 | DSPy sends any provider whose `<PREFIX>_BASE_URL` is set through LiteLLM, which cannot carry `prompt_cache`. Hosted sessions set `ANTHROPIC_BASE_URL` to the public endpoint, so every frond call from such a VM failed | payload test | closed (this commit) | D26 |
+| G5 | Harbor may forward `ANTHROPIC_BASE_URL` into task containers | E0's first run shows the container environment | open, low | frond handles the variable either way (D26) |
 
 ## Assumptions to test
 
