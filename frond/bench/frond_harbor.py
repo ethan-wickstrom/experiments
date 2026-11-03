@@ -1,9 +1,11 @@
 """Run frond on Terminal-Bench (and any other Harbor dataset) through Harbor's installed-agent interface.
 
-    uv tool install harbor            # https://harborframework.com
     export ANTHROPIC_API_KEY=...
-    PYTHONPATH=bench harbor run -d terminal-bench/terminal-bench-2-1 -a frond_harbor:Frond \
-        -m anthropic/claude-sonnet-5-5 -n 8 -o jobs
+    PYTHONPATH=bench uvx --from harbor==0.25.0 harbor run -d terminal-bench/terminal-bench@4.0.0 \
+        -a frond_harbor:Frond -m anthropic/claude-opus-5-5 -e docker -n 1 -o jobs
+
+bench/matrix.py builds these commands for every arm of an experiment, with the egress-CA overlay a host that
+re-terminates TLS needs (bench/compose/egress-ca.yaml).
 
 Harbor runs each task in a sandbox container, by default with Docker; ``-e daytona``, ``modal`` and others work
 without it. This adapter installs frond there from a wheel it builds from this checkout and uploads, so it needs
@@ -18,7 +20,6 @@ This file is not part of the frond package and needs ``harbor`` (written against
 from __future__ import annotations
 
 import json
-import os
 import shlex
 import subprocess
 import tempfile
@@ -44,29 +45,8 @@ from pydantic import Field
 
 PROJECT = Path(__file__).resolve().parents[1]  # the frond project this file ships with
 PATH = 'export PATH="$HOME/.local/bin:$PATH"'
-EXPORT = "frond"  # under Harbor's agent log directory: steps.jsonl, usage.json, answer.md
-CA_IN_CONTAINER = "/tmp/frond-ca-bundle.crt"
+EXPORT = "frond"  # under Harbor's agent log directory: steps.jsonl, usage.json, calls.jsonl, metrics.json, answer.md
 _wheel: Path | None = None
-
-
-def host_ca_bundle() -> Path | None:
-    """The CA bundle the host trusts, when it is not the system default (ledger G6).
-
-    Behind a TLS-inspecting egress proxy, as in hosted agent sessions, a task container reaches the internet only
-    if it trusts the proxy's CA. So the bundle is carried into the container, and curl, uv and Python are pointed
-    at it for frond's install and run.
-    """
-    for value in (os.environ.get("FROND_CA_BUNDLE"), os.environ.get("SSL_CERT_FILE")):
-        if value and Path(value).is_file():
-            return Path(value)
-    return None
-
-
-def tls_env() -> str:
-    if host_ca_bundle() is None:
-        return ""
-    ca = CA_IN_CONTAINER
-    return f"export SSL_CERT_FILE={ca} CURL_CA_BUNDLE={ca} REQUESTS_CA_BUNDLE={ca}; "
 
 
 def build_wheel() -> Path:
@@ -173,13 +153,10 @@ class Frond(BaseInstalledAgent):
         await self.ensure_system_dependencies(environment, ("curl", "ca_certificates"))
         target = f"/tmp/{wheel.name}"
         await environment.upload_file(wheel, target)
-        ca = host_ca_bundle()
-        if ca is not None:
-            await environment.upload_file(ca, CA_IN_CONTAINER)
         await self.exec_as_agent(
             environment,
             command=(
-                f"set -euo pipefail; {tls_env()}"
+                "set -euo pipefail; "
                 "command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh; "
                 f"{PATH}; uv tool install --force --python 3.12 {shlex.quote(target)}; frond --version"
             ),
@@ -195,7 +172,7 @@ class Frond(BaseInstalledAgent):
             environment,
             env=env,
             command=(
-                f'{tls_env()}{PATH}; task="$FROND_INSTRUCTION"; unset FROND_INSTRUCTION; '
+                f'{PATH}; task="$FROND_INSTRUCTION"; unset FROND_INSTRUCTION; '
                 f"frond -p --yolo --model {shlex.quote(self.model_name)} {self.build_cli_flags()} "
                 f'--export {logs}/{EXPORT} "$task" </dev/null 2>{logs}/frond-progress.log; rc=$?; '
                 # Harbor classifies failures (rate limits, auth) from stderr: give it the tail of frond's progress.

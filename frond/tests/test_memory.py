@@ -40,6 +40,27 @@ class StepLogTest(unittest.TestCase):
         self.assertEqual({h["seq"] for h in hits[:2]}, {1, 2})  # snake_case and camelCase both match
         self.assertEqual(again.add("user", turn=2, output="next"), 4)
 
+    def test_a_line_cut_short_by_a_crash_does_not_swallow_the_next_record(self):
+        path = Path(tempfile.mkdtemp(prefix="frond-log-")) / "s.steps.jsonl"
+        StepLog(path).add("user", turn=1, output="first")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write('{"seq": 2, "kind": "step", "turn": 1, "out')  # the process died mid-write
+        log = StepLog(path)
+        self.assertEqual(len(log), 1)
+        log.add("answer", turn=1, output="after the crash")
+        again = StepLog(path)
+        self.assertEqual([r.output for r in again.records()], ["first", "after the crash"])
+
+    def test_a_restart_begins_a_new_record_and_keeps_the_old_file(self):
+        directory = Path(tempfile.mkdtemp(prefix="frond-log-"))
+        log = StepLog(directory / "a.steps.jsonl")
+        log.add("user", turn=1, output="the build takes 93 seconds")
+        log.restart(directory / "b.steps.jsonl")
+        self.assertEqual((len(log), log.search("build seconds")), (0, []))
+        self.assertEqual(log.add("user", turn=1, output="a new conversation"), 1)
+        self.assertEqual(len(StepLog(directory / "a.steps.jsonl")), 1)
+        self.assertEqual(len(StepLog(directory / "b.steps.jsonl")), 1)
+
     def test_tokens_split_identifiers(self):
         self.assertEqual(
             tokens("parseConfig max_tokens"), ["parseconfig", "parse", "config", "max_tokens", "max", "tokens"]
@@ -108,6 +129,35 @@ class PreviewAndNamesTest(WorkspaceCase):
         first = "\n".join(m.text or "" for m in engine.requests[0].messages)
         self.assertIn("[[ ## repl_variables ## ]]\n(none yet)", first)
 
+    def test_code_that_does_not_compile_leaves_the_names_as_they_were(self):
+        steps = [
+            Step("Define.", "x = {'a': 1}"),
+            Step("Typo.", "def broken(:"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = scripted_agent(self, steps)
+        agent.run_turn("go")
+        third = "\n".join(m.text or "" for m in engine.requests[2].messages)
+        self.assertIn("x: dict, 1 keys ('a')", third.split("[[ ## repl_variables ## ]]", 1)[1])
+
+
+class NewConversationTest(WorkspaceCase):
+    def test_a_new_conversation_cannot_search_the_old_one(self):
+        directory = Path(tempfile.mkdtemp(prefix="frond-log-"))
+        steps = [
+            Step("Measure.", "print('the build takes 93 seconds')"),
+            Step("Answer.", "SUBMIT(response='measured')"),
+            Step("Recall.", "SUBMIT(response=repr(history_search('build seconds')))"),
+        ]
+        agent, _ = scripted_agent(self, steps)
+        agent.attach_log(directory / "old.steps.jsonl")
+        agent.new_log = lambda: directory / "new.steps.jsonl"
+        agent.run_turn("how long is the build?")
+        agent.clear()
+        self.assertEqual(agent.run_turn("what did we measure?").response, "[]")
+        self.assertIn("93 seconds", (directory / "old.steps.jsonl").read_text())
+        self.assertNotIn("93 seconds", (directory / "new.steps.jsonl").read_text())
+
 
 class ContinueKeepsTheLogTest(WorkspaceCase):
     files: ClassVar[dict[str, str]] = {"notes.txt": "hello\n"}
@@ -138,6 +188,21 @@ class ContinueKeepsTheLogTest(WorkspaceCase):
         self.assertEqual(usage["calls"], 2)
         self.assertGreater(usage["input_tokens"], 0)
         self.assertEqual((export / "answer.md").read_text(), "exported")
+
+    def test_a_continued_run_exports_only_what_it_did(self):
+        first = [
+            {"reasoning": "Look.", "code": "print('looked')"},
+            {"reasoning": "Answer.", "code": "SUBMIT(response='first')"},
+        ]
+        self.assertEqual(self.run_cli(first, "go"), "first")
+        export = self.root / "out"
+        second = [{"reasoning": "Answer.", "code": "SUBMIT(response='second')"}]
+        self.assertEqual(self.run_cli(second, "--continue", "--export", str(export), "again"), "second")
+        records = [json.loads(line) for line in (export / "steps.jsonl").read_text().splitlines()]
+        self.assertEqual([r["kind"] for r in records], ["user", "step", "answer"])
+        metrics = json.loads((export / "metrics.json").read_text())
+        self.assertEqual((metrics["turns"], metrics["steps"], metrics["continued_after_seq"]), (1, 1, 4))
+        self.assertEqual(json.loads((export / "usage.json").read_text())["calls"], 1)
 
     def test_continue_can_search_the_earlier_session(self):
         first = [

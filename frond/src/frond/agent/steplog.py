@@ -1,15 +1,16 @@
 """The conversation's lossless record: every user message, every REPL step and every answer, in order.
 
 A long turn folds its early steps out of the prompt to stay within the context window, and the prompt shows only
-the tail of earlier turns. Neither step loses anything: the record keeps each step's reasoning, code and full
-output under a sequence number, and the agent reads it back with ``history_search`` and ``history_step``. This
+the tail of earlier turns. Neither step loses anything: the record keeps each step's reasoning, code and output
+under a sequence number, and the agent reads it back with ``history_search`` and ``history_step``. The one limit:
+an output longer than ``MAX_STORED_OUTPUT`` characters is cut there, with a note saying how much was dropped. This
 follows Scroll ("Context as an Environment", arXiv 2608.21690), where an append-only event log the model queries
 from its REPL beat summarised history by a wide margin (73.1% vs 19.9% on BEAM-10M), and replaces summaries,
 which drop the user's constraints (arXiv 2610.31778), mix the summariser's guesses in with facts (arXiv
 2610.20927), and can launder instructions planted in tool output into apparent user turns (arXiv 2610.29869).
 
 Search is BM25 over identifiers and words. The record is appended to a JSONL file beside the session file, so
-``--continue`` brings it back.
+``--continue`` brings it back. A new conversation (``/new``) starts a new file: search covers one conversation.
 """
 
 from __future__ import annotations
@@ -85,6 +86,7 @@ class StepLog:
         self._postings: dict[str, dict[int, int]] = {}  # term -> {index: count}
         self._lengths: list[int] = []
         self.path: Path | None = None
+        self.loaded = 0  # records that came from the file at attach time, written by an earlier process
         if path is not None:
             self.attach(path)
 
@@ -97,13 +99,26 @@ class StepLog:
             self._records, self._postings, self._lengths = [], {}, []
             self.path = path
             if path.exists():
-                for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                data = path.read_bytes()
+                for line in data.decode("utf-8", errors="replace").splitlines():
                     try:
                         self._index(Record(**json.loads(line)))
                     except (ValueError, TypeError):
                         continue  # a line cut short by a crash
+                if data and not data.endswith(b"\n"):
+                    # a crash cut the last line short: end it, so the next record starts a line of its own
+                    with open(path, "ab") as f:
+                        f.write(b"\n")
+            self.loaded = len(self._records)
             for record in pending:
                 self._write(self._index(record))
+
+    def restart(self, path: Path | None) -> None:
+        """Begin a new conversation's record in ``path``: what came before stays in its own file, out of search."""
+        with self._lock:
+            self._records, self._postings, self._lengths = [], {}, []
+            self.path = path
+            self.loaded = 0
 
     def add(
         self,

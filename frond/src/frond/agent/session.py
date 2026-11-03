@@ -277,9 +277,11 @@ class Agent:
         lm: dspy.LM | None = None,
         sub_lm: dspy.LM | None = None,
         persist: Callable[[list[TurnRecord]], None] | None = None,
+        new_log: Callable[[], Path] | None = None,
     ) -> None:
         self.config = config
         self.persist = persist
+        self.new_log = new_log  # where a new conversation's step log goes (and, for the caller, its session file)
         self.workspace = workspace
         self._emit = emit
         self.control = TurnControl()
@@ -644,8 +646,10 @@ class Agent:
         self.pool.reset()
 
     def clear(self) -> None:
-        """Forget the conversation (the REPL namespace is kept unless reset_repl is called)."""
+        """Start a new conversation (the REPL namespace is kept unless reset_repl is called). The old conversation's
+        steps stay in their file, out of history_search; with no ``new_log`` the new record is kept in memory only."""
         self.history.clear()
+        self.steps.restart(self.new_log() if self.new_log is not None else None)
 
     def close(self) -> None:
         if self._closed:

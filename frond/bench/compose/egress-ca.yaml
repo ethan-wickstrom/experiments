@@ -1,0 +1,23 @@
+# Trust the egress CA of a host that re-terminates outbound TLS (decision D27, ledger G7).
+#
+# Some hosts, the session VM among them, intercept outbound TLS and present certificates from their own CA. Task
+# containers do not trust that CA, so pip, uv, curl and git fail inside them: for the agent, for the oracle and for the
+# verifier's tests alike. This overlay mounts the CA bundle read-only into the task's main service and points the
+# usual variables at it. `docker exec` inherits a container's environment, so the agent's commands and the verifier's
+# tests see it too.
+#
+#   FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt harbor run ... --extra-docker-compose bench/compose/egress-ca.yaml
+#
+# bench/matrix.py adds it whenever FROND_EGRESS_CA (or, failing that, SSL_CERT_FILE) names a file.
+services:
+  main:
+    volumes:
+      - ${FROND_EGRESS_CA:?set FROND_EGRESS_CA to the CA bundle file}:/etc/frond/egress-ca.crt:ro
+    environment:
+      SSL_CERT_FILE: /etc/frond/egress-ca.crt # OpenSSL (Python's ssl, curl), Go, uv
+      REQUESTS_CA_BUNDLE: /etc/frond/egress-ca.crt # requests, and conda through it
+      CURL_CA_BUNDLE: /etc/frond/egress-ca.crt # curl
+      PIP_CERT: /etc/frond/egress-ca.crt # pip
+      NODE_EXTRA_CA_CERTS: /etc/frond/egress-ca.crt # node, npm
+      GIT_SSL_CAINFO: /etc/frond/egress-ca.crt # git
+      CARGO_HTTP_CAINFO: /etc/frond/egress-ca.crt # cargo

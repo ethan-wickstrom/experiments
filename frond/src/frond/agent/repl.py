@@ -351,7 +351,8 @@ class ReplSession:
             self._send(reply)
 
     def _finish(self, message: dict[str, Any], reason: str) -> Any:
-        self.names = list(message.get("names") or [])
+        if "names" in message:  # code that did not compile ran nothing, so the namespace is as it was
+            self.names = list(message["names"] or [])
         status = message.get("status")
         stdout = message.get("stdout") or ""
         warning = message.get("warning")

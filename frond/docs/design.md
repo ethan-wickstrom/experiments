@@ -108,7 +108,7 @@ C2 has a consequence that crosses spaces. DSPy's sandboxed interpreter runs on D
 ### Success criteria
 
 "Outperform Codex" splits three ways:
-- Pass rate. About 90 tasks at 5 trials each gives a 95% interval of roughly ±4–5 points on the paired difference. That is an estimate, assuming per-task variance typical of agent runs, and P0 measures it. A 3-point gap cannot be resolved at that size, but "no worse within 5 points" can. The test is the Wilcoxon signed-rank test with the task as the pairing unit, the method AgentRewind used.
+- Pass rate. About 90 tasks at 5 trials each gives a 95% interval of roughly ±4–5 points on the paired difference. That is an estimate, assuming per-task variance typical of agent runs, and E0 measures it. A 3-point gap cannot be resolved at that size, but "no worse within 5 points" can. The test is the Wilcoxon signed-rank test with the task as the pairing unit, the method AgentRewind used.
 - Cost per solved task. Cost differences between harnesses are large, so a real advantage would be detectable.
 - Interaction. Stop latency, delivery of mid-turn messages, undo fidelity including shell changes, and injection resistance are deterministic properties. The scripted LM can test them, and they are where frond's design differs most from Codex, which removed its ghost-commit undo in v0.126.
 
