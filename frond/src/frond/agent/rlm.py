@@ -43,6 +43,7 @@ from frond.agent.adapter import (
     STEER_CODE,
     FoldEntry,
     UserEntry,
+    empty_reply,
     escape_marker,
     user_tag,
     without_markers,
@@ -222,12 +223,14 @@ def _call_of(completion: str) -> tuple[Any, Any]:
     """The finish reason and the raw response of the call that returned ``completion``. The LM's history is shared
     with sub-agents and FORK branches in other threads, so the call is found by its output, not taken as the latest."""
     history = getattr(dspy.settings.lm, "history", None) or []
+    empty = completion.strip() in ("", "None")  # DSPy reports a reply with no text as "None" (G45)
     for entry in reversed(history[-50:]):
         outputs = entry.get("outputs") or []
         texts = [o if isinstance(o, str) else (o.get("text") if isinstance(o, dict) else None) for o in outputs]
-        if completion in texts:
+        hits = [i for i, text in enumerate(texts) if (not text if empty else text == completion)]
+        if hits:
             response = entry.get("response")
-            return _finish_reason(response, texts.index(completion)), response
+            return _finish_reason(response, hits[0]), response
     return None, None
 
 
@@ -639,7 +642,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         at the cost of a step, instead of the turn ending (G34). The reply, without field markers, stands as the
         step's reasoning, so the history shows the model its own words in the format it must use."""
         hooks = self.hooks
-        completion = str(exc.lm_response or "")
+        completion = "" if empty_reply(exc) else str(exc.lm_response or "")
         finish, response = _call_of(completion)
         if finish == "content_filter":  # declined by the provider's classifier: retrying would be declined too (G43)
             raise Refused(_refusal_category(response)) from exc
