@@ -17,8 +17,11 @@ and keeps tool output in messages of its own rather than in one string with the 
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
+import typing
+from collections.abc import Callable
 from typing import Any
 
 import dspy
@@ -205,7 +208,42 @@ LAYOUTS = ("turns", "chat")
 # output_config.format) holds to the step's schema, so no reply is off the protocol except one cut off or refused
 # (G48, D53). "markers": DSPy's `[[ ## field ## ]]` text, kept as the control arm.
 PROTOCOLS = ("json", "markers")
-JSON_FIELDS = frozenset({NOTE, "code"})  # the steps that can have a JSON schema: every field a string
+CODE_FIELDS = frozenset({NOTE, "code"})  # a code step: its schema is every field a string
+TOOL_FIELDS = frozenset({NOTE, "tool", "args"})  # a tools-arm step: its schema is one variant per tool (B19)
+
+
+def tool_reply_schema(tools: dict[str, Callable[..., Any]]) -> dict[str, Any]:
+    """The JSON schema of a tools-arm reply (B19): one variant per tool, each naming the tool and holding exactly its
+    parameters. Strict schemas require every property, so a parameter with a default is nullable, and null means
+    "use the default" (``drop_nulls``). Sent as structured output, as code steps' schemas are (D53)."""
+    variants = []
+    for name, func in tools.items():
+        target = getattr(func, "__wrapped__", func)
+        hints = typing.get_type_hints(target)
+        properties: dict[str, Any] = {}
+        for param in inspect.signature(target).parameters.values():
+            if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+                continue
+            kind: Any = hints.get(param.name, str)
+            if param.default is not param.empty:
+                kind = kind | None
+            properties[param.name] = pydantic.TypeAdapter(kind).json_schema()
+        args = {"type": "object", "properties": properties, "required": list(properties), "additionalProperties": False}
+        variants.append(
+            {
+                "type": "object",
+                "properties": {NOTE: {"type": "string"}, "tool": {"const": name}, "args": args},
+                "required": [NOTE, "tool", "args"],
+                "additionalProperties": False,
+            }
+        )
+    schema = {"anyOf": variants}
+    return {"type": "json_schema", "json_schema": {"name": "ToolStep", "strict": True, "schema": schema}}
+
+
+def drop_nulls(args: dict[str, Any]) -> dict[str, Any]:
+    """A tools-arm call's arguments without the nulls that stand for a parameter's default (B19)."""
+    return {name: value for name, value in args.items() if value is not None}
 
 
 def step_schema(signature: type[dspy.Signature]) -> type[pydantic.BaseModel]:
@@ -246,10 +284,9 @@ class FrondAdapter(dspy.ChatAdapter):
         self.marker = marker  # marks the user's messages; escaped out of every step's output (see user_tag)
 
     def json_step(self, signature: type[dspy.Signature]) -> bool:
-        """True when this signature's replies are JSON: the json protocol, and a step whose fields are all
-        strings (the code step). The tools arm's `args` is an open object, which strict schemas cannot hold, so
-        it keeps the markers until it has a schema per tool (B19)."""
-        return self.protocol == "json" and set(signature.output_fields) == JSON_FIELDS
+        """True when this signature's replies are JSON: the json protocol, and a code step or a tools-arm step.
+        A tools-arm step's schema depends on its tools, so its caller passes it as ``response_format`` (B19)."""
+        return self.protocol == "json" and set(signature.output_fields) in (CODE_FIELDS, TOOL_FIELDS)
 
     def format_field_structure(self, signature: type[dspy.Signature]) -> str:
         if not self.json_step(signature):
@@ -260,7 +297,7 @@ class FrondAdapter(dspy.ChatAdapter):
         fields = ", ".join(f"`{name}`" for name in signature.output_fields)
         return (
             "All interactions will be structured in the following way, with the appropriate values filled in."
-            f"\n\n{inputs}\n\nEach reply is one JSON object with the string fields {fields}, and nothing else."
+            f"\n\n{inputs}\n\nEach reply is one JSON object with the fields {fields}, and nothing else."
         )
 
     def user_message_output_requirements(self, signature: type[dspy.Signature]) -> str:
@@ -288,14 +325,18 @@ class FrondAdapter(dspy.ChatAdapter):
             fields = json.loads(completion)
         except ValueError:
             fields = None
-        if not isinstance(fields, dict) or set(fields) != set(signature.output_fields):
+        if (
+            not isinstance(fields, dict)
+            or set(fields) != set(signature.output_fields)
+            or not isinstance(fields.get("args", {}), dict)
+        ):
             raise AdapterParseError(
                 adapter_name=type(self).__name__,
                 signature=signature,  # ty: ignore[invalid-argument-type]  (DSPy passes the class too)
                 lm_response=completion,
                 message="The reply is not one JSON object with the step's fields.",
             )
-        return {name: str(value) for name, value in fields.items()}
+        return {name: value if name == "args" else str(value) for name, value in fields.items()}
 
     def parse(self, signature: type[dspy.Signature], completion: str) -> dict[str, Any]:
         if self.json_step(signature):
@@ -343,7 +384,10 @@ class FrondAdapter(dspy.ChatAdapter):
             if self.json_step(signature):
                 # Not through ChatAdapter's fallback to DSPy's JSONAdapter: the reply was already held to the
                 # schema, so asking again in another format would be a second billed call for the same step.
-                lm_kwargs = {**lm_kwargs, "response_format": step_schema(signature)}
+                if set(signature.output_fields) == CODE_FIELDS:
+                    lm_kwargs = {**lm_kwargs, "response_format": step_schema(signature)}
+                elif "response_format" not in lm_kwargs:
+                    raise ValueError("a tools-arm step on the json protocol needs its tools' schema (B19)")
                 return Adapter.__call__(self, lm, lm_kwargs, signature, demos, inputs)
             return super().__call__(lm, lm_kwargs, signature, demos, inputs)
         except AdapterParseError as exc:

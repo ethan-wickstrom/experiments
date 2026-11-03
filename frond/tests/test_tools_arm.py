@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import unittest
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from dspy.lm15 import CacheConfig
 
@@ -35,19 +35,40 @@ class ToolsArmTest(WorkspaceCase):
         self.assertEqual((self.root / "app.py").read_text(), "def f():\n    return 2\n")
         self.assertEqual([e.path for e in self.of_type(FileChanged)], ["app.py"])
         last = text_of(engine.requests[3])
-        self.assertIn("[[ ## tool ## ]]\nview", last)  # earlier calls are turns in the tool-call format
-        self.assertIn('[[ ## args ## ]]\n{"path": "app.py"}', last)
+        self.assertIn('{"note": "Look.", "tool": "view", "args": {"path": "app.py"}}', last)  # earlier calls as turns
         self.assertRegex(
             last, r"\$ python3 -c 'import app; print\(app.f\(\)\)'  \[exit 0, [\d.]+s\]\n2"
         )  # as in the REPL
         system = engine.requests[0].system or ""
         system = system if isinstance(system, str) else "".join(getattr(p, "text", "") for p in system)
         self.assertIn("- submit(response: str)", system)
+        schema: Any = engine.requests[0].config.response_format  # B19: each reply held to one tool's schema
+        schema = schema["schema"]
+        variants = {v["properties"]["tool"]["const"]: v["properties"]["args"] for v in schema["anyOf"]}
+        self.assertEqual(variants["submit"]["required"], ["response"])
+        self.assertEqual(variants["view"]["properties"]["end"], {"anyOf": [{"type": "integer"}, {"type": "null"}]})
+        self.assertFalse(variants["view"]["additionalProperties"])
         self.assertIn("- edit(", system)
-        self.assertNotIn("[[ ## code ## ]]", system + last)  # no code anywhere: the model cannot write any
+        self.assertNotIn('"code"', system + last)  # no code anywhere: the model cannot write any
         self.assertNotIn("repl_variables", system + last)
         steps_logged = [r.code for r in agent.steps.records() if r.kind == "step"]
         self.assertEqual(json.loads(steps_logged[0]), {"tool": "view", "args": {"path": "app.py"}})  # F35
+
+    def test_a_null_argument_takes_the_parameters_default(self):  # B19: strict schemas require every argument
+        steps = [
+            ToolStep("Look.", "view", {"path": "app.py", "start": None, "end": None}),
+            ToolStep("Done.", "submit", {"response": "ok"}),
+        ]
+        agent, engine = scripted_agent(self, steps, arm="react")
+        self.assertEqual(agent.run_turn("look").response, "ok")
+        self.assertIn("2│     return 1", text_of(engine.requests[1]))
+
+    def test_the_markers_protocol_keeps_the_field_format(self):
+        steps = [ToolStep("Look.", "view", {"path": "app.py"}), ToolStep("Done.", "submit", {"response": "ok"})]
+        agent, engine = scripted_agent(self, steps, arm="react", protocol="markers")
+        self.assertEqual(agent.run_turn("look").response, "ok")
+        self.assertIn("[[ ## tool ## ]]\nview", text_of(engine.requests[1]))
+        self.assertIsNone(engine.requests[0].config.response_format)
 
     def test_unknown_tools_and_bad_arguments_are_errors_the_model_sees(self):
         steps = [

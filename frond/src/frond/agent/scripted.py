@@ -43,6 +43,8 @@ class ToolStep:
     args: dict[str, Any]
 
     def render(self, json_reply: bool = False) -> str:
+        if json_reply:
+            return json.dumps({"note": self.reasoning, "tool": self.tool, "args": self.args})
         return (
             f"[[ ## note ## ]]\n{self.reasoning}\n\n[[ ## tool ## ]]\n{self.tool}\n\n"
             f"[[ ## args ## ]]\n{json.dumps(self.args)}\n\n[[ ## completed ## ]]\n"
@@ -97,7 +99,7 @@ class ScriptedEngine:
 
     def _completion(self, request: Request) -> str | CutOff:
         text = _request_text(request)
-        json_reply = request.config.response_format is not None  # frond asks for JSON only of code steps
+        json_reply = request.config.response_format is not None  # frond asks for JSON only of action steps
         with self._lock:
             self.requests.append(request)
             if "[[ ## repl_history ## ]]" in text and (

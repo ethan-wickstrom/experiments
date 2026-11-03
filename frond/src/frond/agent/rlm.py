@@ -43,8 +43,10 @@ from frond.agent.adapter import (
     STEER_CODE,
     FoldEntry,
     UserEntry,
+    drop_nulls,
     empty_reply,
     escape_marker,
+    tool_reply_schema,
     user_tag,
     without_markers,
 )
@@ -309,6 +311,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             raise ValueError(f"action_space must be 'code' or 'tools', not {action_space!r}")
         self.action_space = action_space  # "code": Python in the REPL; "tools": one tool call per step (H1, B8)
         self._tools_signature: type[dspy.Signature] | None = None
+        self._tool_reply_schema: dict[str, Any] | None = None
         self.hooks = hooks or Hooks()
         self.freshness = freshness  # show the model which of its reads went stale (H3; hooks.stale_reads)
         self.max_branches = max_branches  # FORK is documented, and defined in the REPL, from 2 (H2, ledger B7)
@@ -380,6 +383,20 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             signature = signature.append("stale_reads", dspy.InputField(desc=STALE_READS_DESC), type_=str)
         return self._with_scopes(signature)
 
+    def _tool_schema(self, submit_fields: list[str]) -> dict[str, Any]:
+        """The schema a tools-arm reply is held to on the json protocol: the tools, and submit with the turn's
+        output fields (B19)."""
+        if self._tool_reply_schema is None:
+
+            def submit(**fields: str) -> None: ...
+
+            submit.__signature__ = inspect.Signature(  # ty: ignore[unresolved-attribute]
+                [inspect.Parameter(n, inspect.Parameter.KEYWORD_ONLY, annotation=str) for n in submit_fields]
+            )
+            functions = {name: tool.func for name, tool in self._user_tools.items()}
+            self._tool_reply_schema = tool_reply_schema({**functions, "submit": submit})
+        return self._tool_reply_schema
+
     def _tool_context(self, input_args: dict[str, Any]) -> list[str]:
         """The inputs as text: without a REPL, the model reads them here, clipped like the REPL's previews."""
         out = []
@@ -409,12 +426,14 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         volatile: dict[str, str],
     ) -> Prediction | REPLHistory:
         hooks = self.hooks
+        config = {"response_format": self._tool_schema(output_field_names)} if self.protocol == "json" else {}
         try:
             action = self.generate_action(
                 signature=self._tool_signature(),
                 variables_info=self._tool_context(input_args),
                 repl_history=history,
                 iteration=f"{step}/{self.max_iters}",
+                config=config,
                 **volatile,
             )
         except AdapterParseError as exc:
@@ -425,7 +444,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         action["reasoning"] = reasoning  # what DSPy's loop records each step's narration as
         name = str(getattr(action, "tool", "") or "").strip()
         args = getattr(action, "args", None)
-        args = args if isinstance(args, dict) else {}
+        args = drop_nulls(args) if isinstance(args, dict) else {}
         call = json.dumps({"tool": name, "args": args}, ensure_ascii=False, default=str)
         shown = f"{name}({', '.join(f'{k}={v!r}' for k, v in args.items())})"
         hooks.step_planned(step, reasoning, shown)
@@ -659,10 +678,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         cut_off = finish == "length"
         hooks.reply_unparsed(step, cut_off)
         reply = _clip(without_markers(completion), 4_000) or "(an empty reply)"
-        if self.action_space == "tools":
+        if self.protocol == "json":
+            fields, empty = "", "{}" if self.action_space == "tools" else ""
+        elif self.action_space == "tools":
             fields, empty = "`[[ ## tool ## ]]` with the tool's name, then `[[ ## args ## ]]` with a JSON object", "{}"
-        elif self.protocol == "json":
-            fields, empty = "", ""
         else:
             fields, empty = "`[[ ## code ## ]]` with one ```python block", ""
         why = (  # G38: a reply cut off at the output limit is no format error, and needs a shorter step, not markers
@@ -671,8 +690,9 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             if cut_off
             else "Your reply did not follow the step format, so nothing ran."
         )
+        names = f"`{NOTE}`, `tool` and `args`" if self.action_space == "tools" else f"`{NOTE}` and `code`"
         how = (
-            f"Reply with one JSON object with the string fields `{NOTE}` and `code`."
+            f"Reply with one JSON object with the fields {names}."
             if not fields
             else f"Reply with `[[ ## {NOTE} ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put nothing "
             "before the first marker."
