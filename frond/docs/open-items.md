@@ -401,12 +401,12 @@ PR2 is under Waiting on you.
 [PR #3](https://github.com/ethan-wickstrom/experiments/pull/3) (`claude/frond-context-engine`, stacked on PR #2) is a draft with no reviews. It leaves draft only after P1 is committed to it.
 - Done when all of these hold:
   - P1 is on the branch (done in 3c188c9);
-  - the description cites AgentRewind precisely: 62.2% with no rewind, 43.9% with the context rewound alone, 87.8% with both;
-  - the description ends with the PR attribution lines;
+  - the description cites AgentRewind precisely: 62.2% with no rewind, 43.9% with the context rewound alone, 87.8% with both (done 2026-11-03, with P1 and the docs added to it);
+  - the description ends with the PR attribution lines (done 2026-11-03);
   - the PR is marked ready.
 - Status: open; P1 is on the branch · Blocked on: your go-ahead to leave draft, which also starts the Codex and Devin reviews · Source: PR #3; your instruction of 2026-11-03.
 
-Safety-net check-ins for both PRs exist only in the session that created them (next at 10:12 UTC on 2026-11-03; 1 of 3 empty so far). A new session has none, and should subscribe to both PRs itself.
+Safety-net check-ins for both PRs exist only in the session that created them. The next is at 08:34 UTC on 2026-11-03, and the empty count reset with the P1 push. A new session has none, and should subscribe to both PRs itself.
 
 ## Decisions that close earlier ideas
 
