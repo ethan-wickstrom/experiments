@@ -9,9 +9,12 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest import mock
 
+import dspy
 from dspy.utils.exceptions import AdapterParseError
 
+from bench import analyze
 from frond.agent.adapter import FrondAdapter
 from frond.agent.lm import usage_totals
 from frond.agent.metrics import RunMetrics, normalize_usage
@@ -125,6 +128,42 @@ class ExportTest(WorkspaceCase):
         calls = [json.loads(line) for line in (out / "calls.jsonl").read_text().splitlines()]
         self.assertTrue(calls)
         self.assertTrue(all({"role", "model", "usage", "raw_usage"} <= set(c) for c in calls))
+
+
+class ProviderFailureTest(WorkspaceCase):
+    """A run that ends because the model provider failed is flagged, exits 75, and is not scored (ledger G22)."""
+
+    def test_a_rate_limit_is_the_providers_failure_not_the_agents(self):
+        agent, engine = scripted_agent(self, [Step("Go.", "print(1)")])
+        with mock.patch.object(engine, "_completion", side_effect=dspy.LMRateLimitError("too many requests")):
+            record = agent.run_turn("go")
+        self.assertEqual((record.status, record.error_kind), ("error", "provider"))
+        out = Path(tempfile.mkdtemp(prefix="frond-export-"))
+        self.addCleanup(shutil.rmtree, out, True)
+        export_run(agent, out)
+        metrics = json.loads((out / "metrics.json").read_text())
+        self.assertEqual(metrics["error_kind"], "provider")
+        trial = out.parent / (out.name + "-trial")
+        self.addCleanup(shutil.rmtree, trial, True)
+        (trial / "agent").mkdir(parents=True)
+        shutil.copytree(out, trial / "agent" / "frond")
+        started = {"started_at": "2026-11-03T10:00:00Z", "finished_at": "2026-11-03T10:01:00Z"}
+        (trial / "result.json").write_text(
+            json.dumps(
+                {"task_id": {"name": "t"}, "agent_execution": started, "verifier_result": {"rewards": {"reward": 0}}}
+            )
+        )
+        scored = analyze.load_trial(trial, "frond", analyze.load_prices())
+        assert scored is not None
+        self.assertIsNone(scored.reward)  # reported as an infrastructure failure, never scored
+        self.assertEqual(scored.exception, "provider failure")
+
+    def test_an_agent_error_stays_the_agents(self):
+        agent, engine = scripted_agent(self, [Step("Go.", "print(1)")])
+        with mock.patch.object(engine, "_completion", side_effect=ValueError("bad output")):
+            record = agent.run_turn("go")
+        self.assertEqual(record.status, "error")
+        self.assertNotIn(record.error_kind, ("", "provider"))  # scored as the agent's failure
 
 
 if __name__ == "__main__":

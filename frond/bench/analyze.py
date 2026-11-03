@@ -28,6 +28,30 @@ from .spec import BENCH, BOUNDED, Claim, Spec, load
 from .stats import bootstrap, bootstrap_interval, difference_cs, holm, wilcoxon
 
 TOKEN_KEYS = ("input", "cache_read", "cache_write", "output")
+# Harbor's exception types for a model provider's failure (its error_policy.py, "model provider failed"), raised for
+# agents it drives, such as Claude Code and Terminus 2. Like frond's provider failures (G22), they are not scored.
+PROVIDER_EXCEPTIONS = frozenset(
+    {
+        "AgentAuthenticationError",
+        "ApiError",
+        "ApiRateLimitError",
+        "ApiInternalServerError",
+        "ApiOverloadedError",
+        "ApiConnectionClosedError",
+        "ApiResponseStalledError",
+        "ApiConnectionError",
+        "ApiUsageLimitError",
+        "UnknownApiError",
+        "NetworkConnectionError",
+        "RateLimitError",
+        "InternalServerError",
+        "ServiceUnavailableError",
+        "APIConnectionError",
+        "APIError",
+        "Timeout",
+        "AuthenticationError",
+    }
+)
 COUNTERS = ("failed_edits", "stale_actions", "parse_failures", "syntax_errors", "compactions", "summaries", "steps")
 
 
@@ -82,8 +106,12 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
     exception = result.get("exception_info") or {}
     execution = result.get("agent_execution") or {}
     rewards = (result.get("verifier_result") or {}).get("rewards") or {}
-    # None when the environment or the agent's installation failed: then nothing the agent did is measured
-    reward = None if exception and not execution.get("started_at") else float(rewards.get("reward") or 0.0)
+    # None when the environment or the agent's installation failed, or the model provider did: then nothing the agent
+    # did is measured
+    provider = str(exception.get("exception_type") or "") in PROVIDER_EXCEPTIONS
+    reward = (
+        None if exception and (provider or not execution.get("started_at")) else float(rewards.get("reward") or 0.0)
+    )
     export = directory / "agent" / "frond"
     tokens = dict.fromkeys(TOKEN_KEYS, 0)
     cost: float | None
@@ -112,6 +140,8 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
         metrics = json.loads((export / "metrics.json").read_text(encoding="utf-8"))
         counters = {key: float(metrics[key]) for key in COUNTERS if isinstance(metrics.get(key), (int, float))}
         config = metrics.get("config") or {}
+        if metrics.get("error_kind") == "provider":  # the model provider failed, not the agent (ledger G22)
+            reward, exception = None, {"exception_type": "provider failure"}
     except (OSError, ValueError):
         pass
     return Trial(
@@ -239,6 +269,11 @@ def arm_summary(trials: list[Trial], spec: Spec) -> dict[str, Any]:
     }
     for key in TOKEN_KEYS:
         out[f"{key}_tokens_per_trial"] = fmean(t.tokens.get(key, 0) for t in scored) if scored else None
+    total_input = sum(t.tokens.get("input", 0) for t in scored)
+    # the share of input tokens the provider served from its cache (R8, H6)
+    out["cache_read_share"] = sum(t.tokens.get("cache_read", 0) for t in scored) / total_input if total_input else None
+    seconds = [t.seconds for t in scored if t.seconds is not None]
+    out["agent_seconds_per_trial"] = fmean(seconds) if seconds else None
     for key in COUNTERS:
         counted = [t.counters[key] for t in scored if key in t.counters]
         out[f"{key}_per_trial"] = fmean(counted) if counted else None
@@ -295,14 +330,18 @@ def report(summary: dict[str, Any]) -> str:
     lines.append(f"Spec `{summary['spec']}` (sha256 {summary['spec_sha256']}), alpha {summary['alpha']}.")
     if summary["excluded_tasks"]:
         lines.append(f"Excluded before the run: {', '.join(summary['excluded_tasks'])}.")
-    lines += ["", "| Arm | Tasks | Trials | Pass rate (95% CI) | Cost/trial | Cost/solved | Failed edits/trial |"]
-    lines.append("|---|---|---|---|---|---|---|")
+    lines += [
+        "",
+        "| Arm | Tasks | Trials | Pass rate (95% CI) | Cost/trial | Cost/solved | Cache share | Failed edits/trial |",
+    ]
+    lines.append("|---|---|---|---|---|---|---|---|")
     for name, arm in summary["arms"].items():
         ci = arm["pass_rate_interval"]
         rate = f"{_fmt(arm['pass_rate'])} ({_fmt(ci[0])}–{_fmt(ci[1])})" if ci else "–"
         lines.append(
             f"| {name} | {arm['tasks']} | {arm['trials']} | {rate} | {_fmt(arm['cost_per_trial'], 2)} | "
-            f"{_fmt(arm['cost_per_solved'], 2)} | {_fmt(arm['failed_edits_per_trial'], 2)} |"
+            f"{_fmt(arm['cost_per_solved'], 2)} | {_fmt(arm['cache_read_share'], 2)} | "
+            f"{_fmt(arm['failed_edits_per_trial'], 2)} |"
         )
     if summary["claims"]:
         lines += ["", "| Claim | Kind | Tasks | Estimate (95% CI) | p | Holm p | Holds | Sequence |"]

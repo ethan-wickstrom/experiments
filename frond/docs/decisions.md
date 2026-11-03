@@ -331,3 +331,9 @@ Each stays closed unless new evidence reopens it:
 - Rejected: a version range (`>=3.4.1,<3.5`): a patch release may change private methods; vendoring DSPy: frond is built on DSPy, and copying its RLM would break C1 (D25); checking only the version string: it says nothing about what changed.
 - Evidence: `tests/test_compat.py`.
 
+## D37 · Collect the world store by mark-and-sweep from recent sessions' worlds (2026-11-03, active)
+- Decision: when a workspace's store passes 2 GB, frond collects it in the background at startup. The roots are every world named by the session files and step logs of sessions touched in the last 30 days; everything reachable from them stays, and so does every object used in the last hour. `Store.put` refreshes the timestamp of an object it finds already stored, and each turn's first world goes into the step log as the turn starts, so an object a running session depends on is always either reachable or recent.
+- Why: the store is shared by all of a workspace's sessions so that `/undo` survives `--continue` (D29), and without collection it only grows (G21).
+- Rejected: reference counting (every snapshot would write counts for thousands of entries); deleting whole old sessions' stores (objects are shared across sessions by design); collecting while a session snapshots without the in-use rule (a reused old blob could vanish from under a new tree); a size bound that drops reachable objects (undo history within 30 days is kept whole).
+- Evidence: `tests/test_world.py::CollectionTest`.
+

@@ -6,14 +6,17 @@ not the REPL's memory: variables do not survive a restart, but the agent knows w
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import datetime as dt
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 
 from frond.agent.session import TurnRecord
+from frond.world import Store
 
 
 def data_home() -> Path:
@@ -34,6 +37,36 @@ class SessionStore:
     def steps_path(session_file: Path) -> Path:
         """Where the session's step log lives: every message, step and answer, one JSON line each."""
         return session_file.with_name(session_file.stem + ".steps.jsonl")
+
+    def world_roots(self, *, max_age_days: float = 30.0) -> set[str]:
+        """The worlds this workspace's recent sessions name: their turns' and their steps' (ledger G21). Sessions
+        untouched for longer than ``max_age_days`` no longer hold theirs, so their undo history may be collected."""
+        cutoff = time.time() - max_age_days * 86400
+        roots: set[str] = set()
+        if not self.directory.is_dir():
+            return roots
+        for path in self.directory.iterdir():
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+                if path.name.endswith(".steps.jsonl"):
+                    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                        with contextlib.suppress(ValueError, AttributeError):
+                            roots.add(json.loads(line).get("world") or "")
+                elif path.suffix == ".json":
+                    for turn in json.loads(path.read_text(encoding="utf-8")).get("turns", []):
+                        roots.update((turn.get("world_before") or "", turn.get("world_after") or ""))
+            except (OSError, ValueError):
+                continue
+        roots.discard("")
+        return roots
+
+    def collect(self, store: Store, *, bound: int = 2 * 1024**3, grace: float = 3600.0) -> int:
+        """Past ``bound`` bytes, delete the store's objects that no recent session reaches and that have not been
+        used for ``grace`` seconds (objects a running session is still writing are newer); bytes freed."""
+        if store.size() <= bound:
+            return 0
+        return store.sweep(store.reachable(self.world_roots()), older_than=time.time() - grace)
 
     def latest(self) -> Path | None:
         if not self.directory.is_dir():

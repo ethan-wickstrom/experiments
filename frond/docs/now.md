@@ -1,19 +1,17 @@
 # Now
 
-Updated 2026-11-03, first session, after B9 (scopes): every hypothesis H1–H6 now has both arms.
+Updated 2026-11-03, first session: every hypothesis H1–H6 has both arms, every experiment is pre-registered, and E0a is finishing.
 
 ## In flight
 
-E0a, the oracle sweep, runs through the matrix runner on the 56 TB 4.0 tasks that can start in this VM (G20): `uv run python -m bench.matrix bench/experiments/e0a-oracle.toml`, jobs in `frond/jobs/E0a/`. Running the same command again resumes it. When it finishes:
-- `python -m bench.analyze bench/experiments/e0a-oracle.toml --out bench/results/2026-11-03-e0a-oracle`, plus `--failing oracle > bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`, which later specs exclude;
-- write `bench/experiments/e0-pilot.toml` (10 sampled tasks × 3 trials on Opus 5.5; 10 × 1 on Sonnet 5.5 and Haiku 5.5).
+E0a, the oracle sweep, has scored 52 of the 56 TB 4.0 tasks that start in this VM (G20); the oracle failed three (`bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`, provisional until it finishes). Resume or rerun it with `uv run python -m bench.matrix bench/experiments/e0a-oracle.toml`; then write its report with `uv run python -m bench.analyze bench/experiments/e0a-oracle.toml --out bench/results/2026-11-03-e0a-oracle` and the final list with `--failing oracle`.
 
 ## Next, in order (research-first, D16)
 
-1. When E0a finishes: its summary in `bench/results/`, the oracle-failure exclusion list, and the E0 spec.
-2. Specs for E1–E6 and E11 in `bench/experiments/`, pre-registered before any key arrives.
-3. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`.
-4. B13 (a TUI world view of branches and scopes), B11 (pin DSPy), G21 (world store GC).
+1. E0, as soon as REQ-1 arrives: `bench/experiments/e0-pilot.toml`. First run `smoke.toml` with the real key's environment (free: it stops at the first call only with a bad key; with a real one it is one short run).
+2. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), sample sizes from the variance, and the program's budget (a new REQ).
+3. E1–E6 and E11 in the order in `research.md`.
+4. B13 (a TUI world view of branches and scopes), B14 (narrowing hints in truncation notes), B17 (stop latency).
 
 ## Waiting on the owner
 

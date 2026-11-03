@@ -1,0 +1,32 @@
+# Smoke test: frond through Harbor with every arm flag set, and a dummy key (the first model call fails with 401).
+id = "SMOKE"
+title = "frond's Harbor plumbing, without spending anything"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = ["layout-config-recreation2"]
+trials = 1
+batch = 1
+seed = 0
+concurrency = 1
+
+[[arms]]
+name = "frond"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { arm = "rlm", fork = "3", freshness = "on", context = "fold", scopes = "on", layout = "turns", effort = "high", max_steps = "3" }
+
+# The reference agents of E11, which Harbor installs in the container (Claude Code through npm, which tests the
+# overlay's NODE_EXTRA_CA_CERTS).
+[[arms]]
+name = "claude-code"
+agent = "claude-code"
+model = "anthropic/claude-opus-5-5"
+
+[[arms]]
+name = "terminus-2"
+agent = "terminus-2"
+model = "anthropic/claude-opus-5-5"
+
+[[arms]]
+name = "dspy-rlm"
+agent = "dspy-rlm"
+model = "anthropic/claude-opus-5-5"

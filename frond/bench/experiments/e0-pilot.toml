@@ -1,0 +1,38 @@
+# E0: the pilot (ledger E0, research.md). Descriptive, so no claims: it measures what the comparative experiments
+# need. Protocol adherence (parse failures, code that did not compile), real cache reads per call, failed edits,
+# within- and between-task variance of pass rate (to size E1-E6), cost per run, and pass rates on three models to
+# choose the screening model (the cheapest whose pass rate sits between 20% and 80%).
+# Budget (REQ-1, $100 cap): about $45 on Opus (30 runs), $8 on Sonnet, under $1 on Haiku; frond's 40-step cap
+# bounds the worst case near $85.
+id = "E0"
+title = "Pilot: protocol adherence, cache reads, variance, and the screening model"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = "datasets/terminal-bench@4.0.0.txt"
+exclude = [
+  "datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt",
+  "results/2026-11-03-e0a-oracle/oracle-failures.txt",
+]
+sample = 10
+seed = 0
+trials = 1
+batch = 10
+concurrency = 2
+
+[[arms]]
+name = "opus"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+trials = 3
+options = { effort = "high" }
+
+[[arms]]
+name = "sonnet"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-sonnet-5-5"
+options = { effort = "high" }
+
+[[arms]]
+name = "haiku"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-haiku-5-5"
+options = { effort = "default" }  # effort is not assumed supported on Haiku 5.5

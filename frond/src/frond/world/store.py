@@ -18,7 +18,7 @@ import stat
 import tempfile
 import time
 import zlib
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -83,13 +83,56 @@ class Store:
     def put(self, kind: str, data: bytes) -> str:
         oid = object_id(kind, data)
         path = self._path(oid)
-        if not path.exists():
+        try:
+            os.utime(path)  # stored already: mark it in use, so a sweep never takes it from a tree being built
+        except FileNotFoundError:
             path.parent.mkdir(exist_ok=True)
             fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-")
             with os.fdopen(fd, "wb") as f:
                 f.write(zlib.compress(kind.encode() + b"\0" + data, 1))
             os.replace(tmp, path)
         return oid
+
+    # ── garbage collection (ledger G21) ──────────────────────────────────────
+
+    def size(self) -> int:
+        """Bytes the objects take on disk."""
+        return sum(f.stat().st_size for f in (self.root / "objects").glob("*/*"))
+
+    def reachable(self, roots: Iterable[str]) -> set[str]:
+        """Every object reachable from the given tree ids (missing or malformed ones are skipped)."""
+        seen: set[str] = set()
+        stack = [r for r in roots if r]
+        while stack:
+            oid = stack.pop()
+            if oid in seen:
+                continue
+            seen.add(oid)
+            try:
+                entries = self.tree(oid)
+            except (OSError, ValueError, zlib.error):
+                continue
+            for entry in entries.values():
+                if entry.kind == "tree":
+                    stack.append(entry.oid)
+                elif entry.kind in ("file", "link"):
+                    seen.add(entry.oid)
+        return seen
+
+    def sweep(self, keep: set[str], *, older_than: float) -> int:
+        """Delete the objects outside ``keep`` last used before ``older_than`` (a timestamp); bytes freed."""
+        freed = 0
+        for directory in (self.root / "objects").iterdir():
+            if not directory.is_dir():
+                continue
+            for path in directory.iterdir():
+                if path.name.startswith(".tmp-") or directory.name + path.name in keep:
+                    continue
+                st = path.stat()
+                if st.st_mtime < older_than:
+                    path.unlink(missing_ok=True)
+                    freed += st.st_size
+        return freed
 
     def get(self, oid: str) -> tuple[str, bytes]:
         kind, _, data = zlib.decompress(self._path(oid).read_bytes()).partition(b"\0")
