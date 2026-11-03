@@ -124,6 +124,21 @@ class ContinueKeepsTheLogTest(WorkspaceCase):
             cli.main(["-p", "--script", str(path), "-C", str(self.root), *args])
         return out.getvalue().strip()
 
+    def test_export_writes_the_runs_record(self):
+        export = self.root / "out"
+        script = [
+            {"reasoning": "Look.", "code": "print('looked')"},
+            {"reasoning": "Answer.", "code": "SUBMIT(response='exported')"},
+        ]
+        self.assertEqual(self.run_cli(script, "--export", str(export), "go"), "exported")
+        records = [json.loads(line) for line in (export / "steps.jsonl").read_text().splitlines()]
+        self.assertEqual([r["kind"] for r in records], ["user", "step", "step", "answer"])
+        self.assertEqual(records[1]["output"].strip(), "looked")
+        usage = json.loads((export / "usage.json").read_text())
+        self.assertEqual(usage["calls"], 2)
+        self.assertGreater(usage["input_tokens"], 0)
+        self.assertEqual((export / "answer.md").read_text(), "exported")
+
     def test_continue_can_search_the_earlier_session(self):
         first = [
             {"reasoning": "Measure.", "code": "print('the build takes 93 seconds')"},

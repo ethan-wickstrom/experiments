@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     import dspy
 
-    from frond.agent.session import AgentConfig, TurnRecord
+    from frond.agent.session import Agent, AgentConfig, TurnRecord
     from frond.workspace import Workspace
 
 
@@ -69,6 +69,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         help="developer playground: replay model steps from a JSON list of {reasoning, code} objects",
     )
     p.add_argument("-v", "--verbose", action="store_true", help="with -p: also print each step's code")
+    p.add_argument(
+        "--export",
+        type=Path,
+        metavar="DIR",
+        help="with -p: write the run's record to DIR (steps.jsonl, usage.json, answer.md), e.g. for benchmarks",
+    )
     p.add_argument("--version", action="version", version=f"frond {__version__}")
     return p.parse_args(argv)
 
@@ -237,8 +243,28 @@ def run_headless(
         agent.cancel()
         return 130
     finally:
+        if args.export is not None:
+            export_run(agent, args.export)
         agent.close()
     return 0 if record.status == "done" else 1
+
+
+def export_run(agent: Agent, directory: Path) -> None:
+    """The run's full record, for harnesses such as Harbor: every message, step (reasoning, code, output) and
+    answer as JSON lines, the token and cost totals, and the final answer."""
+    import dataclasses
+    import json
+
+    from frond.agent.lm import usage_totals
+
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / "steps.jsonl", "w", encoding="utf-8") as f:
+        for record in agent.steps.records():
+            f.write(json.dumps(dataclasses.asdict(record), ensure_ascii=False) + "\n")
+    usage = {"model": agent.config.model, "sub_model": agent.config.sub_model, **usage_totals(agent.lm, agent.sub_lm)}
+    (directory / "usage.json").write_text(json.dumps(usage, indent=1))
+    last = agent.history[-1] if agent.history else None
+    (directory / "answer.md").write_text((last.response or last.error or "") if last else "", encoding="utf-8")
 
 
 if __name__ == "__main__":

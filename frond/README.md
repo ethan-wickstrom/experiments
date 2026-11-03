@@ -27,7 +27,30 @@ rather than JSON tool calls also follows the evidence from [CodeAct](https://arx
 Anthropic's write-up on [code execution with tools](https://www.anthropic.com/engineering/code-execution-with-mcp).
 
 The REPL namespace persists across steps *and* across conversation turns, so the agent can keep notes, parsed data
-or helper functions around while you talk to it.
+or helper functions around while you talk to it. Each step lists the names the code has defined, so later turns know
+what is there.
+
+## Context that is lossless, cache-friendly and steerable
+
+- **Nothing is summarised away.** Every user message, step (reasoning, code, full output) and answer goes into an
+  append-only step log, kept beside the session file. The agent searches it with `history_search('words')` and reads
+  any record back exactly with `history_step(seq)`. When a turn outgrows its budget, early steps are folded into one
+  index line each (seq, headline, first output line), with the recovery instructions right there; no summary is
+  written. The user's own words are never shortened. The design follows
+  [Scroll](https://arxiv.org/abs/2608.21690), where a lossless log the model queries beat summarised history 73.1%
+  to 19.9%. It also sidesteps what summaries do wrong:
+  - they drop the user's instructions about how to work ([arXiv 2610.31778](https://arxiv.org/abs/2610.31778));
+  - they mix the summariser's guesses in with facts ([arXiv 2610.20927](https://arxiv.org/abs/2610.20927));
+  - they can launder injected text into fake user turns ([arXiv 2610.29869](https://arxiv.org/abs/2610.29869)).
+- **The prompt is laid out for the provider's cache.** `dspy.RLM` sends the REPL history as one ever-growing
+  message, which Anthropic's [prompt cache](https://platform.claude.com/docs/en/build-with-claude/prompt-caching) can
+  never reuse. frond sends each step as its own pair of turns and marks the latest reply as a breakpoint, so each step
+  reads all earlier ones from the cache. A test replays a 10-step turn through the real Anthropic payload builder and
+  a simulator of the documented cache rules: the cached share of input exceeds 70% and the cache-priced cost halves.
+  The meter shows the cached share of each prompt.
+- **Steer while it works.** Enter sends your message into the running turn; the model reads it before its next step,
+  marked as newer than everything above it, and it is restated at the end of the prompt while the turn lasts. Tab
+  queues it for after the turn instead. A message the turn never reaches runs next.
 
 ## What you see
 
@@ -36,13 +59,13 @@ cards — a unified diff with line numbers and syntax highlighting for every fil
 and a terminal card with live output and exit status for every command. The final answer streams as Markdown,
 decoded on the fly from the model's `SUBMIT("""...""")` call.
 
-- **Send and stop.** Enter sends. While the agent works, the send button becomes a stop button (click it or press
-  Esc), and Enter queues your next message; queued messages run in order when the turn ends, and ↑ pulls the last one
-  back for editing.
+- **Send, steer and stop.** Enter sends. While the agent works, the send button becomes a stop button (click it or
+  press Esc). Enter then steers the running turn and Tab queues; queued messages run in order when the turn ends, and
+  ↑ pulls the last one back for editing.
 - **@-mentions.** Type `@` to fuzzy-find files and folders; their contents are attached to the request as a REPL
   variable rather than pasted into the prompt.
 - **Context meter.** The status line shows a bar that fills as the latest prompt approaches the model's context window
-  (looked up from DSPy's model metadata), plus the session cost. Long turns compact their own earlier steps.
+  (looked up from DSPy's model metadata), how much of it the provider served from its cache, and the session cost.
 - **Approvals.** Edits inside the workspace and ordinary commands run freely. Recursive deletes, history-rewriting
   git commands, pushes, `sudo`, piping downloads into a shell, and writes outside the workspace ask first (`--yolo`
   never asks; `--read-only` forbids changes and runs commands in the read-only sandbox below).
@@ -69,7 +92,7 @@ decoded on the fly from the model's `SUBMIT("""...""")` call.
   [OSC 8](https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda), and the
   [kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/) where available (so Shift+Enter works).
 
-Keys: Enter send · Ctrl+J, Alt+Enter, Shift+Enter or a trailing `\` new line · Esc stop or close a popup ·
+Keys: Enter send (steer while working) · Tab queue while working · Ctrl+J, Alt+Enter, Shift+Enter or a trailing `\` new line · Esc stop or close a popup ·
 Ctrl+C clear, stop, or quit when pressed twice · PgUp/PgDn or the wheel scroll · Ctrl+O full details ·
 `/help` for the rest. Hold Shift (Option in iTerm2) to select text with the mouse, or use `/copy`.
 
@@ -97,7 +120,12 @@ Project instructions in `AGENTS.md` (or `CLAUDE.md`) from the git root down to t
 ```
 
 - `agent/rlm.py` subclasses `dspy.RLM` to add events, cancellation, a tool reference with real signatures,
-  per-variable previews (the full request, the tail of the conversation), and in-turn compaction.
+  per-variable previews (every user message verbatim, then the latest turns), the defined-names digest, steering
+  messages at step boundaries, step records, and folding of long turns into an index.
+- `agent/adapter.py` lays each step's prompt out as conversation turns, with what changes per step at the end and a
+  cache breakpoint on the latest reply. It keeps the ChatAdapter's text protocol, so parsing and streaming are DSPy's.
+- `agent/steplog.py` is the conversation's lossless record (JSONL, BM25 search) behind `history_search` and
+  `history_step`; `agent/snapshots.py` brackets shell commands with private git snapshots for `/undo`.
 - `agent/repl.py` and `agent/_worker.py` implement DSPy's `CodeInterpreter` protocol with a persistent CPython
   process: live stdout, SIGINT interruption that keeps the namespace, per-step timeouts, and a
   [PEP 578](https://peps.python.org/pep-0578/) audit hook that steers file writes and subprocesses onto the tools,
@@ -110,11 +138,28 @@ Project instructions in `AGENTS.md` (or `CLAUDE.md`) from the git root down to t
 - `tui/` is a small immediate-mode TUI: an input decoder, a cell buffer with a diffing renderer, text wrapping that
   understands wide characters, a Markdown renderer and a syntax highlighter.
 
+## Benchmarks
+
+`bench/frond_harbor.py` plugs frond into [Harbor](https://harborframework.com), the harness behind
+[Terminal-Bench](https://www.tbench.ai). It installs frond in each task's container from a wheel built from this
+checkout, runs `frond -p --yolo --export …` on the task, and turns the exported record into Harbor's ATIF trajectory.
+Every REPL step becomes a tool call with its output, so Harbor's viewer and leaderboard review see each command, and
+tokens, cache reads and cost reach the results.
+
+```sh
+uv tool install harbor
+export ANTHROPIC_API_KEY=...
+PYTHONPATH=bench harbor run -d terminal-bench/terminal-bench-2-1 -a frond_harbor:Frond \
+    -m anthropic/claude-sonnet-5-5 -n 8 -o jobs          # add -e daytona (or modal, e2b) to run without Docker
+```
+
+`frond -p --export DIR` writes the same record for any other harness: `steps.jsonl`, `usage.json` and `answer.md`.
+
 ## Developing
 
 ```sh
 uv sync
-uv run python -m unittest discover -s tests -t .   # 111 tests: decoder, layout, tools, REPL, agent turns, undo, sessions, the app
+uv run python -m unittest discover -s tests -t .   # 131 tests: decoder, layout, tools, REPL, agent turns, undo, sessions, the app
 uv run ruff check && uv run ruff format --check && uv run ty check
 ```
 

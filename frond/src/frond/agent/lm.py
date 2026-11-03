@@ -110,6 +110,25 @@ def last_usage(lm: dspy.LM) -> tuple[int, int, int]:
     return prompt, completion, cached
 
 
+def usage_totals(*lms: dspy.LM) -> dict[str, float | int]:
+    """Tokens and cost over every call the given LMs made (each LM counted once)."""
+    totals: dict[str, float | int] = {"calls": 0, "input_tokens": 0, "cache_read_tokens": 0, "output_tokens": 0}
+    seen: set[int] = set()
+    for lm in lms:
+        if id(lm) in seen:
+            continue
+        seen.add(id(lm))
+        for entry in getattr(lm, "history", []) or []:
+            usage = entry.get("usage") or {}
+            details = usage.get("prompt_tokens_details") or {}
+            totals["calls"] += 1
+            totals["input_tokens"] += int(usage.get("prompt_tokens") or 0)  # includes cached tokens
+            totals["cache_read_tokens"] += int((details.get("cached_tokens") if isinstance(details, dict) else 0) or 0)
+            totals["output_tokens"] += int(usage.get("completion_tokens") or 0)
+    totals["cost_usd"] = round(total_cost(*lms), 6)
+    return totals
+
+
 def total_cost(*lms: dspy.LM) -> float:
     seen: set[int] = set()
     cost = 0.0
