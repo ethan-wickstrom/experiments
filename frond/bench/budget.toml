@@ -55,3 +55,8 @@ why = "2026-11-03: E0's third start, stopped in its Haiku arm for G45: 4 trials 
 [[spent]]
 usd = 0.11
 why = "2026-11-03: D53's structured-output probe, 2 calls on each of Haiku, Sonnet and Opus 5.5 ($0.02), and frond's json-protocol smoke runs on the three models outside Harbor ($0.08)"
+
+[[spent]]
+jobs = "E0-markers"
+usd = 9.50
+why = "2026-11-03: E0's fourth start, on DSPy's field markers, stopped before Opus for G48 (D53): Haiku's 10 trials $0.57 and Sonnet's 10 $8.92, from their usage.json; no trial was killed"
