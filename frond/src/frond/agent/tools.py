@@ -28,14 +28,27 @@ from frond.agent.diffing import make_diff
 from frond.agent.patch import FileOp, PatchError, apply_chunks, parse_patch
 from frond.agent.policy import Policy
 from frond.agent.shell import SANDBOX_UNAVAILABLE, JobManager, ShellRunner, sandbox_status, truncate_middle
+from frond.agent.snapshots import GitSnapshots
+from frond.agent.steplog import StepLog
 from frond.agent.web import fetch_text
-from frond.events import Emit, FileChanged, FileViewed, PlanItem, PlanStatus, PlanUpdated, SearchRan
+from frond.events import (
+    ChangeKind,
+    Emit,
+    FileChanged,
+    FileViewed,
+    Notice,
+    PlanItem,
+    PlanStatus,
+    PlanUpdated,
+    SearchRan,
+)
 from frond.workspace import SKIP_DIRS, Workspace, fuzzy_rank
 
 VIEW_WINDOW = 300
 MAX_LINE = 2000
 MAX_READ_BYTES = 2_000_000
 MAX_OUTPUT_CHARS = 24_000
+MAX_COMMAND_DIFFS = 20  # diffs shown for files one shell command changed; undo covers the rest too
 MAX_MATCH_TEXT = 400
 
 
@@ -142,9 +155,13 @@ class Toolbox:
         read_only: bool = False,
         delegate: Delegate | None = None,
         checkpoints: Checkpoints | None = None,
+        memory: StepLog | None = None,
+        snapshots: GitSnapshots | None = None,
     ) -> None:
         self.ws = workspace
         self.checkpoints = checkpoints
+        self.memory = memory
+        self.snapshots = snapshots
         self.emit = emit
         self.shell = shell
         self._jobs = jobs
@@ -173,6 +190,8 @@ class Toolbox:
             "plan",
             "fetch",
         ]
+        if self.memory is not None:
+            names += ["history_search", "history_step"]
         if self.delegate is not None:
             names += ["subagent", "subagent_batched"]
         if self.read_only:
@@ -786,8 +805,13 @@ class Toolbox:
                 "command": command,
             }
         timeout = max(1.0, min(float(timeout), 3600.0))
+        tracked = self.snapshots is not None and self.checkpoints is not None and self.snapshots.enabled
+        before = self.snapshots.take() if tracked and self.snapshots else None
+        head = self.snapshots.head() if before and self.snapshots else ""
         result = self.shell.run(command, cwd=workdir, timeout=timeout, scope=self.scope)
         self.ws.invalidate()
+        if before and self.snapshots:
+            self._journal_command(command, before, head)
         output = truncate_middle(result.output, MAX_OUTPUT_CHARS, note=f"; full output in {result.log_path}")
         return {
             "__frond__": "command",
@@ -800,6 +824,46 @@ class Toolbox:
             "log": result.log_path,
             "truncated": result.total_chars > MAX_OUTPUT_CHARS,
         }
+
+    def _journal_command(self, command: str, before: str, head: str) -> None:
+        """Put what a command changed in the turn's undo journal, and show its diffs (see snapshots.py)."""
+        snapshots, checkpoints = self.snapshots, self.checkpoints
+        assert snapshots is not None and checkpoints is not None
+        after = snapshots.take()
+        if not after or after == before:
+            return
+        if snapshots.head() != head:
+            short = command if len(command) <= 60 else command[:59] + "…"
+            self.emit(Notice("info", f"`{short}` moved HEAD; /undo will not revert the files it changed"))
+            return
+        changes = snapshots.changes(before, after)
+        for change in changes:
+            exec_bit = 0o755 if change.mode == "100755" else 0o644
+            mode_changed = change.status in ("D", "T") or (change.new_mode and change.new_mode != change.mode)
+            checkpoints.record_state(
+                change.path,
+                change.before,
+                exec_bit if change.before is not None and mode_changed else None,
+                link=change.mode == "120000",
+            )
+        shown = 0
+        for change in changes:
+            if shown == MAX_COMMAND_DIFFS or change.mode == "120000" or change.new_mode == "120000":
+                continue
+            old = (change.before or b"").decode("utf-8", errors="replace") if change.before is not None else ""
+            try:
+                new = change.path.read_text(encoding="utf-8") if change.status != "D" else ""
+            except (OSError, UnicodeDecodeError):
+                continue  # binary or vanished: undo still covers it, there is just no text diff to show
+            if "\0" in old:
+                continue
+            kind: ChangeKind = "create" if change.status == "A" else "delete" if change.status == "D" else "edit"
+            display = self.ws.rel(change.path)
+            diff = make_diff(old, new, display, created=kind == "create", deleted=kind == "delete")
+            self.emit(FileChanged(display, kind, diff.text, diff.added, diff.removed, scope=self.scope))
+            shown += 1
+        if len(changes) > shown:
+            self.emit(Notice("info", f"the command changed {len(changes)} files; /undo covers all of them"))
 
     def _sh_sandboxed(self, command: str, workdir: Path, timeout: float, background: bool) -> dict[str, Any]:
         """A read-only agent's command, in an OS sandbox that refuses every filesystem write (see _sandbox.py).
@@ -858,6 +922,27 @@ class Toolbox:
         except KeyError as exc:
             raise ToolError(str(exc.args[0])) from None
         return f"job {job} stopped (exit code {code})"
+
+    # ── the conversation's record ────────────────────────────────────────────
+
+    def history_search(self, query: str, k: int = 8) -> list[dict[str, Any]]:
+        """Search everything earlier in this conversation, in every turn: the user's messages, your answers, and
+        each REPL step's reasoning, code and full output, including steps folded out of the prompt. Matches words
+        and identifiers (BM25), best first. Each hit: seq (pass it to history_step), kind ("user", "step" or
+        "answer"), turn, step, headline, and the best matching line."""
+        if self.memory is None:
+            raise ToolError("there is no conversation record in this session")
+        return self.memory.search(str(query), max(1, min(int(k), 50)))
+
+    def history_step(self, seq: int) -> dict[str, Any]:
+        """One record of the conversation exactly as it was, by seq: a user message, an answer, or a step with
+        its reasoning, code and full output."""
+        if self.memory is None:
+            raise ToolError("there is no conversation record in this session")
+        record = self.memory.get(int(seq))
+        if record is None:
+            raise ToolError(f"no record {seq}; seq runs from 1 to {self.memory.last_seq}")
+        return record.public()
 
     # ── planning, web, delegation ────────────────────────────────────────────
 

@@ -19,7 +19,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -47,12 +47,25 @@ COMMAND_ENV = {
     "FROND_AGENT": "1",
 }
 MAX_MEMORY_CHARS = 4_000_000
+# Variables a confined process (the REPL worker, a read-only agent's command) never needs, and which an injected
+# instruction would want: credentials by name, and URLs that embed a password (user:secret@host).
+CREDENTIAL_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|COOKIE|SESSION", re.IGNORECASE)
+CREDENTIAL_IN_URL = re.compile(r"://[^/\s:@]+:[^/\s@]+@")
 
 _ids = itertools.count(1)
 
 
 def next_command_id() -> int:
     return next(_ids)
+
+
+def scrubbed_env(env: Mapping[str, str]) -> dict[str, str]:
+    """``env`` without the variables that look like credentials.
+
+    Not a security boundary on its own: a process running as the same user can still read its parent's
+    /proc/PID/environ and the user's files. It matters together with the sandbox, which cuts the network.
+    """
+    return {k: v for k, v in env.items() if not CREDENTIAL_NAME.search(k) and not CREDENTIAL_IN_URL.search(v)}
 
 
 def clean_output(text: str) -> str:
@@ -74,9 +87,13 @@ _sandbox_probes: dict[str, tuple[bool, str]] = {}
 _sandbox_lock = threading.Lock()
 
 
-def sandboxed_argv(argv: list[str], tmpdir: str) -> list[str]:
-    """``argv`` run under frond's read-only sandbox (see _sandbox.py): it cannot change the filesystem."""
-    return [sys.executable, "-I", str(SANDBOX_HELPER), tmpdir, "--", *argv]
+def sandboxed_argv(argv: list[str], tmpdir: str, *, shared: bool = False) -> list[str]:
+    """``argv`` run under frond's read-only sandbox (see _sandbox.py): it cannot change the filesystem.
+
+    With ``shared``, ``tmpdir`` stays writable and visible outside the sandbox instead of becoming private.
+    """
+    flag = ["--shared-tmpdir"] if shared else []
+    return [sys.executable, "-I", str(SANDBOX_HELPER), *flag, tmpdir, "--", *argv]
 
 
 def sandbox_status(cwd: Path) -> tuple[bool, str]:
@@ -175,18 +192,28 @@ class ShellRunner:
         self.emit(CommandStarted(cmd_id, command, str(cwd), background=False, scope=scope))
         start = time.monotonic()
         argv = shell_argv(command)
+        env = self.env()
         scratch = None
         if sandboxed:
             scratch = tempfile.mkdtemp(prefix="sandbox-", dir=self.log_dir)
             argv = sandboxed_argv(argv, scratch)
+            env = scrubbed_env(env)
         try:
-            return self._run(command, argv, cmd_id, log_path, cwd, timeout, start)
+            return self._run(command, argv, cmd_id, log_path, cwd, timeout, start, env)
         finally:
             if scratch is not None:
                 shutil.rmtree(scratch, ignore_errors=True)
 
     def _run(
-        self, command: str, argv: list[str], cmd_id: int, log_path: Path, cwd: Path, timeout: float, start: float
+        self,
+        command: str,
+        argv: list[str],
+        cmd_id: int,
+        log_path: Path,
+        cwd: Path,
+        timeout: float,
+        start: float,
+        env: dict[str, str],
     ) -> CommandResult:
         try:
             proc = subprocess.Popen(
@@ -196,7 +223,7 @@ class ShellRunner:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
-                env=self.env(),
+                env=env,
             )
         except OSError as exc:
             self.emit(CommandOutput(cmd_id, f"failed to start: {exc}\n"))

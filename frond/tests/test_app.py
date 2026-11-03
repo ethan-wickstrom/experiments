@@ -20,7 +20,7 @@ class AppTest(WorkspaceCase):
 
     def make(self, steps: list[Step], *, delay: float = 0.0, width: int = 100, height: int = 30) -> Harness:
         app = App(self.ws, model="test/model", sub_model="test/model")
-        agent, _ = scripted_agent(self, steps, delay=delay, approver=app.approver)
+        agent, self.engine = scripted_agent(self, steps, delay=delay, approver=app.approver)
         agent._emit = app.emit  # route events to the app (the helper collected them in a list)
         agent.jobs.set_emit(agent.emit)
         app.attach(agent)
@@ -57,7 +57,8 @@ class AppTest(WorkspaceCase):
         )
         h.type("first\n")
         self.assertTrue(h.wait(lambda: "■ stop" in h.text(), 10))
-        h.type("second\n")
+        h.type("second")
+        h.key("tab")  # enter would steer the running turn; tab queues for after it
         self.assertEqual(self.app.queue, ["second"])
         self.assertIn("↳ queued", h.text())
         h.wait(lambda: any(getattr(b, "state", "") == "running" for b in self.app.blocks), 10)
@@ -68,11 +69,34 @@ class AppTest(WorkspaceCase):
         self.assertIn("second done", screen)
         self.assertEqual(self.app.queue, [])
 
+    def test_enter_steers_the_running_turn(self):
+        h = self.make(
+            [
+                Step("Slow work.", "import time\ntime.sleep(0.6)\nprint('step one done')"),
+                Step("Adjusting.", "SUBMIT(response='steered')"),
+            ],
+            delay=0.002,
+        )
+        h.type("first\n")
+        self.assertTrue(h.wait(lambda: any(getattr(b, "state", "") == "running" for b in self.app.blocks), 10))
+        self.assertIn("⏎ steer", h.text() if self.app.editor.text else (h.type("x"), h.text())[1])
+        self.app.editor.clear()
+        h.type("use tabs, not spaces\n")
+        self.assertEqual(self.app.queue, [])
+        self.assertIn("↪ sent to the running turn", h.text())
+        self.assertTrue(h.wait(timeout=20))
+        self.assertIn("↪ read before step 2", h.text())
+        second = "\n".join(m.text or "" for m in self.engine.requests[1].messages)
+        self.assertIn("sent while you were working", second)
+        self.assertIn("use tabs, not spaces", second)
+
     def test_up_arrow_recalls_last_queued_message(self):
         h = self.make([Step("Slow.", "import time\ntime.sleep(2)\nSUBMIT(response='x')")], delay=0.002)
         h.type("first\n")
         h.wait(lambda: self.app.running, 5)
-        h.type("oops typo\n")
+        h.type("oops typo")
+        h.key("tab")
+        self.assertEqual(self.app.queue, ["oops typo"])
         h.key("up")
         self.assertEqual(self.app.editor.text, "oops typo")
         self.assertEqual(self.app.queue, [])

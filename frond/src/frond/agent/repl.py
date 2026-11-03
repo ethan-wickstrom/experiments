@@ -13,9 +13,11 @@ import inspect
 import json
 import os
 import queue
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable
@@ -27,6 +29,7 @@ import dspy
 from dspy.primitives.code_interpreter import CodeExecutionError, CodeInterpreterError, FinalOutput
 
 from frond.agent.control import TurnCancelled, TurnControl
+from frond.agent.shell import sandbox_status, sandboxed_argv, scrubbed_env
 from frond.agent.tools import display_signature
 
 WORKER = Path(__file__).with_name("_worker.py")
@@ -40,6 +43,8 @@ EXECUTION_INSTRUCTIONS = (
 
 type OutputSink = Callable[[str], None]
 _IDLE: dict[str, Any] = {"type": "idle"}
+# FROND_SANDBOX value -> why a confined worker would not start here, so later workers skip straight to the fallback
+_confine_failures: dict[str, str] = {}
 
 
 def _call_tool(fn: Callable[..., Any], args: list[Any], kwargs: dict[str, Any]) -> Any:
@@ -78,12 +83,17 @@ class ReplSession:
         on_output: OutputSink | None = None,
         timeout: float = 900.0,
         policy: str = "strict",
+        sandbox: bool = True,
     ) -> None:
         self.cwd = cwd
         self.control = control or TurnControl()
         self.on_output = on_output
         self.timeout = timeout
         self.policy = policy
+        self.sandbox = sandbox
+        self.confinement = ""  # the OS sandbox the worker runs in ("namespaces", "landlock", "seatbelt"), or ""
+        self.unconfined_reason = ""  # why it runs without one
+        self._scratch: str | None = None  # the worker's TMPDIR when confined: writable, and readable by commands
         self._tools: dict[str, Callable[..., Any]] = {}
         self.output_fields: list[dict[str, Any]] | None = None
         self._proc: subprocess.Popen[str] | None = None
@@ -93,6 +103,7 @@ class ReplSession:
         self._pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="frond-tool")
         self._closed = False
         self.restarts = 0
+        self.names: list[str] = []  # what the code has defined, as of the last step (see _worker.describe_names)
 
     @property
     def tools(self) -> dict[str, Callable[..., Any]]:
@@ -105,18 +116,43 @@ class ReplSession:
     # ── lifecycle ────────────────────────────────────────────────────────────
 
     def start(self) -> None:
+        """Start the worker: confined by the OS sandbox where one works here, and never holding credentials.
+
+        The model's code needs neither the network nor writes outside its temp directory, because everything it
+        changes goes through the host's tools, which ask, journal and show. The sandbox makes that hold even for
+        code that gets around the audit hook (with ctypes, say), and keeps an injected instruction from sending
+        anything out. Where no sandbox works, the worker still runs, without credentials and under the hook.
+        """
         if self._closed:
             raise CodeInterpreterError("REPL session has been shut down")
         if self._proc is not None and self._proc.poll() is None:
             return
-        env = {**os.environ, "FROND_REPL_POLICY": self.policy, "PYTHONIOENCODING": "utf-8"}
+        env = {**scrubbed_env(os.environ), "FROND_REPL_POLICY": self.policy, "PYTHONIOENCODING": "utf-8"}
+        argv = [sys.executable, "-I", "-B", "-u", str(WORKER)]
+        if self.sandbox and self.policy != "off":
+            key = os.environ.get("FROND_SANDBOX", "")
+            available, why = sandbox_status(self.cwd)
+            if available and key not in _confine_failures:
+                if self._scratch is None:
+                    self._scratch = tempfile.mkdtemp(prefix="frond-repl-")
+                try:
+                    self._spawn(sandboxed_argv(argv, self._scratch, shared=True), env)
+                    return
+                except CodeInterpreterError as exc:
+                    _confine_failures[key] = str(exc)
+            self.unconfined_reason = _confine_failures.get(key, why)
+        else:
+            self.unconfined_reason = "turned off"
+        self._spawn(argv, env)
+
+    def _spawn(self, argv: list[str], env: dict[str, str]) -> None:
         try:
             self._proc = subprocess.Popen(
-                [sys.executable, "-I", "-B", "-u", str(WORKER)],
+                argv,
                 cwd=self.cwd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,  # only the sandbox helper writes here; the worker sends it to /dev/null
                 text=True,
                 encoding="utf-8",
                 start_new_session=True,
@@ -132,8 +168,15 @@ class ReplSession:
         while ready is _IDLE and time.monotonic() < deadline:
             ready = self._next(0.1)
         if ready is None or ready.get("type") != "ready":
+            stderr, proc.stderr = proc.stderr, None  # read only once the process group is dead: then it ends
             self._kill()
-            raise CodeInterpreterError(f"Python worker failed to start: {ready!r}")
+            detail = ""
+            if stderr is not None:
+                with contextlib.suppress(OSError, ValueError):
+                    detail = stderr.read().strip()
+                stderr.close()
+            raise CodeInterpreterError(f"Python worker failed to start: {detail or repr(ready)}")
+        self.confinement = str(ready.get("sandbox") or "")
 
     def _pump(self, proc: subprocess.Popen[str]) -> None:
         assert proc.stdout is not None
@@ -177,7 +220,7 @@ class ReplSession:
             os.killpg(proc.pid, signal.SIGKILL)
         with contextlib.suppress(subprocess.TimeoutExpired):
             proc.wait(timeout=2)
-        for stream in (proc.stdin, proc.stdout):
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
             with contextlib.suppress(OSError):
                 if stream is not None:
                     stream.close()
@@ -198,6 +241,8 @@ class ReplSession:
                 self._proc.wait(timeout=1)
         self._kill()
         self._pool.shutdown(wait=False, cancel_futures=True)
+        if self._scratch is not None:
+            shutil.rmtree(self._scratch, ignore_errors=True)
 
     # ── execution ────────────────────────────────────────────────────────────
 
@@ -306,6 +351,7 @@ class ReplSession:
             self._send(reply)
 
     def _finish(self, message: dict[str, Any], reason: str) -> Any:
+        self.names = list(message.get("names") or [])
         status = message.get("status")
         stdout = message.get("stdout") or ""
         warning = message.get("warning")
@@ -363,6 +409,10 @@ class ReplLease:
     def execute(self, code: str, variables: dict[str, Any] | None = None) -> Any:
         return self._session.execute(code, variables)
 
+    @property
+    def names(self) -> list[str]:
+        return self._session.names
+
     def shutdown(self) -> None:
         if not self._released:
             self._released = True
@@ -387,12 +437,16 @@ class ReplPool:
         on_output: OutputSink | None = None,
         timeout: float = 900.0,
         policy: str = "strict",
+        sandbox: bool = True,
     ) -> None:
         self.cwd = cwd
         self.control = control
         self.timeout = timeout
         self.policy = policy
-        self.root = ReplSession(cwd, control=control, on_output=on_output, timeout=timeout, policy=policy)
+        self.sandbox = sandbox
+        self.root = ReplSession(
+            cwd, control=control, on_output=on_output, timeout=timeout, policy=policy, sandbox=sandbox
+        )
         self._busy = False
         self._lock = threading.Lock()
 
@@ -404,7 +458,9 @@ class ReplPool:
         return self.ephemeral()
 
     def ephemeral(self) -> ReplSession:
-        return ReplSession(self.cwd, control=self.control, timeout=self.timeout, policy=self.policy)
+        return ReplSession(
+            self.cwd, control=self.control, timeout=self.timeout, policy=self.policy, sandbox=self.sandbox
+        )
 
     def _release(self) -> None:
         with self._lock:

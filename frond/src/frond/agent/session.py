@@ -10,6 +10,7 @@ from __future__ import annotations
 import atexit
 import contextvars
 import itertools
+import secrets
 import shutil
 import tempfile
 import threading
@@ -24,15 +25,18 @@ from typing import Any
 import anyio
 import dspy
 
+from frond.agent.adapter import FrondAdapter, escape_marker, user_tag
 from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
-from frond.agent.lm import build_lm, context_window, last_usage, total_cost
+from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage, total_cost
 from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Investigation
 from frond.agent.repl import ReplPool
 from frond.agent.rlm import FrondRLM, Hooks
 from frond.agent.shell import JobManager, ShellRunner
+from frond.agent.snapshots import GitSnapshots
+from frond.agent.steplog import StepLog
 from frond.agent.streaming import StreamSink, SubmitStreamer
 from frond.agent.tools import Delegate, Toolbox
 from frond.events import (
@@ -49,6 +53,8 @@ from frond.events import (
     Notice,
     ReasoningDelta,
     ResponseDelta,
+    SteerDelivered,
+    SteersReturned,
     StepPlanned,
     StepStarted,
     SubAgentFinished,
@@ -79,6 +85,8 @@ class AgentConfig:
     subagent_steps: int = 16
     context_window: int | None = None
     prompt_cache: bool = True
+    track_commands: bool = True  # snapshot a git workspace around shell commands, so /undo covers their changes
+    repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
 
 
 @dataclass
@@ -92,13 +100,19 @@ class TurnRecord:
     files: list[str] = field(default_factory=list)
     commands: list[str] = field(default_factory=list)
     error: str | None = None
+    first_seq: int = 0  # the turn's records in the step log: its message, steps and answer
+    last_seq: int = 0
+    steers: list[str] = field(default_factory=list)  # messages the user sent while the turn ran
 
 
 def format_history(records: list[TurnRecord]) -> str:
     parts: list[str] = []
     for r in records:
         parts.append(f"### turn {r.index} · user\n{r.request}")
+        parts.extend(f"### turn {r.index} · user (while frond worked)\n{text}" for text in r.steers)
         meta = [r.status, f"{r.steps} step{'s' if r.steps != 1 else ''}"]
+        if r.last_seq:
+            meta.append(f"log seq {r.first_seq}-{r.last_seq}")
         if r.files:
             files = ", ".join(dict.fromkeys(r.files))
             meta.append(f"changed {files[:400]}")
@@ -110,6 +124,41 @@ def format_history(records: list[TurnRecord]) -> str:
         }.get(r.status, "(no reply)")
         parts.append(f"### turn {r.index} · frond ({' · '.join(meta)})\n{reply}")
     return "\n\n".join(parts)
+
+
+MAX_VERBATIM_REQUESTS = 8_000
+
+
+def history_preview(records: list[TurnRecord], formatted: str, limit: int, marker: str = "") -> str | None:
+    """The conversation's preview: every user message verbatim, then as much of the latest turns as fits.
+
+    A summary or a tail-only window drops the user's instructions about how to work far more often than what to
+    build (arXiv 2610.31778), so the user's own words always stay in view, and frond's replies give way first.
+    With a ``marker``, the user's messages carry its tag and the rest cannot (see adapter.user_tag).
+    """
+    if not records:
+        return None
+    tag = f" {user_tag(marker)}" if marker else ""
+    requests: list[str] = []
+    for r in records:
+        requests.append(f"[turn {r.index}]{tag} {r.request.strip()}")
+        requests.extend(f"[turn {r.index}, while frond worked]{tag} {text.strip()}" for text in r.steers)
+    shown: list[str] = []
+    used = 0
+    for text in reversed(requests):
+        if used + len(text) > MAX_VERBATIM_REQUESTS and shown:
+            break
+        shown.insert(0, text)
+        used += len(text) + 1
+    head = "The user's messages so far, verbatim (oldest first):\n"
+    if len(shown) < len(requests):
+        head += f"({len(requests) - len(shown)} earlier ones are in `history` and history_search())\n"
+    head += "\n".join(shown)
+    room = max(0, limit - len(head) - 80)
+    tail = escape_marker(formatted[-room:], marker) if room else ""
+    if len(formatted) > room:
+        tail = f"… (earlier turns omitted; print(history) for all of them)\n{tail}"
+    return f"{head}\n\nThe latest turns:\n{tail}"
 
 
 def describe_error(exc: BaseException) -> str:
@@ -152,6 +201,7 @@ class _RootHooks(Hooks):
 
     def exec_finished(self, step: int, output: str, error: str | None, duration: float, final: bool) -> None:
         self.agent.emit(ExecFinished(step, output, error, duration, final))
+        self.agent.report_confinement()
 
     def subquery_progress(self, query_id: int, total: int, done: int) -> None:
         self.agent.emit(SubQueryProgress(query_id, total, done))
@@ -160,8 +210,20 @@ class _RootHooks(Hooks):
         window = self.agent.window or 200_000
         return int(min(window * 0.45, 150_000) * 3.6)
 
-    def summarize(self, text: str) -> str | None:
-        return self.agent._summarize(text)
+    def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
+        turn = self.agent._current.index if self.agent._current else 0
+        return self.agent.steps.add(
+            "step", turn=turn, step=step, reasoning=reasoning, code=code, output=output, error=error
+        )
+
+    def take_messages(self, step: int) -> list[str]:
+        return self.agent._take_steers(step)
+
+    def preview(self, name: str, value: Any) -> str | None:
+        if name != "history" or not isinstance(value, str):
+            return None
+        limit = self.agent.rlm.preview_limits.get("history", 12_000)
+        return history_preview(self.agent.history, value, limit, self.agent.marker)
 
     def compacted(self, steps: int, before: int, after: int) -> None:
         self.agent.emit(Compacted(steps, before, after))
@@ -183,6 +245,19 @@ class _SubHooks(Hooks):
     def step_planned(self, step: int, reasoning: str, code: str) -> None:
         first = next((line.strip() for line in reasoning.splitlines() if line.strip()), "working")
         self.agent.emit(SubAgentProgress(self.agent_id, step, first))
+
+    def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
+        turn = self.agent._current.index if self.agent._current else 0
+        return self.agent.steps.add(
+            "step",
+            turn=turn,
+            step=step,
+            scope=f"sub{self.agent_id}",
+            reasoning=reasoning,
+            code=code,
+            output=output,
+            error=error,
+        )
 
 
 class Agent:
@@ -211,10 +286,24 @@ class Agent:
             else build_lm(config.sub_model, prompt_cache=config.prompt_cache)
         )
         self.window: int | None = config.context_window
+        # Each step's history is sent as conversation turns, with the latest reply marked for providers that
+        # cache only at marked blocks, so every step reads the earlier ones from the provider's cache.
+        # Marks the user's messages in the prompt so text from tools, files or answers cannot pass as the user's.
+        self.marker = secrets.token_hex(6)
+        self._confinement_reported = False
+        self.adapter: dspy.ChatAdapter = FrondAdapter(
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.model), marker=self.marker
+        )
+        self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model)
+        )
         self.policy = Policy(config.approval, approver)
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)
         self.jobs = JobManager(self.log_dir, self.emit)
         self.checkpoints = Checkpoints()
+        self.steps = StepLog()  # every message, step and answer; attach_log() keeps it on disk
+        # In a git workspace, what shell commands change goes into the undo journal too (see snapshots.py).
+        self.snapshots = GitSnapshots(workspace.root, self.log_dir / "snapshots") if config.track_commands else None
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -223,6 +312,8 @@ class Agent:
             policy=self.policy,
             delegate=Delegate(self._run_subagent, self._run_subagents),
             checkpoints=self.checkpoints,
+            memory=self.steps,
+            snapshots=self.snapshots,
         )
         self.pool = ReplPool(
             workspace.root,
@@ -230,6 +321,7 @@ class Agent:
             on_output=self._on_exec_output,
             timeout=config.step_timeout,
             policy=config.repl_policy,
+            sandbox=config.repl_sandbox,
         )
         self.sink = StreamSink(self.control, self._on_field, self._on_thinking)
         self._submit = SubmitStreamer(lambda text: self.emit(ResponseDelta(text)))
@@ -244,11 +336,14 @@ class Agent:
             max_output_chars=config.max_output_chars,
             sub_lm=self.sub_lm,
             interpreter_factory=self.pool,
+            marker=self.marker,
         )
         self._listeners = [
             dspy.streaming.StreamListener("code", predict=self.rlm.generate_action, allow_reuse=True),
             dspy.streaming.StreamListener("response", predict=self.rlm.extract, allow_reuse=True),
         ]
+        for listener in self._listeners:  # listeners look adapters up by class name; ours speaks ChatAdapter's format
+            listener.adapter_identifiers[FrondAdapter.__name__] = listener.adapter_identifiers["ChatAdapter"]
         self.history: list[TurnRecord] = []
         self._turns = itertools.count(1)
         self._subagent_ids = itertools.count(1)
@@ -258,6 +353,9 @@ class Agent:
         self._stream_step: int | None = None
         self._thread: threading.Thread | None = None
         self._turn_over = threading.Event()  # set just before a turn emits TurnFinished
+        self._steers: list[str] = []  # messages sent while the turn runs, read at the next step boundary
+        self._steer_lock = threading.Lock()
+        self._accepting_steers = False
         self._closed = False
         if self.window is None:  # started last: the lookup thread reports through emit(), which needs the above
             threading.Thread(target=self._lookup_window, name="frond-window", daemon=True).start()
@@ -320,6 +418,26 @@ class Agent:
         )
         self._thread.start()
 
+    def steer(self, text: str) -> bool:
+        """Send a message into the running turn; the model reads it before its next step. False when no turn
+        is running (or it is finishing), so the caller should start a turn with it, or queue it."""
+        with self._steer_lock:
+            if not self._accepting_steers:
+                return False
+            self._steers.append(text)
+            return True
+
+    def _take_steers(self, step: int) -> list[str]:
+        with self._steer_lock:
+            texts, self._steers = self._steers, []
+        record = self._current
+        for text in texts:
+            if record is not None:
+                record.steers.append(text)
+                self.steps.add("user", turn=record.index, output=text)
+            self.emit(SteerDelivered(text, step))
+        return texts
+
     def cancel(self) -> None:
         if self.busy:
             self.control.cancel()
@@ -336,7 +454,10 @@ class Agent:
         attachments = attachments or {}
         self.control.reset()
         record = TurnRecord(next(self._turns), request)
+        record.first_seq = self.steps.add("user", turn=record.index, output=request)
         self._current, self._step, self._steps_taken = record, 0, 0
+        with self._steer_lock:
+            self._steers, self._accepting_steers = [], True
         self.checkpoints.begin(record.index)
         started = time.monotonic()
         self.emit(TurnStarted(record.index, request, tuple(attachments)))
@@ -358,8 +479,14 @@ class Agent:
                 self.emit(Notice("error", "".join(traceback.format_exception(exc, limit=-4)).rstrip()))
         finally:
             self._current = None
+        with self._steer_lock:  # from here on, a message starts the next turn instead
+            unread, self._steers, self._accepting_steers = self._steers, [], False
+        if unread:
+            self.emit(SteersReturned(tuple(unread)))
         record.steps = self._steps_taken
         record.duration = time.monotonic() - started
+        answer = record.response or record.error or f"(turn {record.status})"
+        record.last_seq = self.steps.add("answer", turn=record.index, output=answer, error=record.status == "error")
         self.history.append(record)
         self._save()
         self.workspace.invalidate()
@@ -371,13 +498,30 @@ class Agent:
 
     def _forward(self, inputs: dict[str, Any]) -> dspy.Prediction:
         def work() -> dspy.Prediction:
-            with dspy.context(lm=self.lm, send_stream=self.sink, stream_listeners=self._listeners):
+            with dspy.context(
+                lm=self.lm, adapter=self.adapter, send_stream=self.sink, stream_listeners=self._listeners
+            ):
                 return self.rlm(**inputs)
 
         async def main() -> dspy.Prediction:
             return await anyio.to_thread.run_sync(work)
 
         return anyio.run(main)
+
+    def report_confinement(self) -> None:
+        """Say once per session when the REPL worker had to run without an OS sandbox, and why."""
+        root = self.pool.root
+        if self._confinement_reported or root.pid is None or root.confinement or root.unconfined_reason == "turned off":
+            return
+        self._confinement_reported = True
+        self.emit(
+            Notice(
+                "warn",
+                f"The REPL runs without an OS sandbox here ({root.unconfined_reason}). Its Python still holds no "
+                "credentials and is kept off the network, commands and files outside temp, but by an audit hook "
+                "that code can get around.",
+            )
+        )
 
     # ── sub-agents ───────────────────────────────────────────────────────────
 
@@ -394,6 +538,7 @@ class Agent:
             policy=self.policy,
             scope=scope,
             read_only=True,
+            memory=self.steps,
         )
         rlm = FrondRLM(
             Investigation,
@@ -409,7 +554,7 @@ class Agent:
         ok = False
         report = ""
         try:
-            with dspy.context(lm=self.sub_lm, send_stream=None):
+            with dspy.context(lm=self.sub_lm, adapter=self.sub_adapter, send_stream=None):
                 prediction = rlm(task=task, context=context, workspace=self.workspace.snapshot())
             report = str(prediction.report or "").strip()
             ok = True
@@ -437,21 +582,6 @@ class Agent:
             raise
         except Exception as exc:
             return f"[ERROR] {exc}"
-
-    def _summarize(self, transcript: str) -> str | None:
-        prompt = (
-            "Summarise these earlier steps of a coding agent's work so it can continue without them. Keep every "
-            "concrete fact it will need: files read or changed (with line numbers), commands run and their results, "
-            "errors seen, decisions made, and what remains to do. Be terse.\n\n" + transcript[-200_000:]
-        )
-        try:
-            with dspy.context(send_stream=None):
-                out = self.sub_lm(prompt)
-            first = out[0] if isinstance(out, list) and out else out
-            text = first.get("text") if isinstance(first, dict) else first
-            return str(text) if text else None
-        except Exception:
-            return None
 
     # ── housekeeping ─────────────────────────────────────────────────────────
 
@@ -483,6 +613,10 @@ class Agent:
         self.history.append(TurnRecord(next(self._turns), "/undo", f"(the user {summary})", "done"))
         self._save()
         return summary
+
+    def attach_log(self, path: Path) -> None:
+        """Keep the step log in ``path`` (beside the session file), loading what an earlier session recorded."""
+        self.steps.attach(path)
 
     def restore(self, records: list[TurnRecord]) -> None:
         """Continue an earlier conversation: the agent sees its turns (the REPL starts fresh)."""

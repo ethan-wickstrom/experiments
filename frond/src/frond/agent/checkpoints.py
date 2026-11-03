@@ -3,8 +3,8 @@
 Every change the agent makes goes through its tools, so the tools record what they are about to change: a
 file's original bytes and permissions the first time a turn touches it (or that it did not exist yet), a
 directory move, a deleted symbolic link, or a deleted directory. The records form an ordered journal that undo
-replays backwards, so a sequence such as "move a/ to b/, then edit b/x.py" unwinds correctly. Changes made by
-shell commands are not tracked.
+replays backwards, so a sequence such as "move a/ to b/, then edit b/x.py" unwinds correctly. In a git workspace,
+what shell commands change is journaled too, from snapshots taken around each command (see snapshots.py).
 """
 
 from __future__ import annotations
@@ -128,6 +128,19 @@ class Checkpoints:
             if self._current is not None:
                 self._current.journal.append(Entry("link", link, target=target))
 
+    def record_state(self, path: Path, original: bytes | None, mode: int | None = None, *, link: bool = False) -> None:
+        """Remember ``path`` as it was before a change made outside frond's file tools (a shell command), from a
+        snapshot taken before it ran. ``link``: it was a symbolic link and ``original`` holds its target."""
+        with self._lock:
+            cp = self._current
+            if cp is None or path in cp.seen:
+                return
+            cp.seen.add(path)
+            if link and original is not None:
+                cp.journal.append(Entry("link", path, target=original.decode(errors="surrogateescape")))
+            else:
+                cp.journal.append(Entry("file", path, original, mode=mode))
+
     def can_undo(self) -> bool:
         with self._lock:
             return any(self._stack)
@@ -152,7 +165,9 @@ class Checkpoints:
                     shutil.move(str(entry.other), str(entry.path))
                     moves.append(Restored(entry.path, None, None, moved_from=entry.other))
             elif entry.kind == "link":
-                if not entry.path.exists() and not entry.path.is_symlink() and entry.target is not None:
+                if entry.path.is_symlink() or entry.path.is_file():  # whatever the turn put in its place
+                    entry.path.unlink()
+                if not entry.path.exists() and entry.target is not None:
                     entry.path.parent.mkdir(parents=True, exist_ok=True)
                     os.symlink(entry.target, entry.path)
             elif entry.kind == "dir":
@@ -171,6 +186,8 @@ class Checkpoints:
                     if path.is_file() or path.is_symlink():  # a link moved here may dangle at its new place
                         path.unlink()
                 else:
+                    if path.is_symlink():  # a command replaced the file with a link: never write through it
+                        path.unlink()
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_bytes(entry.original)
                     if entry.mode is not None:
