@@ -462,3 +462,8 @@ Each stays closed unless new evidence reopens it:
 - Rejected: a fallback model (the arm would no longer measure the model it names, and the category has none); keeping the field on Opus and Haiku, which answered it (the classifiers can change, and two protocols would make the models incomparable in E0 and every later experiment); rewording the field until the classifier passes it (that is getting around a provider safeguard, not following its guidance).
 - Consequence: the protocol changed before E0 measured anything on it, so E0 restarts and its earlier Haiku trials are not E0's. Protocol adherence is measured afresh.
 - Evidence: `NoteFieldTest`; 3-step frond runs on Sonnet 5.5, Opus 5.5 and Haiku 5.5, every reply parsed.
+
+## D52 · A PR merges once Codex has reviewed it and its findings are answered; Devin is read when it posts (2026-11-03, active, amends D40)
+- Decision: after opening a PR, wait for Codex's review (about two minutes), verify and answer its findings, and merge. Devin's reviews are read when they arrive, before or after the merge; findings on merged PRs go into the ledger (G40 tracks the open ones).
+- Why: D40 waited up to 15 minutes for both bots. Devin posted nothing on #34 to #40, over three hours, while Codex reviewed each within two minutes. The wait held finished work, and a paid run, which lasts only while a turn is active (G44), behind a reviewer that was not reviewing.
+- Rejected: keeping the 15-minute wait (pure delay while Devin is silent); dropping Devin altogether (its findings on #14 to #33 were real, and it may come back).
