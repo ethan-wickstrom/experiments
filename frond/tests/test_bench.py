@@ -6,6 +6,7 @@ import itertools
 import json
 import random
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -186,6 +187,26 @@ class MatrixTest(BenchCase):
         result = {"finished_at": "2026-11-03T10:00:00", "stats": {"n_pending_trials": 0, "n_running_trials": 0}}
         (jobs / "J" / "result.json").write_text(json.dumps(result))
         self.assertEqual(matrix.state(jobs, "J"), "done")
+
+    def test_preflight_refuses_a_daemon_whose_exec_umask_is_not_022(self):
+        s = spec.load(self.write_spec(SPEC.format(tasks='"t0"')))
+
+        def docker(umask: str | None):  # None: the probe container cannot start
+            def run(argv, **_):
+                failed = umask is None and argv[1] == "run"
+                out = {"run": "c0\n", "exec": f"{umask}\n"}.get(argv[1], "")
+                return subprocess.CompletedProcess(argv, int(failed), stdout="" if failed else out, stderr="")
+
+            return run
+
+        with mock.patch("subprocess.run", side_effect=docker("0000")):
+            problems = matrix.preflight(s, None)
+        self.assertTrue(any("umask 0000" in p and "G26" in p for p in problems), problems)
+        with mock.patch("subprocess.run", side_effect=docker(None)):
+            problems = matrix.preflight(s, None)
+        self.assertTrue(any("could not be measured" in p for p in problems), problems)  # unmeasured is refused too
+        with mock.patch("subprocess.run", side_effect=docker("0022")):
+            self.assertFalse([p for p in matrix.preflight(s, None) if "umask" in p])
 
     def test_a_dry_run_prints_every_job_and_runs_nothing(self):
         path = self.write_spec(SPEC.format(tasks=", ".join(f'"t{i}"' for i in range(8))))

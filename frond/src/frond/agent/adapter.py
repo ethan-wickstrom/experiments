@@ -164,7 +164,7 @@ class FrondAdapter(dspy.ChatAdapter):
             return super().parse(signature, completion)
         except Exception:
             if self.metrics is not None:
-                self.metrics.parse_failures += 1
+                self.metrics.bump("parse_failures")
             raise
 
     def format_system_message(self, signature: type[dspy.Signature]) -> str:

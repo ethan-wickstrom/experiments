@@ -1,5 +1,7 @@
 # TB 4.0 tasks whose reference solution (Harbor's oracle agent) fails in this VM, from E0a. Every agent would fail
-# them here, so the experiments exclude them (D28). Provisional while E0a runs; the final list replaces this one.
+# them here, so the experiments exclude them (D28). Provisional until E0a's fourth run (under G26's fix) finishes;
+# the final list replaces this one.
 cad-model  # the task image is broken: its solution fails importing OCP.collections (ocp_gordon against the installed OCP)
-rs-archive-clone  # the reference solution fails 41 of 57 tests; no network errors; cause not diagnosed
+medical-claims-processing  # its playwright-mcp sidecar fetches from npm at startup and cannot trust the egress CA (G25)
+rs-archive-clone  # failed 41 of 57 tests on file modes under docker exec's umask 0 (G26); the fourth run decides
 vba-userform-port  # its separate verifier container pip-installs from PyPI, and cannot trust the egress CA (G23)

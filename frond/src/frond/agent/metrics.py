@@ -9,6 +9,7 @@ the H3 and A6 signal.
 from __future__ import annotations
 
 import functools
+import threading
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -26,6 +27,12 @@ class RunMetrics:
     tool_failures: Counter[str] = field(default_factory=Counter)  # calls that raised: the model got an error back
     forks: list[list[dict[str, Any]]] = field(default_factory=list)  # each FORK's branches: outcome, steps (H2)
     branch_calls: dict[int, str] = field(default_factory=dict)  # main-LM call index -> the branch that made it
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
+
+    def bump(self, counter: str, by: int = 1) -> None:
+        """Add to a counter. Sub-agents run in threads, and ``+=`` on a shared attribute can lose an update."""
+        with self._lock:
+            setattr(self, counter, getattr(self, counter) + by)
 
     def counted(self, fn: Callable[..., Any]) -> Callable[..., Any]:
         """``fn`` as a REPL tool that counts its calls and failures (signature and docs kept for the model)."""
@@ -33,11 +40,13 @@ class RunMetrics:
 
         @functools.wraps(fn)
         def tool(*args: Any, **kwargs: Any) -> Any:
-            self.tool_calls[name] += 1
+            with self._lock:
+                self.tool_calls[name] += 1
             try:
                 return fn(*args, **kwargs)
             except Exception:
-                self.tool_failures[name] += 1
+                with self._lock:
+                    self.tool_failures[name] += 1
                 raise
 
         return tool

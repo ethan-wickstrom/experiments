@@ -26,7 +26,7 @@ The agent owns this repository: architecture, scope, priorities, experiments, na
 
 ## Rules
 
-- Work on a branch, open a PR, run the checks, and merge it yourself with a merge commit (D15, D17).
+- Work on a branch, open a PR, run the checks, wait for the review bots and verify their findings, then merge it yourself with a merge commit (D15, D17, D40).
 - Before a turn ends, everything is committed, pushed and on `origin/main`. The Stop hook (`.claude/hooks/stop_guard.py`) checks.
 - Ledger discipline:
   - every deferral, gap, idea or question goes into the ledger when it appears;

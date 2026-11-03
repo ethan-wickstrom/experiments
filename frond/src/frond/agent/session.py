@@ -161,12 +161,15 @@ def format_history(records: list[TurnRecord]) -> str:
 MAX_VERBATIM_REQUESTS = 8_000
 
 
-def history_preview(records: list[TurnRecord], formatted: str, limit: int, marker: str = "") -> str | None:
+def history_preview(
+    records: list[TurnRecord], formatted: str, limit: int, marker: str = "", searchable: bool = True
+) -> str | None:
     """The conversation's preview: every user message verbatim, then as much of the latest turns as fits.
 
     A summary or a tail-only window drops the user's instructions about how to work far more often than what to
     build (arXiv 2610.31778), so the user's own words always stay in view, and frond's replies give way first.
-    With a ``marker``, the user's messages carry its tag and the rest cannot (see adapter.user_tag).
+    With a ``marker``, the user's messages carry its tag and the rest cannot (see adapter.user_tag). ``searchable``:
+    the model has history_search (the fold policy).
     """
     if not records:
         return None
@@ -184,7 +187,8 @@ def history_preview(records: list[TurnRecord], formatted: str, limit: int, marke
         used += len(text) + 1
     head = "The user's messages so far, verbatim (oldest first):\n"
     if len(shown) < len(requests):
-        head += f"({len(requests) - len(shown)} earlier ones are in `history` and history_search())\n"
+        where = "`history` and history_search()" if searchable else "`history`"
+        head += f"({len(requests) - len(shown)} earlier ones are in {where})\n"
     head += "\n".join(shown)
     room = max(0, limit - len(head) - 80)
     tail = escape_marker(formatted[-room:], marker) if room else ""
@@ -270,17 +274,17 @@ class _RootHooks(Hooks):
         if name != "history" or not isinstance(value, str):
             return None
         limit = self.agent.rlm.preview_limits.get("history", 12_000)
-        return history_preview(self.agent.history, value, limit, self.agent.marker)
+        return history_preview(self.agent.history, value, limit, self.agent.marker, self.agent.memory is not None)
 
     def summarize(self, transcript: str) -> str | None:
         return self.agent._summarize(transcript)
 
     def folded(self, steps: int, before: int, after: int) -> None:
-        self.agent.metrics.compactions += 1
+        self.agent.metrics.bump("compactions")
         self.agent.emit(Folded(steps, before, after))
 
     def code_rejected(self, step: int) -> None:
-        self.agent.metrics.syntax_errors += 1
+        self.agent.metrics.bump("syntax_errors")
 
 
 class _BranchHooks(Hooks):
@@ -311,6 +315,12 @@ class _BranchHooks(Hooks):
     def history_budget(self) -> int:
         return self.agent._history_budget()
 
+    def summarize(self, transcript: str) -> str | None:
+        return self.agent._summarize(transcript)  # within the branch's calls, so its cost is the branch's
+
+    def folded(self, steps: int, before: int, after: int) -> None:
+        self.agent.metrics.bump("compactions")
+
     def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
         turn = self.agent._current.index if self.agent._current else 0
         return self.agent.steps.add(
@@ -328,7 +338,7 @@ class _BranchHooks(Hooks):
         return self.observations.note()
 
     def code_rejected(self, step: int) -> None:
-        self.agent.metrics.syntax_errors += 1
+        self.agent.metrics.bump("syntax_errors")
 
     def fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
         return "FORK is not available inside a branch: finish your option, then SUBMIT a report."
@@ -399,6 +409,12 @@ class _SubHooks(Hooks):
         first = next((line.strip() for line in reasoning.splitlines() if line.strip()), "working")
         self.agent.emit(SubAgentProgress(self.agent_id, step, first))
 
+    def summarize(self, transcript: str) -> str | None:
+        return self.agent._summarize(transcript, self.agent.sub_lm)
+
+    def folded(self, steps: int, before: int, after: int) -> None:
+        self.agent.metrics.bump("compactions")
+
     def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
         turn = self.agent._current.index if self.agent._current else 0
         return self.agent.steps.add(
@@ -456,12 +472,17 @@ class Agent:
             history_tools=config.context == "fold",
         )
         self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
-            cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model), layout=config.layout
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model),
+            layout=config.layout,
+            history_tools=config.context == "fold",
         )
         self.policy = Policy(config.approval, approver)
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)
         self.jobs = JobManager(self.log_dir, self.emit)
         self.steps = StepLog()  # every message, step and answer; attach_log() keeps it on disk
+        # The step log as the model may search it. The context policy holds for every loop of the turn, the main
+        # line, FORK branches and sub-agents alike: under the summary policy nothing can be searched back (H4).
+        self.memory = self.steps if config.context == "fold" else None
         # The workspace as a world after every step: whatever changed it is in the difference (frond.world).
         self.timeline = Timeline(workspace.root, world_dir or self.log_dir / "world") if config.worlds else None
         if self.timeline is not None:
@@ -477,7 +498,7 @@ class Agent:
             jobs=self.jobs,
             policy=self.policy,
             delegate=Delegate(self._run_subagent, self._run_subagents),
-            memory=self.steps if config.context == "fold" else None,  # a summary cannot be searched back (H4)
+            memory=self.memory,
             timeline=self.timeline,
             metrics=self.metrics,
             observations=self.observations,
@@ -713,17 +734,18 @@ class Agent:
         window = self.window or 200_000
         return int(min(window * 0.45, 150_000) * 3.6)
 
-    def _summarize(self, transcript: str) -> str | None:
-        """The summary context policy's call (H4): the main model condenses the early steps of a long turn."""
+    def _summarize(self, transcript: str, lm: dspy.LM | None = None) -> str | None:
+        """The summary context policy's call (H4): the loop's model (the main one unless ``lm``) condenses the early
+        steps of a long turn."""
         try:
-            with dspy.context(lm=self.lm, adapter=dspy.ChatAdapter(), send_stream=None):
+            with dspy.context(lm=lm or self.lm, adapter=dspy.ChatAdapter(), send_stream=None):
                 prediction = dspy.Predict(Compaction)(transcript=transcript)
         except TurnCancelled:
             raise
         except Exception as exc:
             self.emit(Notice("warn", f"could not summarise earlier steps: {describe_error(exc)}"))
             return None
-        self.metrics.summaries += 1
+        self.metrics.bump("summaries")
         return str(prediction.summary or "").strip() or None
 
     # ── scopes (H5) ──────────────────────────────────────────────────────────
@@ -835,7 +857,7 @@ class Agent:
             jobs=jobs,
             policy=self.policy,
             scope=scope,
-            memory=self.steps,
+            memory=self.memory,
             timeline=self.timeline,
             metrics=self.metrics,
             observations=observations,
@@ -895,7 +917,7 @@ class Agent:
             policy=self.policy,
             scope=scope,
             read_only=True,
-            memory=self.steps,
+            memory=self.memory,
         )
         rlm = FrondRLM(
             Investigation,
@@ -907,6 +929,7 @@ class Agent:
             max_output_chars=self.config.max_output_chars,
             sub_lm=self.sub_lm,
             interpreter_factory=self.pool.ephemeral,
+            context=self.config.context,
         )
         ok = False
         report = ""

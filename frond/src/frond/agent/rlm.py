@@ -43,6 +43,7 @@ from frond.agent.tools import display_signature
 
 ERROR_PREFIXES = ("[Error]", "[Type Error]")
 INDEX_MARK = "Index of the folded steps (oldest first):"
+SUMMARY_HEAD = "Summary of the earlier steps of this turn:\n"  # opens the note the summary policy leaves
 FOLD_GUIDE = (
     "Earlier steps of this turn were folded to keep the prompt within budget. Nothing was lost: "
     "history_step(seq) returns any step's reasoning, code and full output exactly as they were, and "
@@ -553,6 +554,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         if before <= budget or len(history.entries) <= self.keep_recent:
             return history
         old, recent = list(history.entries[: -self.keep_recent]), list(history.entries[-self.keep_recent :])
+        if all(isinstance(e, (FoldEntry, UserEntry)) for e in old):
+            return history  # only notes and the user's words are left, which neither policy shortens
         if self.context == "summary":
             return self._summarize(old, recent, history, before)
         tag = user_tag(self.marker)
@@ -577,27 +580,32 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
     def _summarize(
         self, old: list[REPLEntry], recent: list[REPLEntry], history: REPLHistory, before: int
     ) -> REPLHistory:
-        """H4's control arm: replace the early steps, any earlier summary and the user's messages among them,
-        with an LLM-written summary, as products compact a long session. Unlike the fold, nothing points back to
-        the steps, and the summary, written from tool output, cannot carry the user's mark."""
+        """H4's control arm, as products compact a long session: the early steps and any earlier summary become one
+        LLM-written summary, and nothing points back to the steps. The user's messages among them stay verbatim,
+        in order, ahead of the summary, as Codex keeps them and as the fold keeps them, so the two arms differ only
+        in how the agent's own steps are compacted (D38). The summary, written from tool output, cannot carry the
+        user's mark."""
+        users = [e for e in old if isinstance(e, UserEntry)]
+        earlier = [e.output.removeprefix(SUMMARY_HEAD) for e in old if isinstance(e, FoldEntry)]
+        steps = [e for e in old if not isinstance(e, (FoldEntry, UserEntry))]
         parts = []
         for i, entry in enumerate(old, start=1):
             if isinstance(entry, FoldEntry):
-                parts.append(f"Summary of even earlier steps:\n{entry.output}")
+                parts.append("Summary of even earlier steps:\n" + entry.output.removeprefix(SUMMARY_HEAD))
             elif isinstance(entry, UserEntry):
                 parts.append(f"The user wrote, during the turn:\n{entry.output}")
             else:
                 parts.append(entry.format(index=i, max_output_chars=4000))
         summary = self.hooks.summarize("\n\n".join(parts))
-        if not summary:  # the summary call failed: keep a clipped trace rather than nothing
-            summary = "\n".join(_index_line(e) for e in old if not isinstance(e, (FoldEntry, UserEntry)))
+        if not summary:  # the call failed: keep the earlier summaries, and a clipped trace of the steps since them
+            summary = "\n\n".join([*earlier, "\n".join(_index_line(e) for e in steps)])
         note = FoldEntry(
-            reasoning=f"({len(old)} earlier steps of this turn were summarised to save context)",
+            reasoning=f"({len(steps)} earlier steps of this turn were summarised to save context)",
             code=NOTE_CODE,
-            output="Summary of the earlier steps of this turn:\n" + escape_marker(summary, self.marker),
+            output=SUMMARY_HEAD + escape_marker(summary, self.marker),
         )
-        summarised = REPLHistory(entries=[note, *recent], max_output_chars=history.max_output_chars)
-        self.hooks.folded(len(old), before, len(summarised.format()))
+        summarised = REPLHistory(entries=[*users, note, *recent], max_output_chars=history.max_output_chars)
+        self.hooks.folded(len(steps), before, len(summarised.format()))
         return summarised
 
 
