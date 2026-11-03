@@ -174,6 +174,15 @@ class FenceTest(WorkspaceCase):
         record = agent.run_turn("go")
         self.assertEqual((record.status, record.response), ("done", answer))
 
+    def test_raw_json_code_with_a_fence_in_a_string_runs_whole(self):  # Codex, #43: no inner fence is looked for
+        answer = "app.py holds one line:\n\n```python\nx = 1\n```\n\nNothing else."
+        code = f'SUBMIT(response="""{answer}""")'  # a literal multiline string, as a JSON reply carries it
+        for protocol in ("json", "markers"):
+            with self.subTest(protocol=protocol):
+                agent, _ = scripted_agent(self, [Step("Answer.", code)], protocol=protocol)
+                record = agent.run_turn("go")
+                self.assertEqual((record.status, record.response), ("done", answer))
+
     def test_other_shapes_still_go_to_dspy(self):
         from frond.agent.rlm import strip_fences
 

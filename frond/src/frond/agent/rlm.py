@@ -261,17 +261,18 @@ def _finish_reason(response: Any, index: int) -> Any:
 PYTHON_FENCES = frozenset({"", "python", "py", "python3"})
 
 
-def strip_fences(text: str) -> str:
-    """The code in a step's code field. The field is one fenced block, so its fence is the field's first and last
-    lines: code whose strings hold a fence of their own (an answer with a markdown code block, say) keeps them. DSPy's
-    stripper ended the block at the first inner fence, which cut such code mid-string (G42). Any other shape goes to
-    DSPy's, which also refuses a fence for another language."""
+def strip_fences(text: str, *, raw: bool = False) -> str:
+    """The code in a step's code field. Under the markers the field is one fenced block, so its fence is the field's
+    first and last lines: code whose strings hold a fence of their own (an answer with a markdown code block, say)
+    keeps them. DSPy's stripper ended the block at the first inner fence, which cut such code mid-string (G42). Any
+    other shape goes to DSPy's, which also refuses a fence for another language. ``raw``: the field holds the code
+    itself (the json protocol, D53), so only a fence around all of it is removed, and none inside it is looked for."""
     lines = text.strip().splitlines()
     if len(lines) >= 2 and lines[0].startswith("```") and lines[-1].strip() == "```":
         tag = lines[0][3:].strip()
         if (tag.split(maxsplit=1)[0].lower() if tag else "") in PYTHON_FENCES:
             return "\n".join(lines[1:-1]).strip("\n")
-    return _strip_code_fences(text)
+    return text if raw else _strip_code_fences(text)
 
 
 def _clip(text: str, limit: int) -> str:
@@ -613,7 +614,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         reasoning = str(getattr(action, NOTE, "") or "")
         action["reasoning"] = reasoning  # what DSPy's loop records each step's narration as
         try:
-            code = strip_fences(str(action.code or ""))
+            code = strip_fences(str(action.code or ""), raw=self.protocol == "json")
         except SyntaxError as exc:
             code = str(action.code or "")
             hooks.step_planned(step, reasoning, code)
