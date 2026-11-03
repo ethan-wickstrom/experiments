@@ -566,6 +566,35 @@ def fake_trial(
 
 
 class AnalyzeTest(BenchCase):
+    def test_trials_stopped_by_a_reference_agents_bound_are_counted(self):  # G39
+        model = "anthropic/claude-opus-5-5"
+        capped = spec.Arm("cc", "claude-code", model, {"max_budget_usd": "10"}, None)
+        turns = spec.Arm("t2", "terminus-2", model, {"max_turns": "150"}, None)
+        frond = spec.Arm("f", "frond_harbor:Frond", model, {}, None)
+
+        def trial(cost: float | None = None, turns: int | None = None) -> analyze.Trial:
+            return analyze.Trial("x", "t", "t__1", 1.0, cost, turns=turns)
+
+        self.assertTrue(analyze.stopped_by_bound(trial(cost=9.7), capped))
+        self.assertFalse(analyze.stopped_by_bound(trial(cost=3.0), capped))
+        self.assertTrue(analyze.stopped_by_bound(trial(turns=150), turns))
+        self.assertFalse(analyze.stopped_by_bound(trial(turns=40), turns))
+        self.assertIsNone(analyze.stopped_by_bound(trial(turns=None), turns))
+        self.assertIsNone(analyze.stopped_by_bound(trial(cost=9.9), frond))
+        job = self.dir / "job"
+        directory = job / "t__1"
+        (directory / "agent").mkdir(parents=True)
+        result = {
+            "task_id": {"name": "t"},
+            "agent_execution": {"started_at": "2026-11-03T10:00:00Z"},
+            "verifier_result": {"rewards": {"reward": 0.0}},
+            "agent_result": {"cost_usd": 2.0, "metadata": {"n_episodes": 150}},
+        }
+        (directory / "result.json").write_text(json.dumps(result))
+        loaded = analyze.load_trial(directory, "t2", analyze.load_prices())
+        assert loaded is not None
+        self.assertEqual(loaded.turns, 150)
+
     def test_the_report_shows_protocol_adherence_per_step(self):  # E0's first question (D46)
         arms = {
             "haiku": {
