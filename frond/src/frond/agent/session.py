@@ -30,6 +30,7 @@ from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
 from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage, total_cost
+from frond.agent.metrics import RunMetrics
 from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Investigation
 from frond.agent.repl import ReplPool
@@ -230,6 +231,9 @@ class _RootHooks(Hooks):
     def compacted(self, steps: int, before: int, after: int) -> None:
         self.agent.emit(Compacted(steps, before, after))
 
+    def code_rejected(self, step: int) -> None:
+        self.agent.metrics.syntax_errors += 1
+
 
 class _SubHooks(Hooks):
     def __init__(self, agent: Agent, agent_id: int) -> None:
@@ -293,8 +297,11 @@ class Agent:
         # Marks the user's messages in the prompt so text from tools, files or answers cannot pass as the user's.
         self.marker = secrets.token_hex(6)
         self._confinement_reported = False
+        self.metrics = RunMetrics()  # what the run did, for research exports (ledger B2)
         self.adapter: dspy.ChatAdapter = FrondAdapter(
-            cache_breakpoints=config.prompt_cache and caches_by_marks(config.model), marker=self.marker
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.model),
+            marker=self.marker,
+            metrics=self.metrics,
         )
         self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
             cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model)
@@ -316,6 +323,7 @@ class Agent:
             checkpoints=self.checkpoints,
             memory=self.steps,
             snapshots=self.snapshots,
+            metrics=self.metrics,
         )
         self.pool = ReplPool(
             workspace.root,

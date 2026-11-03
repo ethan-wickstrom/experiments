@@ -4,16 +4,15 @@ Updated 2026-11-03, at the end of the first session, after the owner's standing 
 
 ## In flight
 
-The worlds core (B4a: store, snapshots, checkout, diff, merge3, revert) is on `main`. Next comes B4b, wiring it into frond's tools and `/undo` and deleting `Checkpoints` and `GitSnapshots`.
+E0a, the oracle sweep over all 66 TB 4.0 tasks, is running in the session VM. Its results go to `bench/results/` when it finishes; a fresh session reruns it with `harbor run -d terminal-bench/terminal-bench@4.0.0 -a oracle -e docker -n 2 --delete`.
 
 ## Next, in order (research-first, D16)
 
-1. B2: per-call usage, protocol violations, failed edits and stale actions in `--export`.
-2. B3: arm flags, the matrix runner (`bench/matrix.py`) and the analysis script (`bench/analyze.py`).
-3. B12: redaction, before any results are committed.
-4. B4b: wire worlds into frond, with undo as a revert of the turn's steps, which closes R2, R3 and P2.
-5. B5, B6 and B7: freshness, the forkable REPL, then fork, select and merge.
-6. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`.
+1. B3: arm flags, the matrix runner (`bench/matrix.py`) and the analysis script (`bench/analyze.py`).
+2. B12: redaction, before any results are committed.
+3. B4b: wire worlds into frond, with undo as a revert of the turn's steps, which closes R2, R3 and P2.
+4. B5, B6 and B7: freshness (including stale-action counts), the forkable REPL, then fork, select and merge.
+5. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`.
 
 ## Waiting on the owner
 

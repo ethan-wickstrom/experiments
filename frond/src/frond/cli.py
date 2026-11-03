@@ -263,6 +263,7 @@ def export_run(agent: Agent, directory: Path) -> None:
     import json
 
     from frond.agent.lm import usage_totals
+    from frond.agent.metrics import call_records
 
     directory.mkdir(parents=True, exist_ok=True)
     with open(directory / "steps.jsonl", "w", encoding="utf-8") as f:
@@ -270,6 +271,13 @@ def export_run(agent: Agent, directory: Path) -> None:
             f.write(json.dumps(dataclasses.asdict(record), ensure_ascii=False) + "\n")
     usage = {"model": agent.config.model, "sub_model": agent.config.sub_model, **usage_totals(agent.lm, agent.sub_lm)}
     (directory / "usage.json").write_text(json.dumps(usage, indent=1))
+    with open(directory / "calls.jsonl", "w", encoding="utf-8") as f:
+        roles = [("main", agent.lm)] + ([("sub", agent.sub_lm)] if agent.sub_lm is not agent.lm else [])
+        for role, lm in roles:
+            for record in call_records(lm, role):
+                f.write(json.dumps(record, default=str) + "\n")
+    metrics = {"turns": len(agent.history), "steps": sum(r.steps for r in agent.history), **agent.metrics.as_dict()}
+    (directory / "metrics.json").write_text(json.dumps(metrics, indent=1))
     last = agent.history[-1] if agent.history else None
     (directory / "answer.md").write_text((last.response or last.error or "") if last else "", encoding="utf-8")
 
