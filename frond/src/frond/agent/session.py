@@ -28,6 +28,7 @@ import dspy
 from frond.agent.adapter import FrondAdapter, escape_marker, user_tag
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
+from frond.agent.freshness import Observations
 from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage, total_cost
 from frond.agent.metrics import RunMetrics
 from frond.agent.policy import Approver, Mode, Policy
@@ -90,6 +91,7 @@ class AgentConfig:
     worlds: bool = True  # snapshot the workspace at every step (frond.world): /undo, turn diffs, command diffs
     repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
     layout: str = "turns"  # how each step sees the history: "turns" (frond) or "chat" (DSPy's stock layout; H6)
+    freshness: bool = True  # mark stale reads and refuse overwriting what changed since a read (H3); off: count only
 
 
 @dataclass
@@ -194,7 +196,11 @@ class _RootHooks(Hooks):
     def step_started(self, step: int, max_steps: int) -> None:
         self.agent._step = step
         self.agent._steps_taken = step
+        self.agent.observations.step = step
         self.agent.emit(StepStarted(step, max_steps))
+
+    def stale_reads(self, step: int) -> str:
+        return self.agent.observations.note()
 
     def before_lm(self, step: int | None) -> None:
         self.agent._stream_step = step
@@ -330,6 +336,7 @@ class Agent:
         if self.timeline is not None:
             self.timeline.warm()
         self._world = ""  # the world after the latest step, for its step-log record
+        self.observations = Observations(workspace.root)  # what the model read this turn (freshness, H3)
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -340,6 +347,8 @@ class Agent:
             memory=self.steps,
             timeline=self.timeline,
             metrics=self.metrics,
+            observations=self.observations,
+            freshness=config.freshness,
         )
         self.pool = ReplPool(
             workspace.root,
@@ -363,6 +372,7 @@ class Agent:
             sub_lm=self.sub_lm,
             interpreter_factory=self.pool,
             marker=self.marker,
+            freshness=config.freshness,
         )
         self._listeners = [
             dspy.streaming.StreamListener("code", predict=self.rlm.generate_action, allow_reuse=True),
@@ -485,6 +495,7 @@ class Agent:
         with self._steer_lock:
             self._steers, self._accepting_steers = [], True
         head = ""
+        self.observations.reset()
         if self.timeline is not None:
             record.world_before, head = self.timeline.begin_turn()
         started = time.monotonic()

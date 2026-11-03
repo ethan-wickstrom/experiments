@@ -19,6 +19,7 @@ from typing import Any
 class RunMetrics:
     parse_failures: int = 0  # replies that did not parse into the step's output fields
     syntax_errors: int = 0  # code that did not compile
+    stale_actions: int = 0  # edits, writes and deletes of files changed since the model read them (H3, B5)
     tool_calls: Counter[str] = field(default_factory=Counter)
     tool_failures: Counter[str] = field(default_factory=Counter)  # calls that raised: the model got an error back
 
@@ -41,6 +42,7 @@ class RunMetrics:
         return {
             "parse_failures": self.parse_failures,
             "syntax_errors": self.syntax_errors,
+            "stale_actions": self.stale_actions,
             "tool_calls": dict(sorted(self.tool_calls.items())),
             "tool_failures": dict(sorted(self.tool_failures.items())),
             "failed_edits": sum(self.tool_failures[n] for n in ("edit", "patch", "write")),

@@ -8,6 +8,7 @@ with ``__frond__`` are rehydrated into friendlier objects on the REPL side (see 
 
 from __future__ import annotations
 
+import contextlib
 import difflib
 import inspect
 import json
@@ -24,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from frond.agent.diffing import make_diff
+from frond.agent.freshness import Observation, Observations
 from frond.agent.metrics import RunMetrics
 from frond.agent.patch import FileOp, PatchError, apply_chunks, parse_patch
 from frond.agent.policy import Policy
@@ -157,9 +159,13 @@ class Toolbox:
         memory: StepLog | None = None,
         timeline: Timeline | None = None,
         metrics: RunMetrics | None = None,
+        observations: Observations | None = None,
+        freshness: bool = True,
     ) -> None:
         self.ws = workspace
         self.memory = memory
+        self.observations = observations  # what the model has read this turn (freshness, H3)
+        self.freshness = freshness  # act on stale reads; off, they are only counted
         self.timeline = timeline  # snapshots around each command, to show what it changed (undo needs none of this)
         self.metrics = metrics  # counts every tool call and failure, for research (ledger B2)
         self.emit = emit
@@ -211,7 +217,7 @@ class Toolbox:
         hint = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
         return FileNotFoundError(f"{path} does not exist.{hint}")
 
-    def _read_text(self, p: Path, display: str, *, strict: bool = False) -> str:
+    def _read_text(self, p: Path, display: str, *, strict: bool = False, observe: bool = False) -> str:
         if not p.exists():
             raise self._missing(display)
         if p.is_dir():
@@ -222,6 +228,8 @@ class Toolbox:
         data = p.read_bytes()
         if _is_binary(data):
             raise ToolError(f"{display} looks like a binary file ({size:,} bytes)")
+        if observe and self.observations is not None:
+            self.observations.saw(display, data)
         if strict:
             try:
                 return data.decode("utf-8")
@@ -233,6 +241,35 @@ class Toolbox:
         if self.read_only:
             raise PermissionError("this agent is read-only; report what should change instead")
         self.policy.check_write(p, self.ws.is_inside(p))
+
+    def _stale(self, display: str, *, replaces: bool) -> Observation | None:
+        """The model's read of ``display`` when the file changed since (counted as a stale action). With freshness
+        on, an action that ``replaces`` the whole file is refused: it would overwrite a change the model never saw."""
+        stale = self.observations.changed(display) if self.observations is not None else None
+        if stale is None:
+            return None
+        if self.metrics is not None:
+            self.metrics.stale_actions += 1
+        if self.freshness and replaces:
+            raise ToolError(
+                f"{display} changed since you read it at step {stale.step}. Read it again before replacing or "
+                "deleting it, so the change made since is not lost."
+            )
+        return stale
+
+    def _wrote(self, p: Path, display: str, stale: Observation | None) -> None:
+        """After the model's own change the file holds what it intended, unless its picture was stale already."""
+        if self.observations is not None and stale is None:
+            with contextlib.suppress(OSError):
+                self.observations.saw(display, (p.resolve() if p.is_symlink() else p).read_bytes())
+
+    def _stale_note(self, display: str, stale: Observation | None) -> str:
+        if stale is None or not self.freshness:
+            return ""
+        return (
+            f". Note: {display} had changed since you read it at step {stale.step}; the edit applied where your "
+            "old text still matched. Read the file again before relying on the rest of it."
+        )
 
     def _commit(self, p: Path, display: str, old: str | None, new: str) -> tuple[int, int]:
         target = p.resolve() if p.is_symlink() else p
@@ -267,7 +304,7 @@ class Toolbox:
         display = self.ws.rel(p)
         if p.is_dir():
             return self.ls(path, depth=1)
-        text = self._read_text(p, display)
+        text = self._read_text(p, display, observe=True)
         lines = text.splitlines()
         total = len(lines)
         start = max(1, int(start))
@@ -294,7 +331,7 @@ class Toolbox:
         Use view() instead when you want to look at it."""
         p = self._path(path)
         display = self.ws.rel(p)
-        text = self._read_text(p, display)
+        text = self._read_text(p, display, observe=True)
         n = text.count("\n") + (0 if text.endswith("\n") or not text else 1)
         self.emit(FileViewed(display, 1, n, n, self.scope))
         return text
@@ -553,7 +590,9 @@ class Toolbox:
             old = self._read_text(p, display, strict=True) if p.exists() else None
             if old == content:
                 return f"{display} unchanged (content identical)"
+            stale = self._stale(display, replaces=True)
             added, removed = self._commit(p, display, old, content)
+            self._wrote(p, display, stale)
         lines = content.count("\n") + (0 if content.endswith("\n") or not content else 1)
         if old is None:
             return f"created {display} ({lines} lines)"
@@ -577,12 +616,14 @@ class Toolbox:
         with self._write_lock:
             text = self._read_text(p, display, strict=True)
             updated = self._replace(text, old, new, replace_all, display)
+            stale = self._stale(display, replaces=False)
             added, removed = self._commit(p, display, text, updated)
+            self._wrote(p, display, stale)
         prefix = next(
             (i for i, (a, b) in enumerate(zip(text, updated, strict=False)) if a != b), min(len(text), len(updated))
         )
         line = text.count("\n", 0, prefix) + 1
-        return f"edited {display} at line {line} (+{added} −{removed})"
+        return f"edited {display} at line {line} (+{added} −{removed}){self._stale_note(display, stale)}"
 
     @staticmethod
     def _replace(text: str, old: str, new: str, replace_all: bool, display: str) -> str:
@@ -642,6 +683,7 @@ class Toolbox:
             raise ToolError(str(exc)) from None
         planned: list[tuple[FileOp, Path, str | None, str | None]] = []  # op, path, old, new
         touched: set[Path] = set()
+        stale: dict[Path, Observation | None] = {}  # checked while planning, so a refusal writes nothing
 
         def claim(path: Path) -> None:
             if path in touched:
@@ -660,8 +702,10 @@ class Toolbox:
                     planned.append((op, p, None, op.content))
                 elif op.kind == "delete":
                     planned.append((op, p, self._read_text(p, display, strict=True), None))
+                    stale[p] = self._stale(display, replaces=True)
                 else:
                     old = self._read_text(p, display, strict=True)
+                    stale[p] = self._stale(display, replaces=False)
                     try:
                         new = apply_chunks(old, op.chunks, display) if op.chunks else old
                     except PatchError as exc:
@@ -683,15 +727,18 @@ class Toolbox:
                     summary.append(f"deleted {display}")
                     continue
                 assert new is not None
+                note = self._stale_note(display, stale.get(p))
                 if op.move_to:
                     dest = self._path(op.move_to)
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     os.replace(p, dest)
                     added, removed = self._commit(dest, self.ws.rel(dest), old, new)
-                    summary.append(f"moved {display} → {self.ws.rel(dest)} (+{added} −{removed})")
+                    self._wrote(dest, self.ws.rel(dest), stale.get(p))
+                    summary.append(f"moved {display} → {self.ws.rel(dest)} (+{added} −{removed}){note}")
                 else:
                     added, removed = self._commit(p, display, old, new)
-                    summary.append(f"{'created' if old is None else 'updated'} {display} (+{added} −{removed})")
+                    self._wrote(p, display, stale.get(p))
+                    summary.append(f"{'created' if old is None else 'updated'} {display} (+{added} −{removed}){note}")
             self.ws.invalidate()
         return "\n".join(summary)
 
@@ -722,6 +769,7 @@ class Toolbox:
             old = self._read_text(p, display)
         except ToolError:
             old = ""
+        self._stale(display, replaces=True)
         p.unlink()
         diff = make_diff(old, "", display, deleted=True)
         self.emit(FileChanged(display, "delete", diff.text, 0, diff.removed, scope=self.scope))

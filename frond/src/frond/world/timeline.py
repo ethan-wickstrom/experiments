@@ -14,6 +14,7 @@ checkout) is not undone file by file, which would contradict the commit; git und
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import threading
 import time
@@ -75,7 +76,12 @@ class Timeline:
 
     def warm(self) -> None:
         """Take a first snapshot in the background, so the first turn does not wait for every file to be read."""
-        threading.Thread(target=self.snapshot, name="frond-world-warmup", daemon=True).start()
+
+        def first() -> None:
+            with contextlib.suppress(OSError):  # best effort: the session may close, and its store go, meanwhile
+                self.snapshot()
+
+        threading.Thread(target=first, name="frond-world-warmup", daemon=True).start()
 
     def snapshot(self, *, new_ignored: bool = False) -> str:
         """The workspace now, as a tree id. ``new_ignored``: first leave out paths git began ignoring that did not

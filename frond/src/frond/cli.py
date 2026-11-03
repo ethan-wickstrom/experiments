@@ -73,6 +73,13 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
         "an experiment arm (H6)",
     )
     p.add_argument(
+        "--freshness",
+        choices=["on", "off"],
+        default="on",
+        help="tell the model which files changed since it read them, and refuse to overwrite them unread; "
+        "off only counts such actions (an experiment arm, H3)",
+    )
+    p.add_argument(
         "--demo", action="store_true", help="scripted session in a temporary sample project (no API key needed)"
     )
     p.add_argument(
@@ -171,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         prompt_cache=not args.no_prompt_cache,
         effort=None if args.effort == "default" else args.effort,
         layout=args.layout,
+        freshness=args.freshness == "on",
     )
     prompt = " ".join(args.prompt).strip()
 

@@ -19,7 +19,7 @@ Each hypothesis compares arms on the same tasks, model, effort and budget.
 |---|---|---|---|---|
 | H1 | Code actions in a persistent REPL solve at least as many tasks as JSON tool calling with identical tools, at lower cost | `--arm rlm` vs `--arm react` | TB 4.0 | pass rate (non-inferiority, 5 points); cost per solved task |
 | H2 | Forking k=3 branches at the model's request and keeping the one verifiers prefer raises pass rate. Prefix caching keeps cost under 2× | `--fork 1` vs `--fork 3` | TB 4.0 | pass rate (superiority); cost ratio |
-| H3 | Marking stale observations, meaning files changed since the model read them, cuts failed edits and wrong-state actions | `--freshness off` vs `on` | TB 4.0 | failed edits per task; pass rate |
+| H3 | Marking stale observations, meaning files changed since the model read them, cuts failed edits and wrong-state actions | `--freshness off` vs `on` | TB 4.0 | failed edits and stale actions per task; pass rate |
 | H4 | A lossless log with index folds beats LLM summary compaction on long tasks | `--context fold` vs `--context summary` | LHTB 2.0 | pass rate |
 | H5 | Scopes as savepoints, collapsing finished subtasks and rewinding abandoned ones, raise long-horizon pass rate and cut cost | `--scopes off` vs `on` | LHTB 2.0 | pass rate; cost |
 | H6 | The per-step cache layout cuts cost at least 3× on Anthropic without lowering pass rate | `--layout chat` vs `--layout frond` | TB 4.0 subset | cost per task; pass rate (non-inferiority) |
@@ -35,7 +35,7 @@ Each run records, in `frond -p --export` and on to Harbor:
 - steps and wall-clock time;
 - protocol violations: replies that failed to parse into reasoning and code;
 - failed edits: edit or patch calls that raised;
-- stale actions: edits to files changed since they were last read;
+- stale actions: edits, writes and deletes of files changed since the model last read them (`stale_actions`; both freshness arms count them);
 - forks and the verifier scores of each branch.
 
 ## Statistics

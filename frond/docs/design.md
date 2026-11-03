@@ -247,6 +247,8 @@ in place of k · P. Forking three ways from a 50k-token prefix on Opus 5.5 costs
 
 Every read records an observation. At each step the compiler checks every observation against the current tree, one dictionary lookup each, and marks the stale ones in the view: "you read src/x.py at step 3; it changed at step 7 (your sed)" or "…changed outside frond". The model then sees that it is about to edit a file from an out-of-date picture at the moment that matters (H3). The observation set is also what [CarryOn](https://arxiv.org/abs/2610.18784) calls continuation carriers, except that their validity is checked mechanically rather than by a model.
 
+As built (B5, D30): observations are per file and per turn, keyed by the blob id the world store uses. A stale read is named in a volatile prompt field before each step. A whole-file write or a delete over a stale read is refused until the model reads the file again: compare-and-swap, so a change the model never saw cannot be overwritten. With `--freshness off`, only the count of stale actions remains, which is the control arm of H3.
+
 ### Provenance
 
 Every fragment of a view has one of three sources:
