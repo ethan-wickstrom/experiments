@@ -1,0 +1,73 @@
+[project]
+name = "frond"
+version = "0.1.0"
+description = "An RLM-centric coding agent for the terminal, built on DSPy"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "Ethan Wickstrom", email = "e.t.wickstrom@wustl.edu" }]
+requires-python = ">=3.12"
+keywords = ["agent", "coding-agent", "dspy", "rlm", "tui", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console :: Curses",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
+]
+# dspy is the only runtime dependency; everything else (the TUI included) is the CPython stdlib.
+# The upper bound matters: frond hooks RLM internals that DSPy 3.5 is scheduled to rework.
+dependencies = ["dspy>=3.4.1,<3.5"]
+
+[project.scripts]
+frond = "frond.cli:main"
+
+[dependency-groups]
+dev = ["ruff>=0.17.3", "ty>=0.0.95"]
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "C4",   # comprehensions
+    "PIE",  # misc lints
+    "RUF",  # ruff-specific
+    "PERF", # performance anti-patterns
+]
+ignore = [
+    "RUF001", # ambiguous unicode: the TUI draws with box-drawing and symbol glyphs on purpose
+    "RUF002",
+    "RUF003",
+    "SIM105", # contextlib.suppress is not always clearer than try/except/pass
+    "PERF203", # try/except in loops is fine in IO-bound code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+"src/frond/agent/prompts.py" = ["E501"] # prompt prose reads better unwrapped
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "tests"]
