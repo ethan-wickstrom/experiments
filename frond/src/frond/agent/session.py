@@ -90,6 +90,7 @@ class AgentConfig:
     sub_effort: str | None = None  # for llm_query sub-calls and sub-agents
     track_commands: bool = True  # snapshot a git workspace around shell commands, so /undo covers their changes
     repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
+    layout: str = "turns"  # how each step sees the history: "turns" (frond) or "chat" (DSPy's stock layout; H6)
 
 
 @dataclass
@@ -304,9 +305,10 @@ class Agent:
             cache_breakpoints=config.prompt_cache and caches_by_marks(config.model),
             marker=self.marker,
             metrics=self.metrics,
+            layout=config.layout,
         )
         self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
-            cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model)
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model), layout=config.layout
         )
         self.policy = Policy(config.approval, approver)
         self.shell = ShellRunner(workspace.root, self.log_dir, self.emit, self.control.cancelled)

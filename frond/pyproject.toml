@@ -35,7 +35,7 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "."]
 
 [tool.ruff.lint]
 select = [
@@ -70,4 +70,5 @@ quote-style = "double"
 python-version = "3.12"
 
 [tool.ty.src]
-include = ["src", "tests"]
+include = ["src", "tests", "bench"]
+exclude = ["bench/frond_harbor.py"]  # needs harbor, which frond does not depend on

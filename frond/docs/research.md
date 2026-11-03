@@ -40,11 +40,15 @@ Each run records, in `frond -p --export` and on to Harbor:
 
 ## Statistics
 
-- The task is the pairing unit. Each arm runs k trials per task, giving a per-task pass fraction.
-- The comparison is the paired Wilcoxon signed-rank test on per-task differences, as in [AgentRewind](https://arxiv.org/abs/2608.14380), with bootstrap 95% intervals on the mean difference. Holm correction applies across H1–H6.
-- Non-inferiority margin: 5 points. Superiority means the interval excludes 0.
-- Sample size comes from E0's per-task variance. Before E0, the estimate at 66 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
-- Runs go in batches of 22 tasks, so the program can stop early on clear success or futility, at the cost of the error control a single fixed-size test would give.
+Every experiment is a spec in `bench/experiments/`, committed before its first trial: tasks, run order, arms, trials and claims, each claim with its test and margin. `bench/matrix.py` runs it and `bench/analyze.py` evaluates it from the same file (D28).
+
+- The population is the TB 4.0 tasks that can start in the VM: 56 of 66, since 10 declare more than 4 CPUs or a GPU (`bench/datasets/`, G20). Tasks the oracle fails in E0a are excluded too.
+- The task is the pairing unit. Each arm runs k trials per task, giving a per-task pass fraction. Only the first k valid trials of a task count, in start order. Trials whose environment failed before the agent started are reported and not scored.
+- Fixed-size test: the exact paired Wilcoxon signed-rank test on per-task differences (as in [AgentRewind](https://arxiv.org/abs/2608.14380)), one-sided against the claim's boundary, computed over all sign assignments so ties need no approximation. Effect sizes get bootstrap 95% intervals over tasks. Holm's correction applies across a spec's claims; a claim holds when its adjusted p is below 0.05.
+- Non-inferiority margin: 5 points. Cost claims compare total cost between arms (a ratio, with a bootstrap test against its bound).
+- Sequential decisions: after every batch, each pass-rate claim's betting confidence sequence ([Waudby-Smith and Ramdas](https://arxiv.org/abs/2010.09686)) is read. It holds at all looks at once, so stopping as soon as a claim is decided keeps the error below alpha (split across claims by Bonferroni). A fixed-size test read after every batch would not. Specs opt in with `stop_early = true`.
+- Batches alternate the order of arms (ABBA), so drift in the API or the VM falls on every arm alike.
+- Sample size comes from E0's within-task and between-task variance, which the analysis reports. Before E0, the estimate at 56 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
 
 ## Cost model and screening
 
@@ -65,13 +69,13 @@ Screening protocol: run each hypothesis first on the cheapest model whose TB 4.0
 From `frond/`, like the checks:
 
 ```sh
-scripts/dev-env.sh    # dockerd, the Docker Hub mirror (D23), and the egress CA to trust (D27)
-FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt PYTHONPATH=bench uvx --from harbor==0.25.0 harbor run \
-  -d terminal-bench/terminal-bench@4.0.0 -a frond_harbor:Frond -m anthropic/claude-opus-5-5 -e docker -n 1 -k 3 \
-  --extra-docker-compose bench/compose/egress-ca.yaml -o jobs
-python bench/prune.py --while-pid <harbor's pid>    # frees disk between tasks without racing pulls (G8)
+scripts/dev-env.sh                                              # dockerd, the mirror (D23), the egress CA (D27)
+export FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt
+uv run python -m bench.matrix bench/experiments/<spec>.toml --dry-run   # each Harbor job and its command
+uv run python -m bench.matrix bench/experiments/<spec>.toml             # runs, resumes, prunes images (G8)
+uv run python -m bench.analyze bench/experiments/<spec>.toml --out bench/results/<date>-<id>
 ```
 
-Without the overlay, every task whose agent, solution or tests reach the internet fails in this VM, whatever the agent does (G7).
+The runner adds the egress-CA overlay, without which every task whose agent, solution or tests reach the internet fails in this VM (G7). It retries only failures before the agent starts, because Harbor reruns a retried trial under the same name and would otherwise keep the better of two attempts. Jobs go to `jobs/<id>/` (ignored by git).
 
 Results, as summaries rather than raw trajectories, go under `frond/bench/results/<date>-<experiment>/`, with secrets redacted (ledger B12).

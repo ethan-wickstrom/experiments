@@ -94,11 +94,28 @@ def last_reply_index(demos: list[dict[str, Any]], history: REPLHistory) -> int |
     return 2 * len(demos) + 2 * replies - 1 if replies else None
 
 
+LAYOUTS = ("turns", "chat")
+
+
 class FrondAdapter(dspy.ChatAdapter):
+    """frond's prompt layout. ``layout="turns"``: each earlier step is an assistant turn (its reasoning and code) and
+    a user turn (its output), the latest reply cache-marked, the volatile fields last. ``layout="chat"``: DSPy's stock
+    rendering, the whole history inside one user message, kept as the control arm of H6 (``research.md``); frond's
+    provenance tags are not applied to it."""
+
     def __init__(
-        self, *, cache_breakpoints: bool = False, marker: str = "", metrics: Any = None, **kwargs: Any
+        self,
+        *,
+        cache_breakpoints: bool = False,
+        marker: str = "",
+        metrics: Any = None,
+        layout: str = "turns",
+        **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        if layout not in LAYOUTS:
+            raise ValueError(f"layout must be one of {LAYOUTS}, not {layout!r}")
+        self.layout = layout
         self.cache_breakpoints = cache_breakpoints
         self.metrics = metrics  # a RunMetrics: counts replies that do not parse (ledger B2)
         self.marker = marker  # marks the user's messages; escaped out of every step's output (see user_tag)
@@ -126,6 +143,7 @@ class FrondAdapter(dspy.ChatAdapter):
         history = inputs.get("repl_history")
         if (
             self.cache_breakpoints
+            and self.layout == "turns"
             and isinstance(history, REPLHistory)
             and history.entries
             and is_action(signature, inputs)
@@ -141,7 +159,12 @@ class FrondAdapter(dspy.ChatAdapter):
         inputs: dict[str, Any],
     ) -> list[dict[str, Any]]:
         history = inputs.get("repl_history")
-        if not is_action(signature, inputs) or not isinstance(history, REPLHistory) or not history.entries:
+        if (
+            self.layout == "chat"
+            or not is_action(signature, inputs)
+            or not isinstance(history, REPLHistory)
+            or not history.entries
+        ):
             return super().format(signature, demos, inputs)
         context = {k: v for k, v in inputs.items() if k not in ("repl_history", *VOLATILE)}
         first = self.format_user_message_content(signature, context)
