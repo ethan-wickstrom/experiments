@@ -96,6 +96,7 @@ class AgentConfig:
     worlds: bool = True  # snapshot the workspace at every step (frond.world): /undo, turn diffs, command diffs
     repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
     layout: str = "turns"  # how each step sees the history: "turns" (frond) or "chat" (DSPy's stock layout; H6)
+    protocol: str = "json"  # each step's reply: "json" (structured output, D53) or "markers" (DSPy's text fields)
     freshness: bool = True  # mark stale reads and refuse overwriting what changed since a read (H3); off: count only
     fork: int = 1  # most branches a FORK may explore (H2); 1 leaves FORK out of the REPL and the prompt
     arm: str = "rlm"  # "rlm": Python in a persistent REPL; "react": one tool call per step, same tools (H1)
@@ -493,6 +494,7 @@ class Agent:
             marker=self.marker,
             metrics=self.metrics,
             layout=config.layout,
+            protocol=config.protocol,
             history_tools=config.context == "fold",
         )
         self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
@@ -500,6 +502,7 @@ class Agent:
             metrics=self.metrics,
             counters="sub_",  # the sub-model's protocol adherence, apart from the main model's (F51)
             layout=config.layout,
+            protocol=config.protocol,
             history_tools=config.context == "fold",
         )
         self.policy = Policy(config.approval, approver)
@@ -559,6 +562,7 @@ class Agent:
             action_space="tools" if config.arm == "react" else "code",
             context=config.context,
             scopes=config.scopes,
+            protocol=config.protocol,
         )
         self.pool.root.max_branches = config.fork
         self._listeners = [
@@ -1031,6 +1035,7 @@ class Agent:
             sub_lm=self.sub_lm,
             interpreter_factory=self.pool.ephemeral,
             context=self.config.context,
+            protocol=self.config.protocol,
         )
         ok = False
         report = ""

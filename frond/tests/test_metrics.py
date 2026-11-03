@@ -56,7 +56,7 @@ class ParseFailureTest(unittest.TestCase):
         metrics = RunMetrics()
         signature = FrondRLM(CodingTurn)._action_signature_for_current_factory(None, "")
         with self.assertRaises(AdapterParseError):
-            FrondAdapter(metrics=metrics).parse(signature, "no field markers at all")
+            FrondAdapter(metrics=metrics, protocol="markers").parse(signature, "no field markers at all")
         self.assertEqual(metrics.parse_failures, 1)
 
     def signature(self, action_space: str = "code") -> type[dspy.Signature]:
@@ -74,7 +74,7 @@ class ParseFailureTest(unittest.TestCase):
             "</invoke>\n\n[[ ## completed ## ]] \n"
         )
         metrics = RunMetrics()
-        adapter = FrondAdapter(metrics=metrics)
+        adapter = FrondAdapter(metrics=metrics, protocol="markers")
         got = adapter.parse(self.signature(), fenced)
         self.assertEqual(got["note"], "I'll start by looking at the renderer.")
         self.assertEqual(got["code"], "```python\nprint(ls('.'))\nr = sh('ls')\n```")
@@ -88,7 +88,7 @@ class ParseFailureTest(unittest.TestCase):
 
     def test_a_reply_that_could_mean_more_than_one_action_is_not_guessed(self):  # G34
         metrics = RunMetrics()
-        adapter = FrondAdapter(metrics=metrics)
+        adapter = FrondAdapter(metrics=metrics, protocol="markers")
         replies = [
             "First:\n```python\nprint(1)\n```\nthen:\n```python\nprint(2)\n```",
             '<invoke name="python"><parameter name="script">print(1)</parameter></invoke>',
@@ -129,7 +129,7 @@ class NoteFieldTest(WorkspaceCase):
                     else "".join(getattr(part, "text", "") for part in request.system or [])
                 )
                 text = system + "\n".join(m.text or "" for m in request.messages)
-                self.assertIn("[[ ## note ## ]]", text)
+                self.assertIn("`note`", text)
                 self.assertNotIn("## reasoning ##", text)
                 self.assertNotIn("Think step-by-step", text)
                 self.assertNotIn("`reasoning`", text)
@@ -242,13 +242,16 @@ class UnparsedStepTest(WorkspaceCase):
             Step("The sub-agent reports.", "SUBMIT(report='seen')"),
             Step("Done.", "SUBMIT(response='ok')"),
         ]
-        agent, _ = scripted_agent(self, steps)
-        record = agent.run_turn("go")
-        self.assertEqual((record.status, record.response), ("done", "ok"))
-        counts = agent.metrics.as_dict()
-        self.assertEqual((counts["parse_failures"], counts["parse_recovered"], counts["unparsed_steps"]), (0, 0, 0))
-        sub = (counts["sub_parse_failures"], counts["sub_parse_recovered"], counts["sub_unparsed_steps"])
-        self.assertEqual(sub, (2, 1, 1))
+        for protocol, expected in (("markers", (2, 1, 1)), ("json", (2, 0, 2))):  # JSON replies are never recovered
+            with self.subTest(protocol=protocol):
+                agent, _ = scripted_agent(self, steps, protocol=protocol)
+                record = agent.run_turn("go")
+                self.assertEqual((record.status, record.response), ("done", "ok"))
+                counts = agent.metrics.as_dict()
+                main = (counts["parse_failures"], counts["parse_recovered"], counts["unparsed_steps"])
+                self.assertEqual(main, (0, 0, 0))
+                sub = (counts["sub_parse_failures"], counts["sub_parse_recovered"], counts["sub_unparsed_steps"])
+                self.assertEqual(sub, expected)
 
 
 class UsageTotalsTest(unittest.TestCase):

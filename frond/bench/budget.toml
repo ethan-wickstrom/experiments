@@ -51,3 +51,7 @@ why = "2026-11-03: diagnosing G41 and G42 outside Harbor: direct Sonnet calls an
 jobs = "E0-protocol-v2"
 usd = 0.60
 why = "2026-11-03: E0's third start, stopped in its Haiku arm for G45: 4 trials at $0.28 (their usage.json), and three killed before writing a cost (two by a VM restart, G44, one at the stop), each a few minutes of Haiku, bounded by $0.10 each"
+
+[[spent]]
+usd = 0.11
+why = "2026-11-03: D53's structured-output probe, 2 calls on each of Haiku, Sonnet and Opus 5.5 ($0.02), and frond's json-protocol smoke runs on the three models outside Harbor ($0.08)"

@@ -296,8 +296,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         action_space: str = "code",
         context: str = "fold",
         scopes: bool = False,
+        protocol: str = "json",
         **kwargs: Any,
     ) -> None:
+        self.protocol = protocol  # how code steps reply: one JSON object (D53), or DSPy's field markers
         self.scopes = scopes  # scopes as savepoints: the tools, the open_scopes field and the guide (H5, B9)
         if context not in ("fold", "summary"):
             raise ValueError(f"context must be 'fold' or 'summary', not {context!r}")
@@ -455,6 +457,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         signature = super()._action_signature_for_current_factory(factory, sub_agent_rules)
         if "reasoning" in signature.output_fields:  # DSPy asks for step-by-step reasoning in the reply: a note instead
             signature = signature.delete("reasoning").insert(0, NOTE, dspy.OutputField(desc=NOTE_DESC), type_=str)
+        if self.protocol == "json" and "code" in signature.output_fields:  # DSPy's desc asks for a fenced block
+            signature = signature.with_updated_fields("code", desc="The Python code to run in this step.")
         if "repl_variables" not in signature.input_fields:
             signature = signature.append("repl_variables", dspy.InputField(desc=REPL_VARIABLES_DESC), type_=str)
         if self.freshness and "stale_reads" not in signature.input_fields:
@@ -656,6 +660,8 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         reply = _clip(without_markers(completion), 4_000) or "(an empty reply)"
         if self.action_space == "tools":
             fields, empty = "`[[ ## tool ## ]]` with the tool's name, then `[[ ## args ## ]]` with a JSON object", "{}"
+        elif self.protocol == "json":
+            fields, empty = "", ""
         else:
             fields, empty = "`[[ ## code ## ]]` with one ```python block", ""
         why = (  # G38: a reply cut off at the output limit is no format error, and needs a shorter step, not markers
@@ -664,10 +670,13 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             if cut_off
             else "Your reply did not follow the step format, so nothing ran."
         )
-        error = (
-            f"[Error] {why} Reply with `[[ ## {NOTE} ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put "
-            "nothing before the first marker."
+        how = (
+            f"Reply with one JSON object with the string fields `{NOTE}` and `code`."
+            if not fields
+            else f"Reply with `[[ ## {NOTE} ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put nothing "
+            "before the first marker."
         )
+        error = f"[Error] {why} {how}"
         hooks.step_planned(step, reply, empty)
         hooks.exec_finished(step, error, error, 0.0, False)
         action = Prediction(reasoning=reply, code=empty)

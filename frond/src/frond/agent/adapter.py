@@ -22,8 +22,10 @@ import re
 from typing import Any
 
 import dspy
-from dspy.adapters.base import _expand_legacy_custom_type_markers_in_chat_message
-from dspy.adapters.chat_adapter import field_header_pattern
+import pydantic
+from dspy.adapters.base import Adapter, _expand_legacy_custom_type_markers_in_chat_message
+from dspy.adapters.chat_adapter import FieldInfoWithName, field_header_pattern
+from dspy.adapters.utils import translate_field_type
 from dspy.lm15 import CacheConfig
 from dspy.primitives.repl_types import REPLEntry, REPLHistory
 from dspy.utils.exceptions import AdapterParseError
@@ -199,6 +201,17 @@ def recover_action(signature: type[dspy.Signature], completion: str) -> dict[str
 
 
 LAYOUTS = ("turns", "chat")
+# How a step's reply is shaped. "json": one JSON object, which the provider's structured output (Anthropic's
+# output_config.format) holds to the step's schema, so no reply is off the protocol except one cut off or refused
+# (G48, D53). "markers": DSPy's `[[ ## field ## ]]` text, kept as the control arm.
+PROTOCOLS = ("json", "markers")
+JSON_FIELDS = frozenset({NOTE, "code"})  # the steps that can have a JSON schema: every field a string
+
+
+def step_schema(signature: type[dspy.Signature]) -> type[pydantic.BaseModel]:
+    """The JSON schema of a code step's reply: every output field a string, no other key."""
+    fields: dict[str, Any] = dict.fromkeys(signature.output_fields, (str, ...))
+    return pydantic.create_model("StepReply", __config__=pydantic.ConfigDict(extra="forbid"), **fields)
 
 
 class FrondAdapter(dspy.ChatAdapter):
@@ -216,9 +229,13 @@ class FrondAdapter(dspy.ChatAdapter):
         layout: str = "turns",
         history_tools: bool = False,
         counters: str = "",
+        protocol: str = "json",
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        if protocol not in PROTOCOLS:
+            raise ValueError(f"protocol must be one of {PROTOCOLS}, not {protocol!r}")
+        self.protocol = protocol
         self.counters = counters  # prefix of the metrics this adapter's replies count under: "sub_" for sub-agents
         self.history_tools = history_tools  # history_step exists, so a truncation note can point at it
         if layout not in LAYOUTS:
@@ -228,7 +245,66 @@ class FrondAdapter(dspy.ChatAdapter):
         self.metrics = metrics  # a RunMetrics: counts replies that do not parse (ledger B2)
         self.marker = marker  # marks the user's messages; escaped out of every step's output (see user_tag)
 
+    def json_step(self, signature: type[dspy.Signature]) -> bool:
+        """True when this signature's replies are JSON: the json protocol, and a step whose fields are all
+        strings (the code step). The tools arm's `args` is an open object, which strict schemas cannot hold, so
+        it keeps the markers until it has a schema per tool (B19)."""
+        return self.protocol == "json" and set(signature.output_fields) == JSON_FIELDS
+
+    def format_field_structure(self, signature: type[dspy.Signature]) -> str:
+        if not self.json_step(signature):
+            return super().format_field_structure(signature)
+        inputs = self.format_field_with_value(
+            {FieldInfoWithName(name=n, info=f): translate_field_type(n, f) for n, f in signature.input_fields.items()}
+        )
+        fields = ", ".join(f"`{name}`" for name in signature.output_fields)
+        return (
+            "All interactions will be structured in the following way, with the appropriate values filled in."
+            f"\n\n{inputs}\n\nEach reply is one JSON object with the string fields {fields}, and nothing else."
+        )
+
+    def user_message_output_requirements(self, signature: type[dspy.Signature]) -> str:
+        if not self.json_step(signature):
+            return super().user_message_output_requirements(signature)
+        return (
+            "Respond with one JSON object with the fields "
+            + ", then ".join(f"`{name}`" for name in signature.output_fields)
+            + "."
+        )
+
+    def format_assistant_message_content(
+        self, signature: type[dspy.Signature], outputs: dict[str, Any], missing_field_message: Any = None
+    ) -> str:
+        if not self.json_step(signature):
+            return super().format_assistant_message_content(signature, outputs, missing_field_message)
+        return json.dumps(
+            {name: outputs.get(name, missing_field_message) for name in signature.output_fields}, ensure_ascii=False
+        )
+
+    def parse_json_step(self, signature: type[dspy.Signature], completion: str) -> dict[str, Any]:
+        """A JSON step reply, read strictly: structured output makes every whole reply valid, so one that is not
+        was cut off or refused, and repairing it would run code that was never finished."""
+        try:
+            fields = json.loads(completion)
+        except ValueError:
+            fields = None
+        if not isinstance(fields, dict) or set(fields) != set(signature.output_fields):
+            raise AdapterParseError(
+                adapter_name=type(self).__name__,
+                signature=signature,  # ty: ignore[invalid-argument-type]  (DSPy passes the class too)
+                lm_response=completion,
+                message="The reply is not one JSON object with the step's fields.",
+            )
+        return {name: str(value) for name, value in fields.items()}
+
     def parse(self, signature: type[dspy.Signature], completion: str) -> dict[str, Any]:
+        if self.json_step(signature):
+            try:
+                return self.parse_json_step(signature, completion)
+            except AdapterParseError:
+                if self.metrics is not None:
+                    self.metrics.bump(f"{self.counters}parse_failures")
+                raise
         try:
             return super().parse(signature, completion)
         except Exception:
@@ -264,6 +340,11 @@ class FrondAdapter(dspy.ChatAdapter):
         ):
             lm_kwargs = {**lm_kwargs, "prompt_cache": CacheConfig(prefix_until_index=index)}
         try:
+            if self.json_step(signature):
+                # Not through ChatAdapter's fallback to DSPy's JSONAdapter: the reply was already held to the
+                # schema, so asking again in another format would be a second billed call for the same step.
+                lm_kwargs = {**lm_kwargs, "response_format": step_schema(signature)}
+                return Adapter.__call__(self, lm, lm_kwargs, signature, demos, inputs)
             return super().__call__(lm, lm_kwargs, signature, demos, inputs)
         except AdapterParseError as exc:
             # A reply with no text (cut off at the output limit while thinking, or refused) fails in DSPy before
@@ -302,7 +383,8 @@ class FrondAdapter(dspy.ChatAdapter):
             if "tool" in signature.output_fields:
                 reply = {NOTE: entry.reasoning, **tool_call(entry.code)}
             else:
-                reply = {NOTE: entry.reasoning, "code": f"```python\n{entry.code}\n```"}
+                code = entry.code if self.json_step(signature) else f"```python\n{entry.code}\n```"
+                reply = {NOTE: entry.reasoning, "code": code}
             messages.append({"role": "assistant", "content": self.format_assistant_message_content(signature, reply)})
             step = getattr(entry, "step", 0) or replies
             folded = isinstance(entry, FoldEntry)  # built by frond from escaped outputs, with the user's lines tagged

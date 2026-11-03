@@ -285,7 +285,7 @@ Requirements to design, code, tests and status. Design commitments without a req
 
 | Req | Decisions | Code | Tests | Status (2026-11-03) | Ledger |
 |---|---|---|---|---|---|
-| R1 | D20, D21, D28 | `bench/frond_harbor.py`, `bench/matrix.py`, `bench/analyze.py` | `test_bench` | unmeasured; the machinery is in place | E1, E11 |
+| R1 | D20, D21, D28, D53 | `bench/frond_harbor.py`, `bench/matrix.py`, `bench/analyze.py`, `agent/adapter.py` (protocol) | `test_bench`, `test_caching` | unmeasured; the machinery is in place, and code steps reply under structured output (D53) | E1, E11, B19 |
 | R2 | D10, D22, D29 | `world/timeline.py`, `agent/session.py` (`turn_diff`), `agent/tools.py`, `tui/app.py` (`/diff`) | `test_command_undo`, `test_app` | done: per-command diffs in any directory, and each turn's net change (`/diff`) | closed |
 | R3 | D22, D29 | `world/merge.py` (`revert`), `agent/session.py` (`undo`) | `test_world`, `test_command_undo` | done: `/undo` reverts by three-way merge and reports what it kept | closed |
 | R4 | D09 | `tui/app.py`, `agent/session.py` | `test_steering`, `test_app` | steer and queue done; stop latency unmeasured | B17 |

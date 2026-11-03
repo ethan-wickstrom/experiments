@@ -1,9 +1,10 @@
 """Streaming field parsing, SUBMIT literal streaming, patches, globs, fuzzy matching, markdown."""
 
+import json
 import unittest
 
 from frond.agent.patch import PatchError, apply_chunks, parse_patch
-from frond.agent.streaming import FieldStreamParser, SubmitStreamer
+from frond.agent.streaming import FieldStreamParser, ReplyStreamParser, SubmitStreamer
 from frond.agent.tools import glob_to_regex
 from frond.tui.markdown import MarkdownRenderer
 from frond.tui.style import make_theme
@@ -27,6 +28,22 @@ class FieldStreamParserTest(unittest.TestCase):
             self.assertTrue(fields["code"].startswith("```python\nprint(a[1])"), size)
             self.assertTrue(fields["code"].endswith("```"), size)
             self.assertNotIn("completed", fields)
+
+
+class ReplyStreamParserTest(unittest.TestCase):  # D53: JSON replies stream field by field too
+    def test_any_chunking_of_either_protocol_yields_the_same_fields(self):
+        reply = {"note": 'Say "hi" é 🎉 [[ ## x ## ]]', "code": "print('a\\nb')\nSUBMIT(response=\"ok🎉\")"}
+        for text in (json.dumps(reply), json.dumps(reply, ensure_ascii=False), "  \n" + json.dumps(reply, indent=2)):
+            for size in (1, 2, 3, 5, 7, 64, len(text)):
+                fields: dict[str, str] = {}
+                parser = ReplyStreamParser(lambda f, t, fields=fields: fields.__setitem__(f, fields.get(f, "") + t))
+                for i in range(0, len(text), size):
+                    parser.feed(text[i : i + size])
+                self.assertEqual(fields, reply, (size, text[:20]))
+        fields = {}
+        parser = ReplyStreamParser(lambda f, t: fields.__setitem__(f, fields.get(f, "") + t))
+        parser.feed(COMPLETION)
+        self.assertEqual(fields["reasoning"], "Check x[0] and [[nested]] brackets.")
 
 
 class SubmitStreamerTest(unittest.TestCase):
