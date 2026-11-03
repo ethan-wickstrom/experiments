@@ -106,7 +106,7 @@ Every decision frond rests on: what was chosen, what was rejected and why, and w
 - The work order follows the research question, not daily-driver hardening.
 - Rejected: the daily-driver order (P2, P4, P6a first). It hardens frond for daily use without testing any hypothesis; that work is deferred in the ledger.
 
-## D17 · No PR watching; the agent merges its own PRs (2026-11-03, active)
+## D17 · No PR watching; the agent merges its own PRs (2026-11-03, active; its rejection of waiting for review bots superseded by D40)
 - Decision: branch, push, open a PR, run the local checks, merge. A PR is a record, not a review gate.
 - Rejected: waiting on Codex or Devin bot reviews. Nobody acts on them, and the local test suite is the gate.
 
@@ -354,7 +354,7 @@ Each stays closed unless new evidence reopens it:
 - Evidence: `tests/test_summary_arm.py` (`EveryLoopTest`, `SummaryCompactionTest`); G27–G29.
 
 ## D39 · Docker's default runtime here is runc behind a wrapper that sets umask 022 (2026-11-03, active)
-- Decision: `scripts/dev-env.sh` installs `/usr/local/bin/frond-runc` (`umask 022`, then `exec runc "$@"`) and makes it dockerd's default runtime in `daemon.json`. The script and the matrix runner's preflight measure the umask of a `docker exec` process in a probe container; the runner refuses to start unless it is 0022.
+- Decision: `scripts/dev-env.sh` installs `/usr/local/bin/frond-runc` (`umask 022`, then `exec runc "$@"`) and makes it dockerd's default runtime in `daemon.json`. The script and the matrix runner's preflight measure the umask of a `docker exec` process in a probe container. The runner refuses to start unless it measures 0022, and an umask it cannot measure counts as wrong; the script's probe is plain shell, so setup needs only Docker.
 - Why: Harbor runs agents, reference solutions and tests through `docker exec`, whose processes inherit the umask of the runtime chain (dockerd, containerd, the shim, runc), not the container's. dockerd 29.9.2 sets its own umask to 0, so every file those processes created here was world-writable, and `rs-archive-clone`'s reference solution failed 41 of 57 tests on file modes. A standard host gives 0022. Left alone, the difference would touch every agent's runs wherever modes matter (tests of permissions, ssh refusing a private key others can read).
 - Rejected:
   - starting dockerd with umask 022: it resets its umask to 0 (tried);
@@ -362,3 +362,8 @@ Each stays closed unless new evidence reopens it:
   - setting the umask in the commands Harbor runs: Harbor is pinned and unpatched, and the reference agents' and verifiers' commands go through it too;
   - excluding `rs-archive-clone`: the confound would remain on every other task.
 - Evidence: `docker exec` printed umask 0000 before and 0022 after; `tests/test_bench.py::MatrixTest::test_preflight_refuses_a_daemon_whose_exec_umask_is_not_022`; G26.
+
+## D40 · Merge after the review bots have read the PR (2026-11-03, active)
+- Decision: after marking a PR ready, wait for the Codex and Devin reviews, which arrive within about two minutes, and keep working meanwhile. Verify each finding like any other claim, fix the real ones in the same PR, and answer the rest in their threads with what was traced. Then merge. If a review has not arrived within 15 minutes, merge, and read the PR's reviews again later. Findings found on PRs merged without their reviews go into the ledger when found.
+- Why: D17 rejected waiting because nobody acted on the reviews. On #17 all three of Devin's findings were real, and one biased H4's control arm (G27–G29). The PR had merged within seconds, which also ends the session's subscription to its events, so the findings sat unread. The local suite did not catch them: it tested what the arm was meant to do, not every path into it.
+- Rejected: merging at once (it shipped G27–G29); making a review a hard gate (the bots can be slow or down).

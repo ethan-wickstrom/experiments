@@ -143,9 +143,12 @@ def preflight(spec: Spec, ca: Path | None) -> list[str]:
     if subprocess.run(["docker", "info"], capture_output=True, check=False).returncode != 0:
         problems.append("Docker is not running: run scripts/dev-env.sh")
     else:
-        umask = exec_umask()
+        umask = exec_umask()  # unmeasured counts as wrong: a run that cannot check its environment does not start
         if umask == "unknown":
-            print(f"note: could not check the umask of docker exec ({PROBE_IMAGE} did not start)", file=sys.stderr)
+            problems.append(
+                f"the umask of docker exec could not be measured, because {PROBE_IMAGE} did not start: "
+                "check Docker and the network (G26)"
+            )
         elif umask != "0022":
             problems.append(
                 f"docker exec runs with umask {umask}, not 0022, so files agents and tests create get other modes "

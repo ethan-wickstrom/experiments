@@ -4,7 +4,7 @@ Updated 2026-11-03, first session: every hypothesis H1–H6 has both arms, every
 
 ## In flight
 
-E0a, the oracle sweep, is in its fourth run, started 10:40 UTC. The third run scored 55 of the 56 tasks that start in this VM (0.945) and found two environment faults: `docker exec` ran with umask 0 (G26, fixed by D39, so that run is void) and one task's browser sidecar cannot trust the egress CA (G25, excluded). The provisional exclusion list is `bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`. Resume the run with `FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt uv run python -m bench.matrix bench/experiments/e0a-oracle.toml`; then write its report with `uv run python -m bench.analyze bench/experiments/e0a-oracle.toml --out bench/results/2026-11-03-e0a-oracle` and the final list with `--failing oracle`, keeping the comments on each cause.
+E0a, the oracle sweep, is in its fourth run, started 10:30 UTC. The third run scored 55 of the 56 tasks that start in this VM (0.945) and found two environment faults: `docker exec` ran with umask 0 (G26, fixed by D39, so that run is void) and one task's browser sidecar cannot trust the egress CA (G25, excluded). The provisional exclusion list is `bench/results/2026-11-03-e0a-oracle/oracle-failures.txt`. Resume the run with `FROND_EGRESS_CA=/root/.ccr/ca-bundle.crt uv run python -m bench.matrix bench/experiments/e0a-oracle.toml`; then write its report with `uv run python -m bench.analyze bench/experiments/e0a-oracle.toml --out bench/results/2026-11-03-e0a-oracle` and the final list with `--failing oracle`, keeping the comments on each cause.
 
 ## Next, in order (research-first, D16)
 

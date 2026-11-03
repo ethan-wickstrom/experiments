@@ -55,7 +55,13 @@ case "$mirrors" in
   *mirror.gcr.io*) ;;
   *) echo "warning: dockerd was already running without $mirror; stop it and run this script again" >&2 ;;
 esac
-exec_umask=$(cd "$(dirname "$0")/.." && python3 -c 'from bench.matrix import exec_umask; print(exec_umask())')
+# The probe is bench.matrix.exec_umask in shell, so this script needs nothing but Docker.
+probe=mirror.gcr.io/library/alpine:3.20
+exec_umask=unknown
+if container=$(as_root docker run -d --rm "$probe" sleep 60 2>/dev/null); then
+  exec_umask=$(as_root docker exec "$container" sh -c umask 2>/dev/null || echo unknown)
+  as_root docker rm -f "$container" >/dev/null 2>&1 || true
+fi
 if [ "$exec_umask" != "0022" ]; then
   echo "warning: docker exec runs with umask $exec_umask, not 0022; stop dockerd and run this script again (G26)" >&2
 fi
