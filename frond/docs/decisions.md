@@ -325,3 +325,9 @@ Each stays closed unless new evidence reopens it:
   - collapsing the user's messages with the scope: their words are never shortened (D14).
 - Evidence: `tests/test_scopes.py`: a closed scope becomes goal and result while its steps stay in the log; an abandoned scope reverts the workspace, cuts the context, notes the reason and the stale names; the prefix before a scope is unchanged; ending a scope that is not open is an error the model sees; with scopes off there are no tools or field.
 
+## D36 · Pin DSPy exactly and check its internals at startup (2026-11-03, active)
+- Decision: pyproject requires `dspy==3.4.1`. At startup the CLI checks the private DSPy parts frond overrides or calls (`RLM._execute_iteration` and five more methods, `_LLMCallBudget`, `_strip_code_fences`, the adapter helper, `select_backend`, `CacheConfig`): each must exist, and the overridden methods must keep their parameter names. Otherwise frond exits with status 2 and names what changed.
+- Why: frond's loop is a subclass of `dspy.RLM` that overrides private methods; a patch release could change one and frond would run wrongly instead of failing (R9).
+- Rejected: a version range (`>=3.4.1,<3.5`): a patch release may change private methods; vendoring DSPy: frond is built on DSPy, and copying its RLM would break C1 (D25); checking only the version string: it says nothing about what changed.
+- Evidence: `tests/test_compat.py`.
+

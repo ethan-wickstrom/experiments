@@ -157,6 +157,14 @@ def main(argv: list[str] | None = None) -> int:
     interactive = not args.print_mode and Terminal.available()
     configure_logging(to_stderr=not interactive)
 
+    from frond.agent import compat
+
+    try:
+        compat.check()  # an incompatible DSPy fails here, with what changed (R9)
+    except RuntimeError as exc:
+        print(f"frond: {exc}", file=sys.stderr)
+        return 2
+
     from frond.agent.lm import ModelConfigError, resolve_models
     from frond.agent.scripted import scripted_lm
     from frond.agent.session import Agent, AgentConfig

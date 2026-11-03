@@ -77,7 +77,7 @@ Only what the agent cannot get itself (D16).
 | B8 | ReAct arm: `dspy.ReAct` with frond's tools | runs the demo task headless | closed (this commit) | D33: not `dspy.ReAct` but a tools action space in frond's own loop (`--arm react`): each step is `tool` plus JSON `args`, called host-side, with the same tools, documentation, turns layout, cache marks, freshness and step log as the RLM arm. `tests/test_tools_arm.py` |
 | B9 | Scopes as savepoints (was P5), after N2 | collapse, rewind and cache-prefix tests | closed (this commit) | D35. `open_scope`, `close_scope`, `abandon_scope` (`agent/scopes.py`): closing collapses the scope's steps to goal → result; abandoning reverts its workspace changes by three-way merge, cuts the context back with the reason as a note, and lists stale REPL names; the open scopes are a volatile field. `--scopes on` (default off). Counts in `metrics.json`. `tests/test_scopes.py` |
 | B10 | Summary-compaction arm, rebuilt from the removed `_compact` | runs; the context-policy flag picks it | closed (this commit) | D34. `--context summary`: past the budget, the main model summarises the early steps (and any earlier summary, and the user's mid-turn messages); no index points back, and `history_search`/`history_step` are not offered. Both arms count compactions (`metrics.json`), which also tests A5. `tests/test_summary_arm.py` |
-| B11 | Pin DSPy and check at startup (was P6b) | a changed signature gives a clear startup error | open | R9 |
+| B11 | Pin DSPy and check at startup (was P6b) | a changed signature gives a clear startup error | closed (this commit) | `dspy==3.4.1` in pyproject; `agent/compat.py` checks the private DSPy parts frond overrides or calls (names and parameters) when the CLI starts, and names what changed; `tests/test_compat.py` |
 | B12 | Redact secrets from exported records before results are committed (was I4) | exported records hold no credential values from the environment | closed (this commit) | `agent/redact.py`: the values of credential-named variables (by name), common API key shapes and URL passwords are replaced in every `--export` file and in `-p` output, which Harbor stores and may upload; `tests/test_redact.py` |
 | B13 | A TUI world view: branches as a live tree, with per-branch diffs and verifier status | headless render test | open | delight; follows B7 |
 | B14 | The truncation note suggests how to narrow (was I6) | test checks the hint | open | [TurnCost](https://arxiv.org/abs/2610.15093): 76.9% against 44% |
@@ -125,7 +125,7 @@ Only what the agent cannot get itself (D16).
 | R6 | No unapproved writes, network use or credentials | the main agent's commands remain | deferred | worker and read-only agents done (3c188c9, D13). The main agent's command sandbox (was P4) is daily-driver work (D16). Benchmark runs are already isolated by the container |
 | R7 | The agent can rewind context and workspace together | B4b, then B9 | closed (this commit) | `abandon_scope` returns the context and the workspace to the scope's savepoint together (B9); the REPL is not rewound, and its changed names are listed as stale |
 | R8 | Most input is served from cache | E0 | blocked: REQ-1 | — |
-| R9 | An incompatible DSPy fails at startup | B11 | open | — |
+| R9 | An incompatible DSPy fails at startup | B11 | closed (this commit) | B11 |
 | R11 | macOS | — | closed: won't do | D25 |
 
 ## Gaps

@@ -20,7 +20,7 @@ classifiers = [
 ]
 # dspy is the only runtime dependency; everything else (the TUI included) is the CPython stdlib.
 # The upper bound matters: frond hooks RLM internals that DSPy 3.5 is scheduled to rework.
-dependencies = ["dspy>=3.4.1,<3.5"]
+dependencies = ["dspy==3.4.1"]  # frond overrides private parts of dspy.RLM: agent/compat.py checks them at startup
 
 [project.scripts]
 frond = "frond.cli:main"
