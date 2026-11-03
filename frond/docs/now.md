@@ -10,10 +10,9 @@ E0a, the oracle sweep, runs through the matrix runner on the 56 TB 4.0 tasks tha
 
 ## Next, in order (research-first, D16)
 
-1. B12: redaction, before any trajectory-derived results are committed.
-2. B4b: wire worlds into frond, with undo as a revert of the turn's steps, which closes R2, R3, P2, G18 and G19.
-3. B5, B6 and B7: freshness (including stale-action counts), the forkable REPL, then fork, select and merge; each adds its arm flag and spec.
-4. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`.
+1. B4b: wire worlds into frond, with undo as a revert of the turn's steps, which closes R2, R3, P2, G18 and G19.
+2. B5, B6 and B7: freshness (including stale-action counts), the forkable REPL, then fork, select and merge; each adds its arm flag and spec.
+3. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`.
 
 ## Waiting on the owner
 
