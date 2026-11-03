@@ -11,7 +11,7 @@ E0a, the oracle sweep, has scored 52 of the 56 TB 4.0 tasks that start in this V
 1. E0, as soon as REQ-1 arrives: `bench/experiments/e0-pilot.toml`. First run `smoke.toml` with the real key's environment (free: it stops at the first call only with a bad key; with a real one it is one short run).
 2. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), sample sizes from the variance, and the program's budget (a new REQ).
 3. E1–E6 and E11 in the order in `research.md`.
-4. B13 (a TUI world view of branches and scopes), B14 (narrowing hints in truncation notes), B17 (stop latency).
+4. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner
 

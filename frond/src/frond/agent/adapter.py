@@ -88,6 +88,29 @@ def is_action(signature: type[dspy.Signature], inputs: dict[str, Any]) -> bool:
     )
 
 
+def format_output(output: str, limit: int, hint: str) -> str:
+    """A step's output as the model sees it: head and tail past ``limit``, with the length in the header, as DSPy
+    does, but the cut also says how to see the rest or narrow it (ledger B14; TurnCost, arXiv 2610.15093)."""
+    size = len(output)
+    if size > limit > 0:
+        head = limit // 2
+        output = (
+            f"{output[:head]}\n\n... ({size - limit:,} characters omitted; {hint}) ...\n\n{output[-(limit - head) :]}"
+        )
+    return f"Output ({size:,} chars):\n{output}"
+
+
+def narrowing_hint(signature: type[dspy.Signature], seq: int | None, history_tools: bool) -> str:
+    """What to do about an output too long to show, for the action space at hand."""
+    if "tool" in signature.output_fields:
+        hint = "view a narrower range, or grep for what you need"
+    else:
+        hint = "next time print a slice, a count or the matching lines, or keep the value in a variable"
+    if history_tools and seq:
+        hint = f"history_step({seq}) shows all of it; {hint}"
+    return hint
+
+
 def tool_call(code: str) -> dict[str, Any]:
     """The tool and args of a tool-arm step, from the JSON its history entry keeps as its code."""
     try:
@@ -124,9 +147,11 @@ class FrondAdapter(dspy.ChatAdapter):
         marker: str = "",
         metrics: Any = None,
         layout: str = "turns",
+        history_tools: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        self.history_tools = history_tools  # history_step exists, so a truncation note can point at it
         if layout not in LAYOUTS:
             raise ValueError(f"layout must be one of {LAYOUTS}, not {layout!r}")
         self.layout = layout
@@ -202,7 +227,8 @@ class FrondAdapter(dspy.ChatAdapter):
             folded = isinstance(entry, FoldEntry)  # built by frond from escaped outputs, with the user's lines tagged
             title = "Folded steps" if folded else f"Step {step} output"
             text = entry.output if folded else escape_marker(entry.output, self.marker)
-            output = f"=== {title} ===\n{REPLEntry.format_output(text, history.max_output_chars)}"
+            hint = narrowing_hint(signature, getattr(entry, "seq", None), self.history_tools)
+            output = f"=== {title} ===\n{format_output(text, history.max_output_chars, hint)}"
             messages.append({"role": "user", "content": output})
         # what changes every step goes last, after the cached prefix
         steers = [entry.output for entry in history.entries if isinstance(entry, UserEntry)]

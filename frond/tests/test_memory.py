@@ -166,6 +166,24 @@ class NewConversationTest(WorkspaceCase):
         self.assertNotIn("93 seconds", (directory / "new.steps.jsonl").read_text())
 
 
+class NarrowingHintTest(WorkspaceCase):
+    """A cut output says how to see the rest or narrow it (B14; TurnCost: 76.9% against 44% without)."""
+
+    def test_a_long_output_points_at_its_record_and_at_narrower_code(self):
+        steps = [Step("Dump.", "print('x' * 40_000)"), Step("Done.", "SUBMIT(response='ok')")]
+        agent, engine = scripted_agent(self, steps)
+        agent.run_turn("dump")
+        second = "\n".join(m.text or "" for m in engine.requests[1].messages)
+        self.assertIn("characters omitted; history_step(2) shows all of it; next time print a slice", second)
+
+    def test_the_summary_arm_has_no_history_step_to_point_at(self):
+        steps = [Step("Dump.", "print('x' * 40_000)"), Step("Done.", "SUBMIT(response='ok')")]
+        agent, engine = scripted_agent(self, steps, context="summary")
+        agent.run_turn("dump")
+        second = "\n".join(m.text or "" for m in engine.requests[1].messages)
+        self.assertIn("characters omitted; next time print a slice", second)
+
+
 class ContinueKeepsTheLogTest(WorkspaceCase):
     files: ClassVar[dict[str, str]] = {"notes.txt": "hello\n"}
 

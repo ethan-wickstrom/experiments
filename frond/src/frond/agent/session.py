@@ -453,6 +453,7 @@ class Agent:
             marker=self.marker,
             metrics=self.metrics,
             layout=config.layout,
+            history_tools=config.context == "fold",
         )
         self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
             cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model), layout=config.layout
