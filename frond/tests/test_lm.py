@@ -77,5 +77,31 @@ class LMTest(unittest.TestCase):
             build_lm("anthropic/claude-opus-5-5", effort="extreme")
 
 
+class StreamLimitTest(unittest.TestCase):
+    """One SSE line can hold a whole text delta, which at frond's 32,000 output tokens passes DSPy's 64 KiB line
+    limit: E0's first Haiku trial ended on a 100,754-byte line (G36)."""
+
+    def test_a_long_event_line_reaches_the_provider_parser(self):
+        import asyncio
+        import json
+
+        from dspy._vendor.lm15.providers import async_base, base
+
+        delta = json.dumps({"type": "content_block_delta", "delta": {"type": "text_delta", "text": "x" * 200_000}})
+        lines = [b"event: content_block_delta\n", f"data: {delta}\n".encode(), b"\n"]
+        events = list(base.parse_sse(iter(lines)))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(len(json.loads(events[0].data)["delta"]["text"]), 200_000)
+
+        async def collect() -> list[Any]:
+            async def source():
+                for line in lines:
+                    yield line
+
+            return [event async for event in async_base.aparse_sse(source())]
+
+        self.assertEqual(len(asyncio.run(collect())), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

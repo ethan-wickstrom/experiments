@@ -15,3 +15,25 @@ margin = 1.5
 claude-opus-5-5 = 5.0
 claude-sonnet-5-5 = 2.5
 claude-haiku-5-5 = 0.15
+
+# Spending the trials under jobs/ cannot show (G37): jobs lost with an earlier VM, trials killed before they wrote
+# their cost, and calls made outside Harbor. An entry with `jobs` stands in for that directory under jobs/, which the
+# guard then does not scan. Add an entry for every paid run before its VM can go away, and for every killed trial.
+[[spent]]
+jobs = "SMOKE"
+usd = 0.044
+why = "2026-11-03: first paid smoke, frond on Opus 5.5, one step before G34 ended it (its usage.json)"
+
+[[spent]]
+jobs = "SMOKE-2"
+usd = 0.702
+why = "2026-11-03: second paid smoke, frond on Opus 5.5, 3 steps (its usage.json)"
+
+[[spent]]
+jobs = "E0-aborted-1"
+usd = 1.31
+why = "2026-11-03: E0's first start, stopped for G36: one Haiku trial at $0.025, and two killed before writing their cost, each bounded by 40 steps of 32k output at Haiku's $0.50/M ($0.64)"
+
+[[spent]]
+usd = 0.30
+why = "2026-11-03: six replays of frond's first-step request on Opus 5.5, measuring G34, outside Harbor (about $0.04 each)"

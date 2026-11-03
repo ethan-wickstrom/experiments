@@ -50,6 +50,11 @@ EXPECTED: tuple[tuple[str, str, tuple[str, ...] | str], ...] = (
     ("dspy.adapters.chat_adapter", "field_header_pattern", PATTERN),  # recovering replies off the protocol (D46)
     ("dspy.clients.backend_selection", "select_backend", CALLABLE),
     ("dspy.lm15", "CacheConfig", CALLABLE),
+    # the stream parser and the names the providers call it by, which frond widens (G36)
+    ("dspy._vendor.lm15.sse", "parse_sse", CALLABLE),
+    ("dspy._vendor.lm15.sse", "aparse_sse", CALLABLE),
+    ("dspy._vendor.lm15.providers.base", "parse_sse", CALLABLE),
+    ("dspy._vendor.lm15.providers.async_base", "aparse_sse", CALLABLE),
 )
 
 
