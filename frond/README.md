@@ -54,7 +54,10 @@ decoded on the fly from the model's `SUBMIT("""...""")` call.
   - Where no sandbox is available, read-only agents get no shell.
 - **Undo.** Every change goes through frond's tools, so each turn checkpoints the original bytes of the files it
   touches; `/undo` restores the last turn exactly (edits, new files and their new folders, deletions, renames) and
-  tells the agent it happened. Changes made by shell commands such as formatters are not tracked.
+  tells the agent it happened. In a git workspace it also covers what shell commands change (formatters,
+  codegen, `sed -i`). frond snapshots the worktree around each command into a private index and object store,
+  so `.git` is untouched, and shows a diff for each file the command changed. Files git ignores, and commands
+  that move `HEAD`, are left alone.
 - **Continue.** Each conversation is saved per workspace (under `~/.local/share/frond`, readable only by you);
   `frond --continue` picks up the most recent one, so the agent knows what was said and changed before.
 - **Background jobs.** `sh(..., background=True)` starts dev servers and watchers that outlive a step; `/jobs` and

@@ -78,7 +78,8 @@ Keys
   @              attach files or folders · /  run a command
 Text selection: hold shift (option in iTerm2/Terminal.app) while dragging, or use /copy.
 Commands: /new /undo /reset /details /copy /jobs /kill /model /quit
-/undo reverts the files frond changed in its last turn (changes made by shell commands are not tracked)."""
+/undo reverts the files frond changed in its last turn; in a git workspace that includes what its shell
+commands changed (except files git ignores)."""
 
 
 class AgentLike(Protocol):

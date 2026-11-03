@@ -112,6 +112,13 @@ class FrondAdapter(dspy.ChatAdapter):
             output = f"=== {title} ===\n{REPLEntry.format_output(entry.output, history.max_output_chars)}"
             messages.append({"role": "user", "content": output})
         # what changes every step goes last, after the cached prefix
+        steers = [entry.output for entry in history.entries if entry.code == STEER_CODE]
+        if steers:  # the current intent, restated where the model reads last (arXiv 2609.32520)
+            listed = "\n".join(f"- {text}" for text in steers)
+            messages[-1]["content"] += (
+                "\n\nWhat the user has said during this turn, oldest first; the latest wins where they conflict "
+                f"with each other or with the original request:\n{listed}"
+            )
         current = {k: v for k, v in inputs.items() if k in VOLATILE}
         messages[-1]["content"] += "\n\n" + self.format_user_message_content(signature, current, main_request=True)
         return [_expand_legacy_custom_type_markers_in_chat_message(message) for message in messages]

@@ -34,6 +34,7 @@ from frond.agent.prompts import CodingTurn, Investigation
 from frond.agent.repl import ReplPool
 from frond.agent.rlm import FrondRLM, Hooks
 from frond.agent.shell import JobManager, ShellRunner
+from frond.agent.snapshots import GitSnapshots
 from frond.agent.steplog import StepLog
 from frond.agent.streaming import StreamSink, SubmitStreamer
 from frond.agent.tools import Delegate, Toolbox
@@ -83,6 +84,7 @@ class AgentConfig:
     subagent_steps: int = 16
     context_window: int | None = None
     prompt_cache: bool = True
+    track_commands: bool = True  # snapshot a git workspace around shell commands, so /undo covers their changes
 
 
 @dataclass
@@ -291,6 +293,8 @@ class Agent:
         self.jobs = JobManager(self.log_dir, self.emit)
         self.checkpoints = Checkpoints()
         self.steps = StepLog()  # every message, step and answer; attach_log() keeps it on disk
+        # In a git workspace, what shell commands change goes into the undo journal too (see snapshots.py).
+        self.snapshots = GitSnapshots(workspace.root, self.log_dir / "snapshots") if config.track_commands else None
         self.toolbox = Toolbox(
             workspace,
             self.emit,
@@ -300,6 +304,7 @@ class Agent:
             delegate=Delegate(self._run_subagent, self._run_subagents),
             checkpoints=self.checkpoints,
             memory=self.steps,
+            snapshots=self.snapshots,
         )
         self.pool = ReplPool(
             workspace.root,

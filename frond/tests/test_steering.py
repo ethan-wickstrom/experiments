@@ -86,6 +86,8 @@ class SteeringLayoutTest(WorkspaceCase):
         messages = adapter.format(signature, [], {**inputs, "repl_history": later})
         self.assertEqual([m["role"] for m in messages], ["system", "user", "assistant", "user", "assistant", "user"])
         self.assertIn("use tabs", messages[3]["content"])
+        self.assertIn("What the user has said during this turn, oldest first", messages[-1]["content"])
+        self.assertIn("- use tabs", messages[-1]["content"])
         self.assertTrue(messages[-1]["content"].rstrip().endswith("`[[ ## completed ## ]]`."))
         self.assertEqual(last_reply_index([], later), 3)
 
