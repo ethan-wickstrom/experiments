@@ -1,6 +1,6 @@
-"""Run one command so that it cannot change the filesystem: the shell of frond's read-only agents.
+"""Run one command so that it cannot change the filesystem: the shell of frond's read-only agents, and the REPL.
 
-    python -I _sandbox.py TMPDIR -- ARGV...
+    python -I _sandbox.py [--shared-tmpdir] TMPDIR -- ARGV...
 
 This runs as a fresh, single-threaded process that holds nothing but stdio. Before exec'ing ARGV it applies
 the strongest restriction the system allows, then checks that the working directory really is unwritable.
@@ -10,7 +10,8 @@ the strongest restriction the system allows, then checks that the working direct
    chmod, chown, utime and xattrs. There is no network, and abstract sockets are out of reach.
    - Fresh tmpfs mounts hide /run (docker, D-Bus and user-session sockets) and /tmp (tmux, X11 and ssh-agent
      sockets); /tmp is left alone when the workspace lives under it.
-   - TMPDIR becomes a private tmpfs.
+   - TMPDIR becomes a private tmpfs. With --shared-tmpdir it stays the caller's directory instead, writable
+     and visible outside, so the files the REPL writes there can be read by the commands it runs.
    - Inside, the command runs with a non-zero uid, so exec drops the capabilities that could remount anything
      read-write.
 2. Linux without user namespaces (for example Ubuntu's AppArmor restriction). It uses Landlock, ABI 3 or
@@ -56,7 +57,7 @@ def _check(result: int, what: str) -> None:
 
 SYS_MOUNT_SETATTR = 442  # the same number on x86_64 and aarch64 (kernel 5.12+)
 AT_FDCWD, AT_RECURSIVE, MOUNT_ATTR_RDONLY = -100, 0x8000, 0x1
-MS_NOSUID, MS_NODEV, MS_PRIVATE = 0x2, 0x4, 1 << 18
+MS_NOSUID, MS_NODEV, MS_BIND, MS_PRIVATE = 0x2, 0x4, 0x1000, 1 << 18
 
 
 class _MountAttr(ctypes.Structure):
@@ -68,7 +69,21 @@ class _MountAttr(ctypes.Structure):
     )
 
 
-def namespaces(tmpdir: str) -> str:
+def _set_mount_attr(libc: ctypes.CDLL, path: str, attr: _MountAttr, flags: int, what: str) -> None:
+    _check(
+        libc.syscall(
+            SYS_MOUNT_SETATTR,
+            ctypes.c_int(AT_FDCWD),
+            path.encode(),
+            ctypes.c_uint(flags),
+            ctypes.byref(attr),
+            ctypes.c_size_t(ctypes.sizeof(attr)),
+        ),
+        what,
+    )
+
+
+def namespaces(tmpdir: str, shared: bool = False) -> str:
     libc = _libc()
     uid, gid = os.getuid(), os.getgid()
     cwd = os.getcwd()
@@ -84,18 +99,10 @@ def namespaces(tmpdir: str) -> str:
                 f.write(text)
     except OSError as exc:
         raise Unavailable(f"user namespaces: {exc.strerror or exc}") from None
-    attr = _MountAttr(MOUNT_ATTR_RDONLY, 0, MS_PRIVATE, 0)
-    _check(
-        libc.syscall(
-            SYS_MOUNT_SETATTR,
-            ctypes.c_int(AT_FDCWD),
-            b"/",
-            ctypes.c_uint(AT_RECURSIVE),
-            ctypes.byref(attr),
-            ctypes.c_size_t(ctypes.sizeof(attr)),
-        ),
-        "mount_setattr",
-    )
+    # A shared TMPDIR is held open before the fresh /tmp below can hide its path. It is opened only now, inside
+    # the new mount namespace, because a bind mount's source must belong to the namespace that makes it.
+    held = os.open(tmpdir, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC) if shared else -1
+    _set_mount_attr(libc, "/", _MountAttr(MOUNT_ATTR_RDONLY, 0, MS_PRIVATE, 0), AT_RECURSIVE, "mount_setattr")
 
     def tmpfs(target: str, mode: str) -> bool:
         flags = ctypes.c_ulong(MS_NOSUID | MS_NODEV)
@@ -106,7 +113,13 @@ def namespaces(tmpdir: str) -> str:
     fresh_tmp = not _under(cwd, "/tmp") and os.path.isdir("/tmp") and tmpfs("/tmp", "1777")
     if fresh_tmp and _under(tmpdir, "/tmp"):
         os.makedirs(tmpdir, mode=0o700, exist_ok=True)  # inside the new, writable /tmp
-    elif not tmpfs(tmpdir, "0700"):
+    if shared:
+        # Bind the caller's own TMPDIR back in, writable, so files written there stay visible outside.
+        source = f"/proc/self/fd/{held}".encode()
+        _check(libc.mount(source, tmpdir.encode(), None, ctypes.c_ulong(MS_BIND), None), "bind TMPDIR")
+        _set_mount_attr(libc, tmpdir, _MountAttr(0, MOUNT_ATTR_RDONLY, 0, 0), 0, "writable TMPDIR")
+        os.close(held)
+    elif not (fresh_tmp and _under(tmpdir, "/tmp")) and not tmpfs(tmpdir, "0700"):
         raise Unavailable(f"private tmpfs: {os.strerror(ctypes.get_errno())}")
     _loopback_up()  # the new network namespace has only a loopback device, and it starts down
     return "namespaces"
@@ -209,18 +222,18 @@ def seatbelt(tmpdir: str, argv: list[str]) -> list[str]:
 # ── putting it together ──────────────────────────────────────────────────────
 
 
-def confine(tmpdir: str, argv: list[str], choice: str) -> tuple[str, list[str]]:
+def confine(tmpdir: str, argv: list[str], choice: str, shared: bool = False) -> tuple[str, list[str]]:
     """Apply a sandbox to this process; returns its name and the argv to exec."""
     if sys.platform == "darwin" and choice in ("", "seatbelt"):
         return "seatbelt", seatbelt(tmpdir, argv)
     if not sys.platform.startswith("linux"):
         raise Unavailable(f"no sandbox for {sys.platform}")
     reasons = []
-    for name, apply in (("namespaces", namespaces), ("landlock", landlock)):
+    for name in ("namespaces", "landlock"):
         if choice not in ("", name):
             continue
         try:
-            return apply(tmpdir), argv
+            return (namespaces(tmpdir, shared) if name == "namespaces" else landlock(tmpdir)), argv
         except Unavailable as exc:
             reasons.append(f"{name}: {exc}")
     raise Unavailable("; ".join(reasons) or f"FROND_SANDBOX={choice} is not available")
@@ -241,15 +254,18 @@ def verify(name: str) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) < 4 or sys.argv[2] != "--":
-        sys.stderr.write("usage: _sandbox.py TMPDIR -- ARGV...\n")
+    args = sys.argv[1:]
+    shared = bool(args) and args[0] == "--shared-tmpdir"
+    args = args[1:] if shared else args
+    if len(args) < 3 or args[1] != "--":
+        sys.stderr.write("usage: _sandbox.py [--shared-tmpdir] TMPDIR -- ARGV...\n")
         os._exit(2)
-    tmpdir, argv = sys.argv[1], sys.argv[3:]
+    tmpdir, argv = args[0], args[2:]
     choice = os.environ.pop("FROND_SANDBOX", "")
     try:
         if choice == "none":
             raise Unavailable("disabled by FROND_SANDBOX=none")
-        name, argv = confine(tmpdir, argv, choice)
+        name, argv = confine(tmpdir, argv, choice, shared)
         verify(name)
     except Unavailable as exc:
         sys.stderr.write(f"frond-sandbox: no read-only sandbox is available here ({exc})\n")

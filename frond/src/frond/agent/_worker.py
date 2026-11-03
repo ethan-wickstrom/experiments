@@ -28,6 +28,7 @@ import json
 import os
 import queue
 import signal
+import socket
 import sys
 import tempfile
 import threading
@@ -200,14 +201,14 @@ class Capture(io.TextIOBase):
 
 _active = threading.Event()  # set while user code runs
 _ORIGINAL_STREAMS = (sys.stdout, sys.stderr)
-_ALLOWED_WRITE_DIRS = tuple(
-    {
-        os.path.realpath(tempfile.gettempdir()),
-        "/tmp",
-        "/private/tmp",
-        "/var/folders",
-        os.path.realpath(os.devnull),
-    }
+# The OS sandbox this worker runs in (set by _sandbox.py), or "". Confined, TMPDIR is the one writable place, and
+# commands outside the sandbox can read what is written there.
+_SANDBOX = os.environ.get("FROND_SANDBOXED", "")
+_SCRATCH = os.path.realpath(tempfile.gettempdir())
+_ALLOWED_WRITE_DIRS = (
+    (_SCRATCH, os.path.realpath(os.devnull))
+    if _SANDBOX
+    else tuple({_SCRATCH, "/tmp", "/private/tmp", "/var/folders", os.path.realpath(os.devnull)})
 )
 _WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
 _SUBPROCESS_EVENTS = {
@@ -233,6 +234,12 @@ _PATH_EVENTS = {
     "shutil.move",
     "shutil.copytree",
 }
+# Network access from the model's code: sockets for the internet (TCP and UDP), name lookups (which can carry data
+# out over DNS), urllib, and connections to local services through UNIX socket files (docker, ssh-agent). Every
+# request the agent makes should be a command the user can see. Sockets between threads (socketpair) still work.
+_NETWORK_FAMILIES = {socket.AF_INET, socket.AF_INET6}
+_LOOKUP_EVENTS = {"socket.getaddrinfo", "socket.gethostbyname", "socket.gethostbyaddr", "socket.getnameinfo"}
+NO_NETWORK = "frond: the REPL has no network access; use sh(...) for anything that needs it, so the user sees it"
 
 
 def _writable_path(path: Any) -> bool:
@@ -250,6 +257,12 @@ def _audit(event: str, args: tuple[Any, ...]) -> None:
         return
     if event in _SUBPROCESS_EVENTS:
         raise PermissionError("frond: start commands with sh(...), not from Python, so the user can see them")
+    if event == "socket.__new__" and len(args) > 1 and args[1] in _NETWORK_FAMILIES:
+        raise PermissionError(NO_NETWORK)
+    if event in _LOOKUP_EVENTS or event == "urllib.Request":
+        raise PermissionError(NO_NETWORK)
+    if event == "socket.connect" and len(args) > 1 and isinstance(args[1], (str, bytes)):
+        raise PermissionError(NO_NETWORK)  # a UNIX socket: a local service such as docker, D-Bus or ssh-agent
     if event == "open":
         path, mode, flags = [*args, None, None, None][:3]
         writing = (isinstance(mode, str) and any(c in mode for c in "wax+")) or (
@@ -258,7 +271,7 @@ def _audit(event: str, args: tuple[Any, ...]) -> None:
         if writing and not _writable_path(path):
             raise PermissionError(
                 "frond: write files with write()/edit()/patch() so the user sees a diff "
-                "(scratch files under the temp directory are fine)"
+                f"(scratch files under {_SCRATCH} are fine)"
             )
     elif event in _PATH_EVENTS and args and not _writable_path(args[0]):
         raise PermissionError(f"frond: {event} is blocked in the REPL; use the delete()/move() tools")
@@ -490,7 +503,7 @@ def main() -> None:
     if os.environ.get("FROND_REPL_POLICY", "strict") != "off":
         sys.addaudithook(_audit)
     session = Session()
-    send({"type": "ready", "pid": os.getpid(), "python": sys.version.split()[0]})
+    send({"type": "ready", "pid": os.getpid(), "python": sys.version.split()[0], "sandbox": _SANDBOX})
     while True:
         request = session.commands.get()
         if request is None or request.get("type") == "shutdown":

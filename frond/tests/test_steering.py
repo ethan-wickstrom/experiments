@@ -9,7 +9,7 @@ from dspy.primitives.repl_types import REPLEntry, REPLHistory
 
 from frond.agent.adapter import FrondAdapter, last_reply_index
 from frond.agent.prompts import CodingTurn
-from frond.agent.rlm import STEER_CODE, FrondRLM, Hooks
+from frond.agent.rlm import STEER_CODE, FrondRLM, Hooks, UserEntry
 from frond.agent.scripted import Step
 from frond.agent.session import format_history, history_preview
 from frond.events import SteerDelivered, SteersReturned
@@ -69,7 +69,7 @@ class SteeringLayoutTest(WorkspaceCase):
         rlm = FrondRLM(CodingTurn)
         signature = rlm._action_signature_for_current_factory(None, "")
         adapter = FrondAdapter()
-        early = REPLHistory(entries=[REPLEntry(reasoning="", code=STEER_CODE, output="also add tests")])
+        early = REPLHistory(entries=[UserEntry(reasoning="", code=STEER_CODE, output="also add tests")])
         inputs = {"variables_info": ["v"], "repl_history": early, "iteration": "1/10", "repl_variables": "(none yet)"}
         messages = adapter.format(signature, [], inputs)
         self.assertEqual([m["role"] for m in messages], ["system", "user"])
@@ -79,7 +79,7 @@ class SteeringLayoutTest(WorkspaceCase):
         later = REPLHistory(
             entries=[
                 REPLEntry(reasoning="r1", code="print(1)", output="1"),
-                REPLEntry(reasoning="", code=STEER_CODE, output="use tabs"),
+                UserEntry(reasoning="", code=STEER_CODE, output="use tabs"),
                 REPLEntry(reasoning="r2", code="print(2)", output="2"),
             ]
         )
@@ -100,7 +100,7 @@ class SteeringLayoutTest(WorkspaceCase):
         words = "never edit generated files;\nrun make check before finishing"
         entries = [
             REPLEntry(reasoning="a", code="print(1)", output="x" * 900),
-            REPLEntry(reasoning="", code=STEER_CODE, output=words),
+            UserEntry(reasoning="", code=STEER_CODE, output=words),
             REPLEntry(reasoning="b", code="print(2)", output="y" * 900),
             REPLEntry(reasoning="c", code="print(3)", output="z" * 900),
         ]

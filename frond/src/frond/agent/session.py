@@ -10,6 +10,7 @@ from __future__ import annotations
 import atexit
 import contextvars
 import itertools
+import secrets
 import shutil
 import tempfile
 import threading
@@ -24,7 +25,7 @@ from typing import Any
 import anyio
 import dspy
 
-from frond.agent.adapter import FrondAdapter
+from frond.agent.adapter import FrondAdapter, escape_marker, user_tag
 from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
@@ -85,6 +86,7 @@ class AgentConfig:
     context_window: int | None = None
     prompt_cache: bool = True
     track_commands: bool = True  # snapshot a git workspace around shell commands, so /undo covers their changes
+    repl_sandbox: bool = True  # run the REPL worker in the OS sandbox where one works (see ReplSession.start)
 
 
 @dataclass
@@ -127,18 +129,20 @@ def format_history(records: list[TurnRecord]) -> str:
 MAX_VERBATIM_REQUESTS = 8_000
 
 
-def history_preview(records: list[TurnRecord], formatted: str, limit: int) -> str | None:
+def history_preview(records: list[TurnRecord], formatted: str, limit: int, marker: str = "") -> str | None:
     """The conversation's preview: every user message verbatim, then as much of the latest turns as fits.
 
     A summary or a tail-only window drops the user's instructions about how to work far more often than what to
     build (arXiv 2610.31778), so the user's own words always stay in view, and frond's replies give way first.
+    With a ``marker``, the user's messages carry its tag and the rest cannot (see adapter.user_tag).
     """
     if not records:
         return None
+    tag = f" {user_tag(marker)}" if marker else ""
     requests: list[str] = []
     for r in records:
-        requests.append(f"[turn {r.index}] {r.request.strip()}")
-        requests.extend(f"[turn {r.index}, while frond worked] {text.strip()}" for text in r.steers)
+        requests.append(f"[turn {r.index}]{tag} {r.request.strip()}")
+        requests.extend(f"[turn {r.index}, while frond worked]{tag} {text.strip()}" for text in r.steers)
     shown: list[str] = []
     used = 0
     for text in reversed(requests):
@@ -151,7 +155,7 @@ def history_preview(records: list[TurnRecord], formatted: str, limit: int) -> st
         head += f"({len(requests) - len(shown)} earlier ones are in `history` and history_search())\n"
     head += "\n".join(shown)
     room = max(0, limit - len(head) - 80)
-    tail = formatted[-room:] if room else ""
+    tail = escape_marker(formatted[-room:], marker) if room else ""
     if len(formatted) > room:
         tail = f"… (earlier turns omitted; print(history) for all of them)\n{tail}"
     return f"{head}\n\nThe latest turns:\n{tail}"
@@ -197,6 +201,7 @@ class _RootHooks(Hooks):
 
     def exec_finished(self, step: int, output: str, error: str | None, duration: float, final: bool) -> None:
         self.agent.emit(ExecFinished(step, output, error, duration, final))
+        self.agent.report_confinement()
 
     def subquery_progress(self, query_id: int, total: int, done: int) -> None:
         self.agent.emit(SubQueryProgress(query_id, total, done))
@@ -217,7 +222,8 @@ class _RootHooks(Hooks):
     def preview(self, name: str, value: Any) -> str | None:
         if name != "history" or not isinstance(value, str):
             return None
-        return history_preview(self.agent.history, value, self.agent.rlm.preview_limits.get("history", 12_000))
+        limit = self.agent.rlm.preview_limits.get("history", 12_000)
+        return history_preview(self.agent.history, value, limit, self.agent.marker)
 
     def compacted(self, steps: int, before: int, after: int) -> None:
         self.agent.emit(Compacted(steps, before, after))
@@ -282,8 +288,11 @@ class Agent:
         self.window: int | None = config.context_window
         # Each step's history is sent as conversation turns, with the latest reply marked for providers that
         # cache only at marked blocks, so every step reads the earlier ones from the provider's cache.
+        # Marks the user's messages in the prompt so text from tools, files or answers cannot pass as the user's.
+        self.marker = secrets.token_hex(6)
+        self._confinement_reported = False
         self.adapter: dspy.ChatAdapter = FrondAdapter(
-            cache_breakpoints=config.prompt_cache and caches_by_marks(config.model)
+            cache_breakpoints=config.prompt_cache and caches_by_marks(config.model), marker=self.marker
         )
         self.sub_adapter: dspy.ChatAdapter = FrondAdapter(
             cache_breakpoints=config.prompt_cache and caches_by_marks(config.sub_model)
@@ -312,6 +321,7 @@ class Agent:
             on_output=self._on_exec_output,
             timeout=config.step_timeout,
             policy=config.repl_policy,
+            sandbox=config.repl_sandbox,
         )
         self.sink = StreamSink(self.control, self._on_field, self._on_thinking)
         self._submit = SubmitStreamer(lambda text: self.emit(ResponseDelta(text)))
@@ -326,6 +336,7 @@ class Agent:
             max_output_chars=config.max_output_chars,
             sub_lm=self.sub_lm,
             interpreter_factory=self.pool,
+            marker=self.marker,
         )
         self._listeners = [
             dspy.streaming.StreamListener("code", predict=self.rlm.generate_action, allow_reuse=True),
@@ -496,6 +507,21 @@ class Agent:
             return await anyio.to_thread.run_sync(work)
 
         return anyio.run(main)
+
+    def report_confinement(self) -> None:
+        """Say once per session when the REPL worker had to run without an OS sandbox, and why."""
+        root = self.pool.root
+        if self._confinement_reported or root.pid is None or root.confinement or root.unconfined_reason == "turned off":
+            return
+        self._confinement_reported = True
+        self.emit(
+            Notice(
+                "warn",
+                f"The REPL runs without an OS sandbox here ({root.unconfined_reason}). Its Python still holds no "
+                "credentials and is kept off the network, commands and files outside temp, but by an audit hook "
+                "that code can get around.",
+            )
+        )
 
     # ── sub-agents ───────────────────────────────────────────────────────────
 

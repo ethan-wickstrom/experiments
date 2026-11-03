@@ -29,11 +29,10 @@ from dspy.primitives.prediction import Prediction
 from dspy.primitives.repl_types import REPLEntry, REPLHistory, REPLVariable
 from dspy.utils.exceptions import format_error_for_lm
 
+from frond.agent.adapter import NOTE_CODE, STEER_CODE, FoldEntry, UserEntry, escape_marker, user_tag
 from frond.agent.tools import display_signature
 
 ERROR_PREFIXES = ("[Error]", "[Type Error]")
-NOTE_CODE = "# folded"
-STEER_CODE = "# user message"  # a history entry carrying a message the user sent during the turn
 INDEX_MARK = "Index of the folded steps (oldest first):"
 FOLD_GUIDE = (
     "Earlier steps of this turn were folded to keep the prompt within budget. Nothing was lost: "
@@ -109,12 +108,16 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         preview_limits: dict[str, int] | None = None,
         tail_preview: frozenset[str] = frozenset(),
         keep_recent: int = 4,
+        marker: str = "",
         **kwargs: Any,
     ) -> None:
         self.hooks = hooks or Hooks()
         self.preview_limits = preview_limits or {}
         self.tail_preview = tail_preview
         self.keep_recent = keep_recent
+        # Marks the user's messages in the prompt (see adapter.user_tag); escaped out of everything else frond
+        # puts there: previews, the names digest and folded steps. The adapter escapes step outputs.
+        self.marker = marker
         self._query_ids = 0
         super().__init__(signature, **kwargs)
 
@@ -137,12 +140,14 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             field_info = self.signature.input_fields.get(name)
             limit = self.preview_limits.get(name, 1000)
             var = REPLVariable.from_value(name, value, field_info=field_info, preview_chars=limit)
-            custom = self.hooks.preview(name, value)
+            custom = self.hooks.preview(name, value)  # frond's own previews tag the user's words themselves
             if custom is not None:
                 var = var.model_copy(update={"preview": custom})
             elif name in self.tail_preview and isinstance(value, str) and len(value) > limit:
                 preview = f"… (earlier text omitted; print({name}) for all of it)\n" + value[-limit:]
-                var = var.model_copy(update={"preview": preview})
+                var = var.model_copy(update={"preview": escape_marker(preview, self.marker)})
+            else:
+                var = var.model_copy(update={"preview": escape_marker(var.preview, self.marker)})
             variables.append(var)
         return variables
 
@@ -230,7 +235,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         step = iteration + 1
         steers = hooks.take_messages(step)
         if steers:  # appended, so the cached prefix of the prompt survives
-            entries = [REPLEntry(reasoning="", code=STEER_CODE, output=text) for text in steers]
+            entries = [UserEntry(reasoning="", code=STEER_CODE, output=text) for text in steers]
             history = REPLHistory(entries=[*history.entries, *entries], max_output_chars=history.max_output_chars)
         history = self._fold(history)
         hooks.step_started(step, self.max_iters)
@@ -241,7 +246,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             variables_info=[v.format() for v in variables],
             repl_history=history,
             iteration=f"{step}/{self.max_iters}",
-            repl_variables="\n".join(names) if names else "(none yet)",
+            repl_variables=escape_marker("\n".join(names), self.marker) if names else "(none yet)",
         )
         hooks.after_lm(step)
         reasoning = str(action.reasoning or "")
@@ -299,15 +304,17 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         if before <= budget or len(history.entries) <= self.keep_recent:
             return history
         old, recent = list(history.entries[: -self.keep_recent]), list(history.entries[-self.keep_recent :])
+        tag = user_tag(self.marker)
+        who = f"the user {tag}" if tag else "the user"
         lines: list[str] = []
         for entry in old:
-            if entry.code == NOTE_CODE:
+            if isinstance(entry, FoldEntry):  # an earlier fold: its lines are already escaped and tagged
                 lines.extend(entry.output.split(INDEX_MARK, 1)[-1].strip().splitlines())
-            elif entry.code == STEER_CODE:  # the user's own words are never shortened
-                lines.append("- the user wrote, during the turn: " + entry.output.replace("\n", "\n  "))
-            else:
-                lines.append(_index_line(entry))
-        note = REPLEntry(
+            elif isinstance(entry, UserEntry):  # the user's own words are never shortened
+                lines.append(f"- {who} wrote, during the turn: " + entry.output.replace("\n", "\n  "))
+            else:  # from the step's output, which can say anything: it cannot carry the user's mark
+                lines.append(escape_marker(_index_line(entry), self.marker))
+        note = FoldEntry(
             reasoning=f"({len(lines)} earlier steps of this turn are folded into an index)",
             code=NOTE_CODE,
             output=f"{FOLD_GUIDE}\n{INDEX_MARK}\n" + "\n".join(lines),

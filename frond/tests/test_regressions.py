@@ -21,7 +21,7 @@ from frond.agent.checkpoints import Checkpoints
 from frond.agent.control import TurnControl
 from frond.agent.patch import apply_chunks, parse_patch
 from frond.agent.prompts import CodingTurn
-from frond.agent.rlm import INDEX_MARK, NOTE_CODE, FrondRLM, Hooks, LoggedEntry
+from frond.agent.rlm import INDEX_MARK, NOTE_CODE, FoldEntry, FrondRLM, Hooks, LoggedEntry
 from frond.agent.scripted import Step
 from frond.agent.session import TurnRecord
 from frond.agent.tools import ToolError
@@ -151,7 +151,7 @@ class FoldingKeepsTheIndexTest(WorkspaceCase):
 
         rlm = FrondRLM(CodingTurn, hooks=TinyBudget(), keep_recent=2)
         earlier = f"{INDEX_MARK}\n- step 1 · seq 2 · IMPORTANT: edited src/app.py:42 → ok"
-        entries: list[REPLEntry] = [REPLEntry(reasoning="(folded)", code=NOTE_CODE, output=earlier)]
+        entries: list[REPLEntry] = [FoldEntry(reasoning="(folded)", code=NOTE_CODE, output=earlier)]
         entries += [
             LoggedEntry(reasoning=f"step {i}", code=f"print({i})", output="x" * 900, seq=i + 3, step=i + 2)
             for i in range(6)

@@ -75,6 +75,14 @@ decoded on the fly from the model's `SUBMIT("""...""")` call.
     where user namespaces are blocked.
   - On macOS: Seatbelt (untested in this build).
   - Where no sandbox is available, read-only agents get no shell.
+- **A REPL that cannot reach out.** The Python the model writes needs neither the network nor files outside its
+  temp directory, because everything it changes goes through frond's tools. So the REPL worker starts in the same
+  OS sandbox, with its own temp directory left writable and readable by commands, and without credentials: API keys,
+  tokens and passwords in URLs are taken out of its environment and out of read-only agents' commands. Where no
+  sandbox is available, frond says so once and the worker runs under the audit hook alone.
+- **Your messages can't be forged.** Messages you send during a turn win over the original request, so tool output
+  must not be able to pass as one. Each session marks your messages with a random tag that frond strips from
+  everything else the model reads: command output, files, previews, folded steps and earlier answers.
 - **Undo.** Every change goes through frond's tools, so each turn checkpoints the original bytes of the files it
   touches; `/undo` restores the last turn exactly (edits, new files and their new folders, deletions, renames) and
   tells the agent it happened. In a git workspace it also covers what shell commands change (formatters,
@@ -128,11 +136,12 @@ Project instructions in `AGENTS.md` (or `CLAUDE.md`) from the git root down to t
   `history_step`; `agent/snapshots.py` brackets shell commands with private git snapshots for `/undo`.
 - `agent/repl.py` and `agent/_worker.py` implement DSPy's `CodeInterpreter` protocol with a persistent CPython
   process: live stdout, SIGINT interruption that keeps the namespace, per-step timeouts, and a
-  [PEP 578](https://peps.python.org/pep-0578/) audit hook that steers file writes and subprocesses onto the tools,
-  where the user can see them. It is a guard rail, not a sandbox: the main agent's commands run with your
-  permissions.
-- `agent/_sandbox.py` is the read-only sandbox, a stdlib-only helper. Before exec'ing the command it applies the
-  strongest restriction available, then checks that the workspace really is unwritable; otherwise it runs nothing.
+  [PEP 578](https://peps.python.org/pep-0578/) audit hook that steers file writes, subprocesses and network use
+  onto the tools, where the user can see them. The hook is a guard rail; the worker's OS sandbox is the boundary.
+  The main agent's own commands still run with your permissions.
+- `agent/_sandbox.py` is the read-only sandbox, a stdlib-only helper used for read-only agents' commands and for
+  the REPL worker. Before exec'ing it applies the strongest restriction available, then checks that the workspace
+  really is unwritable; otherwise it runs nothing.
 - `agent/streaming.py` is the `send_stream` sink DSPy writes chunks to; it parses the ChatAdapter's field markers
   incrementally and is also where a stopped turn aborts the in-flight LM call.
 - `tui/` is a small immediate-mode TUI: an input decoder, a cell buffer with a diffing renderer, text wrapping that
@@ -159,7 +168,7 @@ PYTHONPATH=bench harbor run -d terminal-bench/terminal-bench-2-1 -a frond_harbor
 
 ```sh
 uv sync
-uv run python -m unittest discover -s tests -t .   # 131 tests: decoder, layout, tools, REPL, agent turns, undo, sessions, the app
+uv run python -m unittest discover -s tests -t .   # 143 tests: decoder, layout, tools, REPL, sandboxes, agent turns, undo, sessions, the app
 uv run ruff check && uv run ruff format --check && uv run ty check
 ```
 
