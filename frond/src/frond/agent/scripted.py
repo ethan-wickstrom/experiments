@@ -7,11 +7,13 @@ really edited and commands really execute, in whatever workspace the agent was s
 
 from __future__ import annotations
 
+import json
 import re
 import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import dspy
 from dspy._vendor.lm15.types import StreamDeltaEvent, StreamEndEvent, StreamStartEvent, TextDelta
@@ -30,6 +32,21 @@ class Step:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class ToolStep:
+    """A scripted step of the tools arm: one call (ledger B8)."""
+
+    reasoning: str
+    tool: str
+    args: dict[str, Any]
+
+    def render(self) -> str:
+        return (
+            f"[[ ## reasoning ## ]]\n{self.reasoning}\n\n[[ ## tool ## ]]\n{self.tool}\n\n"
+            f"[[ ## args ## ]]\n{json.dumps(self.args)}\n\n[[ ## completed ## ]]\n"
+        )
+
+
 def _request_text(request: Request) -> str:
     parts = []
     if request.system is not None:
@@ -45,14 +62,14 @@ def _request_text(request: Request) -> str:
 class ScriptedEngine:
     def __init__(
         self,
-        steps: Sequence[Step | str] | None = None,
+        steps: Sequence[Step | ToolStep | str] | None = None,
         *,
         chunk: int = 7,
         delay: float = 0.0,
         sub_answer: Callable[[str], str] | None = None,
         after_script: Callable[[str], Step] | None = None,
     ) -> None:
-        self.steps: list[Step | str] = list(steps or [])
+        self.steps: list[Step | ToolStep | str] = list(steps or [])
         self.chunk = max(1, chunk)
         self.delay = delay
         self.sub_answer = sub_answer or (lambda prompt: "OK")
@@ -60,7 +77,7 @@ class ScriptedEngine:
         self.requests: list[Request] = []
         self._lock = threading.Lock()
 
-    def add(self, *steps: Step | str) -> None:
+    def add(self, *steps: Step | ToolStep | str) -> None:
         with self._lock:
             self.steps.extend(steps)
 
@@ -68,14 +85,14 @@ class ScriptedEngine:
         text = _request_text(request)
         with self._lock:
             self.requests.append(request)
-            if "[[ ## repl_history ## ]]" in text and "[[ ## code ## ]]" in text:
+            if "[[ ## repl_history ## ]]" in text and ("[[ ## code ## ]]" in text or "[[ ## tool ## ]]" in text):
                 if self.steps:
                     step = self.steps.pop(0)
                 elif self.after_script is not None:
                     step = self.after_script(text)
                 else:
                     step = Step("The script is finished.", "SUBMIT(response='(end of script)')")
-                return step.render() if isinstance(step, Step) else step
+                return step if isinstance(step, str) else step.render()
             if "[[ ## repl_history ## ]]" in text:  # the extract fallback: answer its output fields directly
                 block = re.search(r"Your output fields are:\n((?:\d+\. `\w+`[^\n]*\n?)+)", text)
                 names = re.findall(r"`(\w+)`", block.group(1)) if block else ["response"]

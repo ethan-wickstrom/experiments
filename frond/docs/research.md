@@ -17,7 +17,7 @@ Each hypothesis compares arms on the same tasks, model, effort and budget.
 
 | ID | Hypothesis | Arms (flag) | Set | Primary metric |
 |---|---|---|---|---|
-| H1 | Code actions in a persistent REPL solve at least as many tasks as JSON tool calling with identical tools, at lower cost | `--arm rlm` vs `--arm react` | TB 4.0 | pass rate (non-inferiority, 5 points); cost per solved task |
+| H1 | Code actions in a persistent REPL solve at least as many tasks as JSON tool calling with identical tools, at lower cost | `--arm rlm` (40 steps) vs `--arm react` (100 steps; one call each) | TB 4.0 | pass rate (non-inferiority, 5 points); cost per solved task |
 | H2 | Forking k=3 branches at the model's request and keeping the one verifiers prefer raises pass rate. Prefix caching keeps cost under 2× | `--fork 1` vs `--fork 3` | TB 4.0 | pass rate (superiority); cost ratio |
 | H3 | Marking stale observations, meaning files changed since the model read them, cuts failed edits and wrong-state actions | `--freshness off` vs `on` | TB 4.0 | failed edits and stale actions per task; pass rate |
 | H4 | A lossless log with index folds beats LLM summary compaction on long tasks | `--context fold` vs `--context summary` | LHTB 2.0 | pass rate |

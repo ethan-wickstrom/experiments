@@ -17,6 +17,7 @@ and keeps tool output in messages of its own rather than in one string with the 
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import dspy
@@ -78,12 +79,25 @@ def provenance_note(marker: str) -> str:
 
 
 def is_action(signature: type[dspy.Signature], inputs: dict[str, Any]) -> bool:
-    """True for the RLM's per-step action call (as opposed to its extract fallback or a sub-query)."""
+    """True for the per-step action call, in either action space (code, or one tool call: ledger B8), as opposed
+    to the extract fallback or a sub-query."""
     return (
-        "code" in signature.output_fields
+        ("code" in signature.output_fields or "tool" in signature.output_fields)
         and "repl_history" in signature.input_fields
         and isinstance(inputs.get("repl_history"), REPLHistory)
     )
+
+
+def tool_call(code: str) -> dict[str, Any]:
+    """The tool and args of a tool-arm step, from the JSON its history entry keeps as its code."""
+    try:
+        call = json.loads(code)
+    except ValueError:
+        call = None
+    if not isinstance(call, dict):
+        return {"tool": "(folded)" if code == NOTE_CODE else "", "args": {}}
+    args = call.get("args")
+    return {"tool": str(call.get("tool") or ""), "args": args if isinstance(args, dict) else {}}
 
 
 def last_reply_index(demos: list[dict[str, Any]], history: REPLHistory) -> int | None:
@@ -179,7 +193,10 @@ class FrondAdapter(dspy.ChatAdapter):
                 messages[-1]["content"] += "\n\n" + steering_text(entry.output, tag)
                 continue
             replies += 1
-            reply = {"reasoning": entry.reasoning, "code": f"```python\n{entry.code}\n```"}
+            if "tool" in signature.output_fields:
+                reply = {"reasoning": entry.reasoning, **tool_call(entry.code)}
+            else:
+                reply = {"reasoning": entry.reasoning, "code": f"```python\n{entry.code}\n```"}
             messages.append({"role": "assistant", "content": self.format_assistant_message_content(signature, reply)})
             step = getattr(entry, "step", 0) or replies
             folded = isinstance(entry, FoldEntry)  # built by frond from escaped outputs, with the user's lines tagged

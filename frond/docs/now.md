@@ -1,6 +1,6 @@
 # Now
 
-Updated 2026-11-03, first session, after B7 (FORK) while the third E0a run finishes.
+Updated 2026-11-03, first session, after B8 (the tool-calling arm) while the third E0a run finishes.
 
 ## In flight
 
@@ -10,7 +10,7 @@ E0a, the oracle sweep, runs through the matrix runner on the 56 TB 4.0 tasks tha
 
 ## Next, in order (research-first, D16)
 
-1. B8 (the ReAct arm, H1) and B10 (summary compaction, H4), so every hypothesis has both arms; then B9 (scopes, H5).
+1. B10 (summary compaction, H4), then B9 (scopes, H5), so every hypothesis has both arms.
 2. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`, each as a spec in `bench/experiments/`.
 
 ## Waiting on the owner

@@ -18,6 +18,7 @@ from __future__ import annotations
 import contextvars
 import copy
 import inspect
+import json
 import textwrap
 import time
 from collections.abc import Callable
@@ -27,12 +28,15 @@ from typing import Any, cast
 
 import dspy
 from dspy.predict.rlm import _LLMCallBudget, _strip_code_fences
+from dspy.primitives.code_interpreter import FinalOutput
 from dspy.primitives.prediction import Prediction
 from dspy.primitives.repl_types import REPLEntry, REPLHistory, REPLVariable
+from dspy.signatures.signature import make_signature
 from dspy.utils.exceptions import format_error_for_lm
 
 from frond.agent.adapter import NOTE_CODE, STEER_CODE, FoldEntry, UserEntry, escape_marker, user_tag
-from frond.agent.prompts import FORK_GUIDE
+from frond.agent.control import TurnCancelled
+from frond.agent.prompts import FORK_GUIDE, TOOL_AGENT_INSTRUCTIONS
 from frond.agent.repl import ForkRequest
 from frond.agent.tools import display_signature
 
@@ -58,6 +62,20 @@ class LoggedEntry(REPLEntry):
 
     seq: int | None = None
     step: int = 0
+
+
+def _render_tool_result(value: Any) -> str:
+    """A tool's result as the tools arm shows it: what printing it in the REPL would show."""
+    if isinstance(value, str):
+        return value or "(empty)"
+    if isinstance(value, dict) and value.get("__frond__") in ("command", "job"):
+        head = f"exit code {value.get('exit_code')}" + (
+            f" ({value['status']})" if value.get("status") not in (None, "ok") else ""
+        )
+        return f"{head}\n{value.get('output', '')}".rstrip()
+    if value is None:
+        return "(done)"
+    return json.dumps(value, indent=1, ensure_ascii=False, default=str)
 
 
 @dataclass
@@ -167,8 +185,13 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         marker: str = "",
         freshness: bool = False,
         max_branches: int = 1,
+        action_space: str = "code",
         **kwargs: Any,
     ) -> None:
+        if action_space not in ("code", "tools"):
+            raise ValueError(f"action_space must be 'code' or 'tools', not {action_space!r}")
+        self.action_space = action_space  # "code": Python in the REPL; "tools": one tool call per step (H1, B8)
+        self._tools_signature: type[dspy.Signature] | None = None
         self.hooks = hooks or Hooks()
         self.freshness = freshness  # show the model which of its reads went stale (H3; hooks.stale_reads)
         self.max_branches = max_branches  # FORK is documented, and defined in the REPL, from 2 (H2, ledger B7)
@@ -210,6 +233,97 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
                 var = var.model_copy(update={"preview": escape_marker(var.preview, self.marker)})
             variables.append(var)
         return variables
+
+    # ── the tool-calling arm (H1, ledger B8) ─────────────────────────────────
+
+    def _tool_signature(self) -> type[dspy.Signature]:
+        """The action signature of the tools arm: the same tools and documentation, one call per step."""
+        if self._tools_signature is None:
+            docs = ["", "Tools (call one per step; `args` is a JSON object of its parameters):"]
+            for tool in self._user_tools.values():
+                docs.append(f"- {tool.name}{display_signature(tool.func)}")
+                doc = inspect.cleandoc(tool.desc or "")
+                if doc:
+                    docs.append(textwrap.indent(doc, "    "))
+            docs.append("- submit(response: str)\n    End the turn with your reply to the user, in a step of its own.")
+            signature = make_signature({}, TOOL_AGENT_INSTRUCTIONS + "\n".join(docs))
+            fields: list[tuple[str, Any, Any]] = [
+                ("variables_info", dspy.InputField(desc="The request, history, workspace and attachments"), str),
+                ("repl_history", dspy.InputField(desc="Your earlier steps: each call and its result"), REPLHistory),
+                ("iteration", dspy.InputField(desc="The current step (1-indexed) out of the maximum"), str),
+                ("reasoning", dspy.OutputField(desc="What you know, what remains, why this call is next"), str),
+                ("tool", dspy.OutputField(desc="The name of one tool, or submit"), str),
+                ("args", dspy.OutputField(desc="The tool's arguments, as a JSON object"), dict[str, Any]),
+            ]
+            for name, field, kind in fields:
+                signature = signature.append(name, field, type_=kind)
+            self._tools_signature = signature
+        signature = self._tools_signature
+        if self.freshness:
+            signature = signature.append("stale_reads", dspy.InputField(desc=STALE_READS_DESC), type_=str)
+        return signature
+
+    def _tool_context(self, input_args: dict[str, Any]) -> list[str]:
+        """The inputs as text: without a REPL, the model reads them here, clipped like the REPL's previews."""
+        out = []
+        for name, value in input_args.items():
+            text = value if isinstance(value, str) else json.dumps(value, indent=1, ensure_ascii=False, default=str)
+            limit = self.preview_limits.get(name, 20_000)
+            if len(text) > limit:
+                cut = len(text) - limit
+                text = (
+                    f"[{cut:,} earlier characters not shown]\n{text[-limit:]}"
+                    if name in self.tail_preview
+                    else f"{text[:limit]}\n[{cut:,} more characters not shown]"
+                )
+            out.append(f"`{name}`:\n{escape_marker(text, self.marker) if name != 'request' else text}")
+        return out
+
+    def _tool_step(
+        self,
+        step: int,
+        history: REPLHistory,
+        input_args: dict[str, Any],
+        output_field_names: list[str],
+        volatile: dict[str, str],
+    ) -> Prediction | REPLHistory:
+        hooks = self.hooks
+        action = self.generate_action(
+            signature=self._tool_signature(),
+            variables_info=self._tool_context(input_args),
+            repl_history=history,
+            iteration=f"{step}/{self.max_iters}",
+            **volatile,
+        )
+        hooks.after_lm(step)
+        reasoning = str(action.reasoning or "")
+        name = str(getattr(action, "tool", "") or "").strip()
+        args = getattr(action, "args", None)
+        args = args if isinstance(args, dict) else {}
+        call = json.dumps({"tool": name, "args": args}, ensure_ascii=False, default=str)
+        shown = f"{name}({', '.join(f'{k}={v!r}' for k, v in args.items())})"
+        hooks.step_planned(step, reasoning, shown)
+        hooks.check()
+        hooks.exec_started(step)
+        started = time.monotonic()
+        result: Any
+        if name == "submit":
+            result = FinalOutput({field: args.get(field, "") for field in output_field_names})
+        elif (tool := self._user_tools.get(name)) is None:
+            known = ", ".join([*sorted(self._user_tools), "submit"])
+            result = f"[Error] There is no tool named {name!r}. The tools are: {known}."
+        else:
+            try:
+                result = _render_tool_result(tool(**args))
+            except TurnCancelled:
+                raise
+            except Exception as exc:
+                result = f"[Error] {type(exc).__name__}: {exc}"
+        outcome = self._process_execution_result(action, call, result, history, output_field_names)
+        output = "" if isinstance(outcome, Prediction) else outcome.entries[-1].output
+        error = output if output.startswith(ERROR_PREFIXES) else None
+        hooks.exec_finished(step, output, error, time.monotonic() - started, isinstance(outcome, Prediction))
+        return self._logged(outcome, step, reasoning, shown)
 
     def _action_signature_for_current_factory(self, factory: Any, sub_agent_rules: str) -> type[dspy.Signature]:
         signature = super()._action_signature_for_current_factory(factory, sub_agent_rules)
@@ -306,8 +420,10 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         history = self._fold(history)
         hooks.step_started(step, self.max_iters)
         hooks.before_lm(step)
-        names = getattr(repl, "names", None)
         volatile = {"stale_reads": escape_marker(hooks.stale_reads(step), self.marker)} if self.freshness else {}
+        if self.action_space == "tools":
+            return self._tool_step(step, history, input_args, output_field_names, volatile)
+        names = getattr(repl, "names", None)
         action = self.generate_action(
             signature=self._action_signature_for_current_factory(interpreter_factory, sub_agent_rules),
             variables_info=[v.format() for v in variables],

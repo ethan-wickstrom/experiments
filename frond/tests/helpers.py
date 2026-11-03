@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 
 from frond.agent.control import TurnControl
 from frond.agent.policy import Approver, Mode, Policy
-from frond.agent.scripted import ScriptedEngine, Step, scripted_lm
+from frond.agent.scripted import ScriptedEngine, Step, ToolStep, scripted_lm
 from frond.agent.session import Agent, AgentConfig
 from frond.agent.shell import JobManager, ShellRunner
 from frond.agent.tools import Toolbox
@@ -74,17 +74,22 @@ class TurnUndo:
 
 def scripted_agent(
     case: WorkspaceCase,
-    steps: list[Step],
+    steps: list[Step] | list[ToolStep] | list[Step | ToolStep],
     *,
     delay: float = 0.0,
     max_steps: int = 10,
     sub_answer=None,
     approver: Approver | None = None,
+    **overrides: Any,
 ) -> tuple[Agent, ScriptedEngine]:
     engine = ScriptedEngine(steps, chunk=5, delay=delay, sub_answer=sub_answer)
     lm = scripted_lm(engine)
     config = AgentConfig(
-        model="openai/frond-scripted", sub_model="openai/frond-scripted", max_steps=max_steps, context_window=100_000
+        model="openai/frond-scripted",
+        sub_model="openai/frond-scripted",
+        max_steps=max_steps,
+        context_window=100_000,
+        **overrides,
     )
     agent = Agent(config, case.ws, case.events.append, approver=approver, lm=lm, sub_lm=lm)
     case.addCleanup(agent.close)
