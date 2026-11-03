@@ -9,7 +9,7 @@ margin = 1.5
 # Before any trial of a model has been measured: USD per trial at frond's default of 40 steps, scaled by an arm's
 # max_steps / 40. From the second paid smoke (2026-11-03): 3 Opus 5.5 steps at high effort cost $0.70, 27k output
 # tokens of which 17.6k thinking, about $0.23 a step, so about $5 for 40 steps at $0.12 a step (later steps are
-# smaller than a 3-step run's). Sonnet is half of Opus, Haiku a fortieth, by list price (D47). Keys match models as in
+# smaller than a 3-step run's). Sonnet is half of Opus, Haiku a fortieth, by list price (D48). Keys match models as in
 # prices.toml.
 [guess]
 claude-opus-5-5 = 5.0

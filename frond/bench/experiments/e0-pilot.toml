@@ -2,9 +2,9 @@
 # need. Protocol adherence (parse failures, recovered and unparsed replies, code that did not compile), real cache
 # reads per call, failed edits, cost per run, and pass rates on three models to choose the screening model (the
 # cheapest whose pass rate sits between 20% and 80%). The within-task variance that sizes E1-E6 comes from E0b, on
-# the screening model (D47).
-# Order: cheapest first, so each model's cost is measured before the next, costlier arm starts (D43, D47).
-# Budget: the second paid smoke cost $0.23 per Opus step at high effort (D47), so about $5 per 40-step Opus trial;
+# the screening model (D48).
+# Order: cheapest first, so each model's cost is measured before the next, costlier arm starts (D43, D48).
+# Budget: the second paid smoke cost $0.23 per Opus step at high effort (D48), so about $5 per 40-step Opus trial;
 # on the guesses in bench/budget.toml this spec plans $76.50 against the $100 grant.
 id = "E0"
 title = "Pilot: protocol adherence, cache reads, cost, and the screening model"

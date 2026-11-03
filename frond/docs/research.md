@@ -33,7 +33,7 @@ Each run records, in `frond -p --export` and on to Harbor:
 - tokens per model call: input, cache read, cache write and output, as the provider reports them (`cache_read_input_tokens` on Anthropic);
 - cost at list prices;
 - steps and wall-clock time;
-- protocol violations: replies that did not follow the field protocol (`parse_failures`), of which `parse_recovered` named one action unambiguously and `unparsed_steps` did not and cost a step (D45);
+- protocol violations: replies that did not follow the field protocol (`parse_failures`), of which `parse_recovered` named one action unambiguously and `unparsed_steps` did not and cost a step (D46);
 - failed edits: edit or patch calls that raised;
 - stale actions: edits, writes and deletes of files changed since the model last read them (`stale_actions`; both freshness arms count them);
 - forks: each FORK's branches with their steps, check result and which was kept (`metrics.json`), and each branch's model calls, tagged with the branch in `calls.jsonl`, so fork overhead is priced separately.
@@ -51,7 +51,7 @@ Pre-registered specs (2026-11-03): `e0-pilot`, `e1-action-space` (H1), `e2-fork`
 - Sequential decisions: after every batch, each pass-rate claim's betting confidence sequence ([Waudby-Smith and Ramdas](https://arxiv.org/abs/2010.09686)) is read. It holds at all looks at once, so stopping as soon as a claim is decided keeps the error below alpha. A fixed-size test read after every batch would not. Specs opt in with `stop_early = true`, and then every claim is decided by a rule valid at the stop (D41): a pass-rate claim by its sequence, any other claim by its fixed-size p-value times the planned looks times the claims; the sequences use alpha split across the claims.
 - Validity: a trial whose recorded configuration contradicts its arm is not scored (D41). A jobs directory holds one version of its spec and of frond's source, and every trial installs the dependency versions in `uv.lock` (D42).
 - Batches alternate the order of arms (ABBA), so drift in the API or the VM falls on every arm alike.
-- Sample size comes from E0b's within-task and between-task variance on the screening model, which the analysis reports (D47). Before E0, the estimate at 56 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
+- Sample size comes from E0b's within-task and between-task variance on the screening model, which the analysis reports (D48). Before E0, the estimate at 56 tasks × 3 trials is a 95% half-width of about 5 points on a paired difference.
 
 ## Cost model and screening
 
@@ -63,7 +63,7 @@ List prices per million tokens (D24):
 | Sonnet 5.5 | $2 | $10 | $0.20 | $2.50 |
 | Haiku 5.5 | $0.10 | $0.50 | about $0.01 | about $0.13 |
 
-An estimated TB 4.0 run takes 25 steps. Each step reads about 30k cached tokens, writes about 1.5k and outputs about 2k. That is about $1.50 per run on Opus 5.5, $0.80 on Sonnet 5.5 and under $0.05 on Haiku 5.5. The first measurement was higher: 3 Opus steps at high effort output 27k tokens, 17.6k of them thinking, for $0.70 (D47). E0 replaces these estimates with measurements.
+An estimated TB 4.0 run takes 25 steps. Each step reads about 30k cached tokens, writes about 1.5k and outputs about 2k. That is about $1.50 per run on Opus 5.5, $0.80 on Sonnet 5.5 and under $0.05 on Haiku 5.5. The first measurement was higher: 3 Opus steps at high effort output 27k tokens, 17.6k of them thinking, for $0.70 (D48). E0 replaces these estimates with measurements.
 
 Screening protocol: run each hypothesis first on the cheapest model whose TB 4.0 pass rate sits between 20% and 80%, where differences are visible. Confirm the winners on Opus 5.5. E0 measures pass rates for all three models on a 10-task subset, one trial each, to choose the screening model.
 
@@ -81,7 +81,7 @@ uv run python -m bench.analyze bench/experiments/<spec>.toml --out bench/results
 
 Before a paid run, `bench/experiments/smoke.toml` with `ANTHROPIC_API_KEY=<anything>` checks the whole pipeline at no cost: the first model call fails with 401, after frond has installed, parsed every arm flag, and written its export.
 
-The first run with a real key is `smoke.toml --arms frond`, 3 steps on Opus 5.5; then `grep -rlF "$CLAUDE_API_KEY" jobs | wc -l` must print 0. The reference agents spend first in E11, under per-trial bounds (D44, G33).
+The first run with a real key is `smoke.toml --arms frond`, 3 steps on Opus 5.5; then `grep -rlF "$CLAUDE_API_KEY" jobs | wc -l` must print 0. The reference agents spend first in E11, under per-trial bounds (D45, G33).
 
 The runner adds the egress-CA overlay, without which every task whose agent, solution or tests reach the internet fails in this VM (G7). It retries only failures before the agent starts, because Harbor reruns a retried trial under the same name and would otherwise keep the better of two attempts. Jobs go to `jobs/<id>/` (ignored by git).
 

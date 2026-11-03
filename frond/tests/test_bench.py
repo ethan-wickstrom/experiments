@@ -481,7 +481,7 @@ class BudgetTest(BenchCase):
         planned = sum(
             budget_mod.job_estimate(c.arm, len(c.tasks) * e0.trials_of(c.arm), {}, budget) for c in matrix.cells(e0)
         )
-        self.assertLessEqual(planned, budget.usd)  # $76.50 (D47): the guard must not stop E0 on its guesses alone
+        self.assertLessEqual(planned, budget.usd)  # $76.50 (D48): the guard must not stop E0 on its guesses alone
 
     def test_a_frond_arms_sub_model_needs_a_price_too(self):  # Codex, #23
         body = SPEC.format(tasks='"t0"').replace('options = {{ layout = "chat" }}', 'options = {{ layout = "chat" }}')

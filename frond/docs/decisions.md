@@ -404,12 +404,12 @@ Each stays closed unless new evidence reopens it:
 - Rejected: the Console limit alone (a job that hits it leaves a half-run batch); a check inside each trial (Harbor runs trials in parallel containers with no shared ledger); a guess with the margin applied too (it would put E0's plan, $45-75 by its own estimate, above the cap before any measurement).
 - Evidence: `tests/test_bench.py::BudgetTest`, including that E0 fits the cap on the guesses alone ($70.50).
 
-## D44 · The paid smoke run is frond's arm alone; the reference agents first spend in E11, under per-trial bounds (2026-11-03, active)
+## D45 · The paid smoke run is frond's arm alone; the reference agents first spend in E11, under per-trial bounds (2026-11-03, active)
 - Decision: the first run with the real key is `smoke.toml --arms frond`: one task, every arm flag, 3 steps on Opus 5.5, so at most a few tens of cents. Its checks are that a model call succeeds end to end, that cost and cache reads reach the export, and that the key's value appears in no file under `jobs/`. Claude Code, Terminus 2 and `dspy-rlm` keep the free smoke (a dummy key, 401), which they passed on 2026-11-03, and spend first in E11, once its spec bounds each per trial (G33).
 - Why: `smoke.toml` was written for a dummy key, under which every arm stops at its first call. With a real key, Claude Code and Terminus 2 run until the task's 8-hour limit, and the guard (D43) would admit them on a $2 guess it cannot enforce within a trial. The paid smoke needs one agent that reaches the model; frond's step limit bounds its cost.
 - Rejected: running all four arms with the key (an unbounded spend for checks the free smoke already made); bounding the reference agents in `smoke.toml` now (the bound is E11's design choice, since a bound that binds changes the reference); skipping the paid smoke and starting E0 (a fault in the export or a leaked key would then spoil 50 trials instead of one).
 
-## D45 · A reply off the field protocol is recovered when it names one action, and otherwise costs a step, not the run (2026-11-03, active)
+## D46 · A reply off the field protocol is recovered when it names one action, and otherwise costs a step, not the run (2026-11-03, active)
 - Decision: when a step's reply does not parse into its fields, `FrondAdapter` recovers it if it names exactly one action: one `<invoke>` call (its `code` parameter for the code arm; its name and parameters, JSON-decoded where they parse, for the tools arm), or for the code arm exactly one fenced Python block. The text before the action, without field markers, is the reasoning. Any other reply raises as before, and the loop turns it into an error step: nothing runs, the model sees its own words in the reasoning slot and a one-line statement of the format, and the step counts against the budget. Every reply off the protocol is still counted (`parse_failures`), with `parse_recovered` and `unparsed_steps` beside it.
 - Why: the first real call showed that Opus 5.5 at high effort writes a narration line before its fields, and often drops the markers for a fenced block or its native tool-call syntax (G34): 4 of 7 first-step replies. A run that ends on the first such reply measures the parser, not the harness, and would have made E0's pass rates mostly zeros. The recovered shapes leave no doubt about what to run, so accepting them changes no action the model chose; a reply with two blocks or a non-Python fence could mean several things, so it is refused, not guessed.
 - Rejected:
@@ -421,12 +421,12 @@ Each stays closed unless new evidence reopens it:
 - Consequence: H1's protocol comparison reads `parse_failures` per step for adherence, and `unparsed_steps` for what adherence cost. The tools arm gets the same recovery, so neither arm of H1 is favoured.
 - Evidence: `tests/test_metrics.py` (`ParseFailureTest`, `UnparsedStepTest`); the six replayed replies and the smoke's reply all parse.
 
-## D46 · Experiments run from a frozen worktree of `origin/main`, sharing the checkout's `jobs/` (2026-11-03, active)
+## D47 · Experiments run from a frozen worktree of `origin/main`, sharing the checkout's `jobs/` (2026-11-03, active)
 - Decision: a paid experiment runs from `git worktree add /home/user/run-<id> <merge commit>`, whose `frond/jobs` is a symlink to the main checkout's `frond/jobs`. Development goes on in the main checkout meanwhile.
 - Why: an experiment like E0 runs for hours, and each Harbor job builds frond from the tree it runs in. The runner now refuses a changed source between jobs (G35), but a refusal stops the experiment; a worktree no edit reaches lets work continue alongside it. The shared `jobs/` keeps every trial where the spending guard counts it (D43) and where the analysis and later sessions look.
 - Rejected: pausing development while an experiment runs (hours lost per experiment); a copy of the tree instead of a worktree (no commit to name in the results); a separate `jobs/` per worktree (the guard would not count the other's spending).
 
-## D47 · E0 runs one trial per model, cheapest first; the variance trials move to E0b on the screening model (2026-11-03, active)
+## D48 · E0 runs one trial per model, cheapest first; the variance trials move to E0b on the screening model (2026-11-03, active)
 - Decision: E0 runs its 10 tasks once on each of Haiku 5.5, Sonnet 5.5 and Opus 5.5, in that order. The 2 further trials per task that measure variance (E0b) run on the screening model E0 picks, under a spec committed once the model is known. `bench/budget.toml`'s per-trial guesses rise to $5 (Opus), $2.50 (Sonnet) and $0.15 (Haiku) at 40 steps.
 - Why:
   - the second paid smoke spent $0.70 on 3 Opus steps at high effort: 27k output tokens, 17.6k of them thinking, against the 2k a step `research.md` assumed. Even if later steps of a 40-step run are half that size, an Opus trial costs about $5, so E0's 30 Opus trials would have cost about $150 of a $100 grant;
