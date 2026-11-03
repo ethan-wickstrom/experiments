@@ -11,7 +11,7 @@ E0a is done: 53 of the 55 tasks that start pass under the reference solutions, a
 ## Next, in order (research-first, D16)
 
 1. E0: analyse with `uv run python -m bench.analyze bench/experiments/e0-pilot.toml --out bench/results/<date>-e0`. Read protocol adherence first: `parse_failures`, `parse_recovered`, `unparsed_steps` per model (D46).
-2. The rest of the review findings (ledger, F-rows still open), before the experiment whose arm they touch: FORK's workspace state (F26–F28) before E2, scopes (F38–F40) before E5. Closed: F1–F25, F29–F37 and F41–F59 (fixed, verified or declined).
+2. The rest of the review findings (ledger, F-rows still open), before the experiment whose arm they touch: scopes (F38–F40) before E5. Closed: F1–F37 and F41–F67 (fixed, verified or declined).
 3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), E0b's spec (2 more trials per task on that model, for the variance that sizes E1–E6), and the program's budget, as a new REQ from E0's measured costs: E1 alone, at 56 tasks × 3 trials × 2 arms, is several hundred dollars on Sonnet.
 4. G33 before E11: per-trial bounds for Claude Code and Terminus 2.
 5. E1–E6 and E11 in the order in `research.md`.
@@ -19,7 +19,7 @@ E0a is done: 53 of the 55 tasks that start pass under the reference solutions, a
 
 ## Waiting on the owner
 
-- REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12, one on #23), visible only in the owner's Devin account. Low priority.
+- REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12, one on #23, one on #33), visible only in the owner's Devin account. Low priority.
 
 ## Facts a fresh session needs
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -109,6 +110,113 @@ class ForkTest(WorkspaceCase):
         self.assertIn("FORK needs workspace snapshots, which stopped", final_prompt)
         self.assertEqual((self.root / "notes.txt").read_text(), "start\n")
         self.assertTrue((self.root / CHECK).exists())
+
+    def test_git_state_is_reset_between_branches_and_the_kept_ones_stays(self):  # Devin, #15 (F26)
+        git = "git -c user.name=t -c user.email=t@example.com"
+        subprocess.run(f"git init -q && {git} add -A && {git} commit -qm start", shell=True, cwd=self.root, check=True)
+        steps = [
+            Step("Branch.", "FORK(['commit a', 'commit b'], check='python3 check.py', steps=2)"),
+            Step(
+                "A.",
+                f"write('answer.txt', 'a')\nsh({git!r} + ' add -A && ' + {git!r} + ' commit -qm a')\n"
+                "SUBMIT(response='a')",
+            ),
+            Step(
+                "B.",
+                "seen = sh('git log --format=%s').output.split()\nwrite('answer.txt', 'b')\n"
+                f"sh({git!r} + ' add -A && ' + {git!r} + ' commit -qm b')\nSUBMIT(response=' '.join(seen))",
+            ),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = self.agent(steps)
+        agent.run_turn("go")
+        last = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("Its report: start", last)  # B started from the commit at FORK, not A's
+        log = subprocess.run(["git", "log", "--format=%s"], cwd=self.root, capture_output=True, text=True).stdout
+        self.assertEqual(log.split(), ["b", "start"])  # the kept branch's commit, on the branch it was made on
+        status = subprocess.run(["git", "status", "--porcelain"], cwd=self.root, capture_output=True, text=True)
+        self.assertEqual(status.stdout, "")  # index and tree agree
+
+    def test_files_too_large_for_the_store_are_restored_between_branches(self):  # Devin, #15 (F27)
+        (self.root / "data.bin").write_bytes(b"0" * 4000)
+        steps = [
+            Step("Branch.", "FORK(['a', 'b', 'c'], check='python3 check.py', steps=1)"),
+            Step("A.", "write('answer.txt', 'a')\nsh('printf changed > data.bin')\nSUBMIT(response='a')"),
+            Step(
+                "B.",
+                "write('answer.txt', 'b')\nn = len(open('data.bin').read())\n"
+                "sh('head -c 5000 /dev/zero > big.bin')\nSUBMIT(response=f'saw {n}')",
+            ),
+            Step("C.", "write('answer.txt', 'c')\nsh('rm big.bin; printf c > data.bin')\nSUBMIT(response='c')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = self.agent(steps)
+        assert agent.timeline is not None
+        agent.timeline.work.max_blob = 1000  # so these files are "large": kept by signature only
+        record = agent.run_turn("go")
+        self.assertEqual(record.response, "ok")
+        last = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("Its report: saw 4000", last)  # B saw data.bin as it was at FORK, after A changed it
+        self.assertEqual((self.root / "data.bin").read_bytes(), b"0" * 4000)
+        self.assertEqual((self.root / "big.bin").stat().st_size, 5000)  # B's large file, though C ran after it
+        self.assertEqual((self.root / "answer.txt").read_text(), "b")
+        self.assertEqual(agent.timeline.work.kept_large, {})  # the copies are gone
+
+    def test_a_check_cannot_spoil_the_large_files_a_branch_is_kept_with(self):  # Devin, #33 (F66)
+        steps = [
+            Step("Branch.", "FORK(['a', 'b'], check='python3 check.py && printf more >> big.bin', steps=1)"),
+            Step("A.", "write('answer.txt', 'a')\nSUBMIT(response='a')"),
+            Step("B.", "write('answer.txt', 'b')\nsh('head -c 5000 /dev/zero > big.bin')\nSUBMIT(response='b')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = self.agent(steps)
+        assert agent.timeline is not None
+        agent.timeline.work.max_blob = 1000
+        agent.run_turn("go")
+        last = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("Kept option 2", last)
+        self.assertEqual((self.root / "big.bin").stat().st_size, 5000)  # as the branch left it, before its check
+
+    def test_a_job_whose_shell_left_its_child_running_is_paused_too(self):  # Devin, #33 (F63)
+        steps = [
+            Step("Start.", "print(sh('(while true; do echo x >> ticks.log; sleep 0.05; done) &', background=True))"),
+            Step("Branch.", "import time\ntime.sleep(0.5)\nFORK(['a', 'b'], steps=1)"),
+            Step(
+                "A.",
+                "import os, time\nn = os.path.getsize('ticks.log')\ntime.sleep(0.5)\n"
+                "SUBMIT(response=str(os.path.getsize('ticks.log') - n))",
+            ),
+            Step("B.", "SUBMIT(response='b')"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+        agent, engine = self.agent(steps)
+        agent.run_turn("go")
+        last = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("Its report: 0", last)
+        agent.jobs.kill_all()
+
+    def test_the_main_lines_jobs_are_paused_while_branches_run(self):  # Devin, #15 (F28)
+        steps = [
+            Step("Start a job.", "print(sh('while true; do echo x >> ticks.log; sleep 0.05; done', background=True))"),
+            Step("Branch.", "import time\ntime.sleep(0.3)\nFORK(['a', 'b'], steps=1)"),
+            Step(
+                "A.",
+                "import os, time\nn = os.path.getsize('ticks.log')\ntime.sleep(0.5)\n"
+                "SUBMIT(response=str(os.path.getsize('ticks.log') - n))",
+            ),
+            Step("B.", "SUBMIT(response='b')"),
+            Step(
+                "Done.",
+                "import os, time\nn = os.path.getsize('ticks.log')\ntime.sleep(0.5)\n"
+                "SUBMIT(response=str(os.path.getsize('ticks.log') > n))",
+            ),
+        ]
+        agent, engine = self.agent(steps)
+        record = agent.run_turn("go")
+        self.assertEqual(record.response, "True")  # resumed after FORK
+        last = "\n".join(m.text or "" for m in engine.requests[-1].messages)
+        self.assertIn("Its report: 0", last)  # no writes while option a ran
+        self.assertIn("1 background job(s) of yours were paused while the branches ran, and resumed", last)
 
     def test_a_branch_can_start_jobs_and_is_told_it_cannot_fork(self):  # Devin, #15 (F29, F31)
         steps = [
