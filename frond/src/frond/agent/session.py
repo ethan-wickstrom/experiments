@@ -274,8 +274,10 @@ class _RootHooks(Hooks):
     def code_rejected(self, step: int) -> None:
         self.agent.metrics.bump("syntax_errors")
 
-    def reply_unparsed(self, step: int) -> None:
+    def reply_unparsed(self, step: int, cut_off: bool) -> None:
         self.agent.metrics.bump("unparsed_steps")
+        if cut_off:
+            self.agent.metrics.bump("cut_off_replies")
 
     def provider_error(self) -> None:
         self.agent.metrics.bump("provider_errors")
@@ -337,8 +339,10 @@ class _BranchHooks(Hooks):
     def code_rejected(self, step: int) -> None:
         self.agent.metrics.bump("syntax_errors")
 
-    def reply_unparsed(self, step: int) -> None:
+    def reply_unparsed(self, step: int, cut_off: bool) -> None:
         self.agent.metrics.bump("unparsed_steps")
+        if cut_off:
+            self.agent.metrics.bump("cut_off_replies")
 
     def fork(self, step: int, request: ForkRequest, branching: Branching) -> str:
         return "FORK is not available inside a branch: finish your option, then SUBMIT a report."
@@ -398,8 +402,10 @@ class _SubHooks(Hooks):
         self.agent_id = agent_id
         self.steps = 0
 
-    def reply_unparsed(self, step: int) -> None:
+    def reply_unparsed(self, step: int, cut_off: bool) -> None:
         self.agent.metrics.bump("sub_unparsed_steps")  # F51
+        if cut_off:
+            self.agent.metrics.bump("sub_cut_off_replies")
 
     def check(self) -> None:
         self.agent.control.check()

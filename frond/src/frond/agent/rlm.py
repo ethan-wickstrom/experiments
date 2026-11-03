@@ -211,8 +211,34 @@ class Hooks:
     def provider_error(self) -> None:
         """A model call inside an llm_query or a sub-agent failed for the provider's reasons (F47)."""
 
-    def reply_unparsed(self, step: int) -> None:
-        """The step's reply followed no format frond can read, so the model was shown an error (G34)."""
+    def reply_unparsed(self, step: int, cut_off: bool) -> None:
+        """The step's reply followed no format frond can read, so the model was shown an error (G34); ``cut_off``:
+        the reply had reached the output limit (G38)."""
+
+
+def _cut_off(completion: str) -> bool:
+    """Whether the call that returned ``completion`` stopped at the output limit. The LM's history is shared with
+    sub-agents and FORK branches in other threads, so the call is found by its output, not taken as the latest."""
+    history = getattr(dspy.settings.lm, "history", None) or []
+    for entry in reversed(history[-50:]):
+        outputs = entry.get("outputs") or []
+        texts = [o if isinstance(o, str) else (o.get("text") if isinstance(o, dict) else None) for o in outputs]
+        if completion in texts:
+            return _finish_reason(entry.get("response"), texts.index(completion)) == "length"
+    return False
+
+
+def _finish_reason(response: Any, index: int) -> Any:
+    """A history entry's finish reason: on the response for DSPy's native route, on the matching choice for the
+    LiteLLM route (Codex, #31)."""
+    reason = getattr(response, "finish_reason", None)
+    if reason is not None:
+        return reason
+    choices = getattr(response, "choices", None) or (response.get("choices") if isinstance(response, dict) else None)
+    if not choices or index >= len(choices):
+        return None
+    choice = choices[index]
+    return choice.get("finish_reason") if isinstance(choice, dict) else getattr(choice, "finish_reason", None)
 
 
 def _clip(text: str, limit: int) -> str:
@@ -584,15 +610,23 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
         at the cost of a step, instead of the turn ending (G34). The reply, without field markers, stands as the
         step's reasoning, so the history shows the model its own words in the format it must use."""
         hooks = self.hooks
-        hooks.reply_unparsed(step)
-        reply = _clip(without_markers(str(exc.lm_response or "")), 4_000) or "(an empty reply)"
+        completion = str(exc.lm_response or "")
+        cut_off = _cut_off(completion)
+        hooks.reply_unparsed(step, cut_off)
+        reply = _clip(without_markers(completion), 4_000) or "(an empty reply)"
         if self.action_space == "tools":
             fields, empty = "`[[ ## tool ## ]]` with the tool's name, then `[[ ## args ## ]]` with a JSON object", "{}"
         else:
             fields, empty = "`[[ ## code ## ]]` with one ```python block", ""
+        why = (  # G38: a reply cut off at the output limit is no format error, and needs a shorter step, not markers
+            "Your reply reached the output limit and was cut off before it ended, so nothing ran. Take a smaller "
+            "step: write less code or reasoning at once."
+            if cut_off
+            else "Your reply did not follow the step format, so nothing ran."
+        )
         error = (
-            "[Error] Your reply did not follow the step format, so nothing ran. Reply with `[[ ## reasoning ## ]]`, "
-            f"then {fields}, then `[[ ## completed ## ]]`, and put nothing before the first marker."
+            f"[Error] {why} Reply with `[[ ## reasoning ## ]]`, then {fields}, then `[[ ## completed ## ]]`, and put "
+            "nothing before the first marker."
         )
         hooks.step_planned(step, reply, empty)
         hooks.exec_finished(step, error, error, 0.0, False)
