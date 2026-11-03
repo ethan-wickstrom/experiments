@@ -11,7 +11,7 @@ exclude = [
   "results/2026-11-03-e0a-oracle/oracle-failures.txt",
 ]
 trials = 3
-batch = 14  # four looks over the 53 tasks E0a leaves (14, 14, 14, 11)
+batch = 14  # four looks over the 53 tasks E0a leaves (14, 14, 14, 11), D44
 seed = 2
 concurrency = 2
 stop_early = true
