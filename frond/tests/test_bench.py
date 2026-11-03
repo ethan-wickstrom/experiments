@@ -567,6 +567,8 @@ class AnalyzeTest(BenchCase):
         self.assertIn("| haiku | 20.0 | 0.250 | 0.150 | 0.100 | – | 0.050 | 0.00/trial |", table)
         self.assertNotIn("| empty |", table)
         self.assertEqual(analyze.protocol_table({"empty": {"steps_per_trial": None}}), [])
+        forked = {**arms["haiku"], "branch_steps_per_trial": 5.0}  # Codex, #36: branch replies are counted too
+        self.assertIn("| forked | 25.0 | 0.200 |", "\n".join(analyze.protocol_table({"forked": forked})))
 
     def test_a_clear_win_holds_and_infrastructure_failures_do_not_count(self):
         names = [f"t{i:02d}" for i in range(16)]

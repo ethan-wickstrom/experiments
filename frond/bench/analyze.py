@@ -72,6 +72,7 @@ COUNTERS = (
     "compactions",
     "summaries",
     "steps",
+    "branch_steps",  # FORK branches' steps, whose replies the protocol counters include (Codex, #36)
     "provider_errors",  # failed model calls inside sub-agents and llm_query, which the turn survived (F47)
 )
 # How frond records each arm option in its metrics.json config, so the analysis can check every trial's setup (F9)
@@ -468,13 +469,15 @@ def protocol_table(arms: dict[str, Any]) -> list[str]:
     step spent on an error), cut off at the output limit, and code that did not compile."""
     lines = [
         "",
-        "| Arm | Steps/trial | Off protocol | Recovered | Unparsed | Cut off | Syntax errors | Sub-agents off |",
+        "| Arm | Steps/trial (with branches) | Off protocol | Recovered | Unparsed | Cut off | Syntax errors "
+        "| Sub-agents |",
         "|---|---|---|---|---|---|---|---|",
     ]
     for name, arm in arms.items():
         steps = arm.get("steps_per_trial")
         if not steps:
             continue
+        steps += arm.get("branch_steps_per_trial") or 0.0  # every reply the counters cover: main line and branches
 
         def per_step(key: str, arm: dict[str, Any] = arm, steps: float = steps) -> str:
             value = arm.get(f"{key}_per_trial")

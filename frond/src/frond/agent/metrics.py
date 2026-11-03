@@ -80,6 +80,7 @@ class RunMetrics:
             "tool_failures": dict(sorted(self.tool_failures.items())),
             "failed_edits": sum(self.tool_failures[n] for n in ("edit", "patch", "write")),
             "forks": self.forks,
+            "branch_steps": sum(int(b.get("steps") or 0) for fork in self.forks for b in fork),  # in the counters too
         }
 
 
