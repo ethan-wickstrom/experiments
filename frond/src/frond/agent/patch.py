@@ -200,7 +200,7 @@ def _seek(lines: list[str], pattern: list[str], start: int, eof: bool) -> int | 
 
 def apply_chunks(original: str, chunks: list[Chunk], path: str) -> str:
     had_newline = original.endswith("\n")
-    lines = original.split("\n")
+    lines = original.split("\n") if original else []  # an empty file has no lines, not one blank line
     if had_newline:
         lines.pop()
     eol = "\r" if "\r\n" in original else ""  # added lines follow the file's line endings
@@ -251,6 +251,8 @@ def apply_chunks(original: str, chunks: list[Chunk], path: str) -> str:
         pos = idx + len(old)
     for idx, length, new in sorted(replacements, key=lambda r: r[0], reverse=True):
         lines[idx : idx + length] = new
+    if not lines:
+        return ""  # every line was removed: the file is empty, whatever its last line's ending was
     # Without a "\ No newline at end of file" marker the file keeps its own ending: patches written by a model
     # rarely carry the marker, so its absence is not taken as a request to add a newline.
     if ends_with_newline is None:

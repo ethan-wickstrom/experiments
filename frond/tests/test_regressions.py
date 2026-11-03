@@ -167,6 +167,20 @@ class PatchEndOfFileTest(WorkspaceCase):
         [op] = parse_patch("--- /dev/null\n+++ b/x\n@@ -0,0 +1 @@\n+solo\n\\ No newline at end of file\n")
         self.assertEqual(op.content, "solo")
 
+    def test_removing_every_line_leaves_an_empty_file(self):
+        [op] = parse_patch("--- a/x\n+++ b/x\n@@ -1 +0,0 @@\n-old\n\\ No newline at end of file\n")
+        self.assertEqual(apply_chunks("old", op.chunks, "x"), "")
+        [op] = parse_patch("--- a/x\n+++ b/x\n@@ -1,2 +0,0 @@\n-a\n-b\n\\ No newline at end of file\n")
+        self.assertEqual(apply_chunks("a\r\nb", op.chunks, "x"), "")
+        [op] = parse_patch("--- a/x\n+++ b/x\n@@ -1 +0,0 @@\n-old\n")
+        self.assertEqual(apply_chunks("old\n", op.chunks, "x"), "")
+
+    def test_lines_added_to_an_empty_file(self):
+        [op] = parse_patch("--- a/x\n+++ b/x\n@@ -0,0 +1 @@\n+new\n")
+        self.assertEqual(apply_chunks("", op.chunks, "x"), "new\n")
+        [op] = parse_patch("*** Begin Patch\n*** Update File: x\n@@\n+new\n*** End Patch")
+        self.assertEqual(apply_chunks("", op.chunks, "x"), "new\n")
+
     def test_without_a_marker_the_file_keeps_its_own_ending(self):
         [op] = parse_patch("--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@\n a\n-b\n+B\n")
         self.assertEqual(apply_chunks("a\nb", op.chunks, "x"), "a\nB")
