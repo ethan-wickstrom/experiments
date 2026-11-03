@@ -168,7 +168,7 @@ class Checkpoints:
                     except OSError:
                         before[path] = None
                 if entry.original is None:
-                    if path.is_file():
+                    if path.is_file() or path.is_symlink():  # a link moved here may dangle at its new place
                         path.unlink()
                 else:
                     path.parent.mkdir(parents=True, exist_ok=True)

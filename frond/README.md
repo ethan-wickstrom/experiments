@@ -102,7 +102,7 @@ Project instructions in `AGENTS.md` (or `CLAUDE.md`) from the git root down to t
 
 ```sh
 uv sync
-uv run python -m unittest discover -s tests -t .   # 102 tests: decoder, layout, tools, REPL, agent turns, undo, sessions, the app
+uv run python -m unittest discover -s tests -t .   # 103 tests: decoder, layout, tools, REPL, agent turns, undo, sessions, the app
 uv run ruff check && uv run ruff format --check && uv run ty check
 ```
 

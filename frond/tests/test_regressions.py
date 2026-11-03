@@ -225,6 +225,16 @@ class UndoFidelityTest(WorkspaceCase):
         self.assertFalse(os.path.lexists(self.root / "renamed.py"))
         self.assertEqual((self.root / "src/m.py").read_text(), "x = 1\n")
 
+    def test_undoing_a_move_removes_the_moved_link_even_where_it_dangles(self):
+        os.symlink("src/m.py", self.root / "shortcut")  # relative: it points nowhere once moved into sub/
+        tools, checkpoints = self.checkpointed()
+        tools.move("shortcut", "sub/shortcut")
+        self.assertTrue(os.path.lexists(self.root / "sub/shortcut"))
+        self.assertFalse((self.root / "sub/shortcut").exists())
+        checkpoints.undo()
+        self.assertEqual(os.readlink(self.root / "shortcut"), "src/m.py")
+        self.assertFalse(os.path.lexists(self.root / "sub"))
+
     def test_recursive_delete_asks_first(self):
         asked: list[str] = []
         tools = self.toolbox(approver=lambda title, detail: asked.append(detail) or "no")
