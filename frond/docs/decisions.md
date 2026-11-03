@@ -404,6 +404,15 @@ Each stays closed unless new evidence reopens it:
 - Rejected: the Console limit alone (a job that hits it leaves a half-run batch); a check inside each trial (Harbor runs trials in parallel containers with no shared ledger); a guess with the margin applied too (it would put E0's plan, $45-75 by its own estimate, above the cap before any measurement).
 - Evidence: `tests/test_bench.py::BudgetTest`, including that E0 fits the cap on the guesses alone ($70.50).
 
+## D44 · E1–E3 run their 53 tasks in four batches of up to 14 (2026-11-03, active)
+- Decision: E0a's final list leaves 53 TB 4.0 tasks, and E1, E2 and E3 take batches of 14 (14, 14, 14, 11), amended before any trial.
+- Why: the batch count is the number of planned looks. Under `stop_early` (E1, E2) a cost claim's p-value is multiplied by it (D41), and each batch is one round of the ABBA order. Batches of 13 would have made five looks, the fifth for a single task.
+- Rejected:
+  - 13 tasks per batch: a fifth look raises the cost claims' multiplier from 4 to 5 for one task, and a one-task batch costs a full ABBA round;
+  - dropping one task to keep 52 in batches of 13: an exclusion with no cause in the task;
+  - 18 per batch (three looks): fewer chances for the confidence sequences to stop a decided experiment early.
+- Evidence: `python -m bench.matrix bench/experiments/e1-action-space.toml --dry-run` (and e2, e3) shows 53 tasks in 4 batches.
+
 ## D45 · The paid smoke run is frond's arm alone; the reference agents first spend in E11, under per-trial bounds (2026-11-03, active)
 - Decision: the first run with the real key is `smoke.toml --arms frond`: one task, every arm flag, 3 steps on Opus 5.5, so at most a few tens of cents. Its checks are that a model call succeeds end to end, that cost and cache reads reach the export, and that the key's value appears in no file under `jobs/`. Claude Code, Terminus 2 and `dspy-rlm` keep the free smoke (a dummy key, 401), which they passed on 2026-11-03, and spend first in E11, once its spec bounds each per trial (G33).
 - Why: `smoke.toml` was written for a dummy key, under which every arm stops at its first call. With a real key, Claude Code and Terminus 2 run until the task's 8-hour limit, and the guard (D43) would admit them on a $2 guess it cannot enforce within a trial. The paid smoke needs one agent that reaches the model; frond's step limit bounds its cost.
