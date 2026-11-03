@@ -492,6 +492,22 @@ class BudgetTest(BenchCase):
             self.assertEqual(matrix.main([str(path), "--jobs", str(self.dir / "jobs")]), 4)
         run.assert_not_called()
 
+    def test_reference_agents_are_estimated_by_their_bounds_and_refused_without(self):  # G33
+        budget = budget_mod.Budget(usd=100.0, margin=1.5, guess={"claude-opus-5-5": 4.0})
+        model = "anthropic/claude-opus-5-5"
+        capped = spec.Arm("cc", "claude-code", model, {"max_budget_usd": "10"}, None)
+        self.assertEqual(budget_mod.job_estimate(capped, 3, {model: 50.0}, budget), 30.0)  # the cap, not history
+        turns = spec.Arm("t2", "terminus-2", model, {"max_turns": "150"}, None)
+        self.assertEqual(budget_mod.job_estimate(turns, 2, {}, budget), 2 * 4.0 * 150 / 40)
+        self.assertFalse(budget_mod.unbounded(capped) or budget_mod.unbounded(turns))
+        self.assertTrue(budget_mod.unbounded(spec.Arm("cc", "claude-code", model, {}, None)))
+        self.assertTrue(budget_mod.unbounded(spec.Arm("x", "some-new-agent", model, {}, None)))
+        self.assertFalse(budget_mod.unbounded(spec.Arm("rlm", "dspy-rlm", model, {}, None)))  # bounded by default
+        self.assertFalse(budget_mod.unbounded(spec.Arm("oracle", "oracle", None, {}, None)))
+        for name in ("e11-references", "smoke"):
+            loaded = spec.load(BENCH / "experiments" / f"{name}.toml")
+            self.assertFalse([a.name for a in loaded.arms if budget_mod.unbounded(a)], name)
+
     def test_e0_fits_the_cap_on_the_guesses_alone(self):
         e0 = spec.load(BENCH / "experiments" / "e0-pilot.toml")
         budget = budget_mod.load_budget()

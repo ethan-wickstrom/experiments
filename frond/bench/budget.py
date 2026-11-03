@@ -87,11 +87,31 @@ def has_guess(model: str, budget: Budget) -> bool:
     return _key(model, list(budget.guess)) is not None
 
 
+# How an agent's arm options bound one trial (G33): a dollar cap is the trial's worst case; a cap on steps, turns or
+# iterations scales the per-trial guess like frond's steps. Harbor's dspy-rlm stops at 20 iterations by default.
+STEP_OPTIONS = ("max_steps", "max_turns", "max_iterations")
+DOLLAR_OPTION = "max_budget_usd"
+BOUNDED = {"claude-code": DOLLAR_OPTION, "terminus-2": "max_turns", "dspy-rlm": None}  # None: bounded by default
+
+
+def unbounded(arm: Arm) -> bool:
+    """A reference agent whose trials this spec does not bound, so their cost cannot be estimated (G33)."""
+    if not arm.model or arm.agent.endswith(":Frond"):  # no model calls (the oracle), or frond's own step limit
+        return False
+    if arm.agent not in BOUNDED:
+        return True
+    needed = BOUNDED[arm.agent]
+    return needed is not None and needed not in arm.options
+
+
 def job_estimate(arm: Arm, trials: int, worst: dict[str, float], budget: Budget) -> float:
     """The most ``trials`` trials of ``arm`` are assumed to cost; 0 for an arm with no model (the oracle)."""
     if not arm.model or trials <= 0:
         return 0.0
-    steps = max(1.0, float(arm.options.get("max_steps", 40)) / 40)
+    if DOLLAR_OPTION in arm.options:  # the agent stops itself there: nothing a trial can cost exceeds it
+        return trials * float(arm.options[DOLLAR_OPTION])
+    bound = next((float(arm.options[o]) for o in STEP_OPTIONS if o in arm.options), 40.0)
+    steps = max(1.0, bound / 40)
     key = _key(arm.model, list(budget.guess))
     guess = budget.guess[key] * steps if key is not None else 0.0
     measured = max(worst.get(arm.model, 0.0), worst.get("", 0.0))  # "": a cost with no model named: assume it
