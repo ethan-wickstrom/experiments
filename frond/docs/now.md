@@ -1,6 +1,6 @@
 # Now
 
-Updated 2026-11-03, first session, after B5 (freshness) while the third E0a run finishes.
+Updated 2026-11-03, first session, after B6 (the forkable REPL) while the third E0a run finishes.
 
 ## In flight
 
@@ -10,7 +10,7 @@ E0a, the oracle sweep, runs through the matrix runner on the 56 TB 4.0 tasks tha
 
 ## Next, in order (research-first, D16)
 
-1. B6 and B7: the forkable REPL, then fork, select and merge on worlds (H2), with the `--fork` arm flag.
+1. B7: fork, select and merge on worlds and forked REPLs (H2), with the `--fork` arm flag.
 2. B8 (the ReAct arm, H1) and B10 (summary compaction, H4), so every hypothesis has both arms.
 3. E0, as soon as REQ-1 arrives. Then E1–E6 in the order in `research.md`, each as a spec in `bench/experiments/`.
 

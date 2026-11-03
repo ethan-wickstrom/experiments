@@ -15,6 +15,7 @@ import os
 import queue
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -23,7 +24,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import IO, Any, Protocol
 
 import dspy
 from dspy.primitives.code_interpreter import CodeExecutionError, CodeInterpreterError, FinalOutput
@@ -45,6 +46,49 @@ type OutputSink = Callable[[str], None]
 _IDLE: dict[str, Any] = {"type": "idle"}
 # FROND_SANDBOX value -> why a confined worker would not start here, so later workers skip straight to the fallback
 _confine_failures: dict[str, str] = {}
+
+
+class _Process(Protocol):
+    """What a session needs of its worker process: a ``subprocess.Popen``, or a ``_Forked``."""
+
+    pid: int
+    stdin: IO[str] | None
+    stdout: IO[str] | None
+    stderr: IO[str] | None
+
+    def poll(self) -> int | None: ...
+    def wait(self, timeout: float | None = None) -> int: ...
+
+
+class _Forked:
+    """A worker that another worker forked (ledger B6). frond is not its parent, so this stands in for Popen: the
+    protocol runs over a socket, and liveness comes from the pid (the parent worker reaps it)."""
+
+    def __init__(self, pid: int, channel: socket.socket) -> None:
+        self.pid = pid
+        self.channel = channel
+        self.stdin: IO[str] | None = channel.makefile("w", encoding="utf-8", newline="\n")
+        self.stdout: IO[str] | None = channel.makefile("r", encoding="utf-8", newline="\n")
+        self.stderr: IO[str] | None = None
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        if self.returncode is None:
+            try:
+                os.kill(self.pid, 0)
+            except ProcessLookupError:
+                self.returncode = -signal.SIGKILL
+            except PermissionError:
+                pass
+        return self.returncode
+
+    def wait(self, timeout: float | None = None) -> int:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while (code := self.poll()) is None:
+            if deadline is not None and time.monotonic() > deadline:
+                raise subprocess.TimeoutExpired(f"forked worker {self.pid}", timeout or 0)
+            time.sleep(0.02)
+        return code
 
 
 def _call_tool(fn: Callable[..., Any], args: list[Any], kwargs: dict[str, Any]) -> Any:
@@ -96,7 +140,8 @@ class ReplSession:
         self._scratch: str | None = None  # the worker's TMPDIR when confined: writable, and readable by commands
         self._tools: dict[str, Callable[..., Any]] = {}
         self.output_fields: list[dict[str, Any]] | None = None
-        self._proc: subprocess.Popen[str] | None = None
+        self._proc: _Process | None = None
+        self._forks: socket.socket | None = None  # where this session sends a forked worker its channel (B6)
         self._inbox: queue.Queue[dict[str, Any] | None] = queue.Queue()
         self._send_lock = threading.Lock()
         self._exec_lock = threading.Lock()
@@ -129,6 +174,16 @@ class ReplSession:
             return
         env = {**scrubbed_env(os.environ), "FROND_REPL_POLICY": self.policy, "PYTHONIOENCODING": "utf-8"}
         argv = [sys.executable, "-I", "-B", "-u", str(WORKER)]
+        if self._forks is not None:
+            self._forks.close()
+        self._forks, worker_end = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        env["FROND_FORK_FD"] = str(worker_end.fileno())
+        try:
+            self._start_worker(argv, env, worker_end)
+        finally:
+            worker_end.close()  # the worker holds its own copy
+
+    def _start_worker(self, argv: list[str], env: dict[str, str], worker_end: socket.socket) -> None:
         if self.sandbox and self.policy != "off":
             key = os.environ.get("FROND_SANDBOX", "")
             available, why = sandbox_status(self.cwd)
@@ -136,18 +191,18 @@ class ReplSession:
                 if self._scratch is None:
                     self._scratch = tempfile.mkdtemp(prefix="frond-repl-")
                 try:
-                    self._spawn(sandboxed_argv(argv, self._scratch, shared=True), env)
+                    self._spawn(sandboxed_argv(argv, self._scratch, shared=True), env, worker_end)
                     return
                 except CodeInterpreterError as exc:
                     _confine_failures[key] = str(exc)
             self.unconfined_reason = _confine_failures.get(key, why)
         else:
             self.unconfined_reason = "turned off"
-        self._spawn(argv, env)
+        self._spawn(argv, env, worker_end)
 
-    def _spawn(self, argv: list[str], env: dict[str, str]) -> None:
+    def _spawn(self, argv: list[str], env: dict[str, str], worker_end: socket.socket) -> None:
         try:
-            self._proc = subprocess.Popen(
+            proc = subprocess.Popen(
                 argv,
                 cwd=self.cwd,
                 stdin=subprocess.PIPE,
@@ -157,11 +212,16 @@ class ReplSession:
                 encoding="utf-8",
                 start_new_session=True,
                 env=env,
+                pass_fds=(worker_end.fileno(),),
             )
         except OSError as exc:
             raise CodeInterpreterError(f"could not start the Python worker: {exc}") from exc
+        self._attach(proc)
+
+    def _attach(self, proc: _Process) -> None:
+        """Talk to ``proc`` from now on, once it says it is ready."""
+        self._proc = proc
         self._inbox = queue.Queue()
-        proc = self._proc
         threading.Thread(target=self._pump, args=(proc,), name="frond-repl-reader", daemon=True).start()
         deadline = time.monotonic() + 15
         ready = self._next(0.1)
@@ -178,7 +238,7 @@ class ReplSession:
             raise CodeInterpreterError(f"Python worker failed to start: {detail or repr(ready)}")
         self.confinement = str(ready.get("sandbox") or "")
 
-    def _pump(self, proc: subprocess.Popen[str]) -> None:
+    def _pump(self, proc: _Process) -> None:
         assert proc.stdout is not None
         inbox = self._inbox
         for line in proc.stdout:
@@ -224,6 +284,51 @@ class ReplSession:
             with contextlib.suppress(OSError):
                 if stream is not None:
                     stream.close()
+        if isinstance(proc, _Forked):
+            proc.channel.close()
+
+    def fork(self) -> ReplSession:
+        """A new session whose worker is a copy of this one's, namespace and all (ledger B6).
+
+        The copy inherits the worker's confinement, and from then on the two run independently: what one defines
+        or changes, the other never sees. Only an idle worker that this session started can fork. The copy calls
+        the same host tools; give it others (``copy.tools.update``) to point it at another directory.
+        """
+        if not self._exec_lock.acquire(blocking=False):
+            raise CodeInterpreterError("the REPL is executing code; fork it between steps")
+        try:
+            self.start()
+            if self._forks is None or self._proc is None:
+                raise CodeInterpreterError("this REPL cannot fork: it is itself a copy")
+            mine, theirs = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                self._send({"type": "fork"})
+                socket.send_fds(self._forks, [b"f"], [theirs.fileno()])
+            finally:
+                theirs.close()
+            deadline = time.monotonic() + 15
+            reply = self._next(0.1)
+            while reply is _IDLE and time.monotonic() < deadline:
+                reply = self._next(0.1)
+            if reply is None or reply.get("type") != "forked":
+                mine.close()
+                raise CodeInterpreterError(f"the Python worker did not fork: {reply!r}")
+            copy = ReplSession(
+                self.cwd,
+                control=self.control,
+                on_output=self.on_output,
+                timeout=self.timeout,
+                policy=self.policy,
+                sandbox=self.sandbox,
+            )
+            copy._tools = dict(self._tools)
+            copy.output_fields = self.output_fields
+            copy.names = list(self.names)
+            copy.unconfined_reason = self.unconfined_reason
+            copy._attach(_Forked(int(reply["pid"]), mine))
+            return copy
+        finally:
+            self._exec_lock.release()
 
     def restart(self) -> None:
         self._kill()
@@ -240,6 +345,8 @@ class ReplSession:
             with contextlib.suppress(subprocess.TimeoutExpired):
                 self._proc.wait(timeout=1)
         self._kill()
+        if self._forks is not None:
+            self._forks.close()
         self._pool.shutdown(wait=False, cancel_futures=True)
         if self._scratch is not None:
             shutil.rmtree(self._scratch, ignore_errors=True)

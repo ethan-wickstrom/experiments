@@ -3,8 +3,8 @@
 Standard library only; started as ``python -I -B _worker.py`` by ``frond.agent.repl``. It speaks
 newline-delimited JSON with the host over stdin and a private duplicate of stdout:
 
-  host → worker   execute | tool_result | tool_error | shutdown
-  worker → host   ready | stdout | tool_request | done
+  host → worker   execute | tool_result | tool_error | fork | shutdown
+  worker → host   ready | stdout | tool_request | done | forked | fork_failed
 
 Design points:
 
@@ -15,6 +15,9 @@ Design points:
 * A PEP 578 audit hook refuses subprocesses and file writes outside temp directories while user code
   runs. Not a security boundary (ctypes can evade it), but it keeps a well-meaning model on the tools,
   where every command and diff is visible to the user.
+* Between steps the worker can fork (ledger B6): the host passes a new socket over the UNIX socket named by
+  FROND_FORK_FD (SCM_RIGHTS), and the child, a copy of the namespace in its own session, speaks the same
+  protocol on it. The child inherits the sandbox: namespaces and Landlock survive fork.
 """
 
 from __future__ import annotations
@@ -35,10 +38,13 @@ import threading
 import time
 import traceback
 import types
+import warnings
 from typing import Any
 
 PROTOCOL = os.fdopen(os.dup(1), "w", encoding="utf-8", buffering=1)
 os.set_inheritable(PROTOCOL.fileno(), False)
+_fork_fd = int(os.environ.pop("FROND_FORK_FD", "-1"))  # where the host sends a forked worker's channel
+FORKS: socket.socket | None = socket.socket(fileno=_fork_fd) if _fork_fd >= 0 else None
 _devnull = os.open(os.devnull, os.O_WRONLY)
 os.dup2(_devnull, 1)
 os.dup2(_devnull, 2)
@@ -281,7 +287,8 @@ def _audit(event: str, args: tuple[Any, ...]) -> None:
 
 
 class Session:
-    def __init__(self) -> None:
+    def __init__(self, inp: Any = None) -> None:
+        self.inp = inp if inp is not None else sys.stdin
         self.ids = itertools.count(1)
         self.pending: dict[int, queue.Queue[dict[str, Any]]] = {}
         self.pending_lock = threading.Lock()
@@ -293,7 +300,7 @@ class Session:
         threading.Thread(target=self._read, name="frond-worker-reader", daemon=True).start()
 
     def _read(self) -> None:
-        for line in sys.stdin:
+        for line in self.inp:
             try:
                 message = json.loads(line)
             except json.JSONDecodeError:
@@ -311,6 +318,46 @@ class Session:
             boxes = list(self.pending.values())
         for box in boxes:
             box.put({"type": "tool_error", "error_type": "EOFError", "message": "host connection closed"})
+
+    def fork(self) -> dict[str, Any] | None:
+        """Copy this worker, namespace and all, into a new process with its own channel to the host.
+
+        In the original, returns the reply for the host. In the copy, it has already said "ready" on its new
+        channel and returns None. Only the original forks: a copy has no channel for receiving another.
+        """
+        global PROTOCOL, FORKS, _send_lock
+        if FORKS is None:
+            return {"type": "fork_failed", "error": "this worker has no fork channel"}
+        _, fds, _, _ = socket.recv_fds(FORKS, 1, 1)
+        if not fds:
+            return {"type": "fork_failed", "error": "no channel arrived"}
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)  # forking with idle daemon threads; see below
+            pid = os.fork()
+        if pid:
+            os.close(fds[0])
+            return {"type": "forked", "pid": pid}
+        # The copy. Only this thread exists here; the reader thread did not come along, and the locks it may
+        # hold (stdin's buffer) are never touched again: inherited descriptors are replaced at the OS level.
+        os.setsid()  # its own process group, so the host can interrupt and kill it alone
+        signal.signal(signal.SIGCHLD, signal.SIG_DFL)
+        devnull = os.open(os.devnull, os.O_RDWR)
+        os.dup2(devnull, 0)  # the original's input
+        os.dup2(devnull, PROTOCOL.fileno())  # the original's line to the host
+        os.close(devnull)
+        FORKS.close()
+        FORKS = None
+        own = tempfile.mkdtemp(prefix="fork-", dir=_SCRATCH)  # scratch files of its own, under the shared one
+        os.environ["TMPDIR"] = tempfile.tempdir = own
+        channel = socket.socket(fileno=fds[0])
+        PROTOCOL = channel.makefile("w", encoding="utf-8", buffering=1)
+        _send_lock = threading.Lock()
+        self.inp = channel.makefile("r", encoding="utf-8")
+        self.ids = itertools.count(1)
+        self.pending, self.pending_lock, self.commands = {}, threading.Lock(), queue.Queue()
+        threading.Thread(target=self._read, name="frond-worker-reader", daemon=True).start()
+        send({"type": "ready", "pid": os.getpid(), "python": sys.version.split()[0], "sandbox": _SANDBOX})
+        return None
 
     def call_tool(self, name: str, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         request_id = next(self.ids)
@@ -497,8 +544,20 @@ def _on_sigint(signum: int, frame: Any) -> None:
         raise KeyboardInterrupt
 
 
+def _reap(signum: int, frame: Any) -> None:
+    """Collect forked copies that ended, so none lingers as a zombie the host would think alive."""
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if pid == 0:
+            return
+
+
 def main() -> None:
     signal.signal(signal.SIGINT, _on_sigint)
+    signal.signal(signal.SIGCHLD, _reap)  # user code cannot start processes here, so every child is a fork
     setattr(builtins, "input", _no_input)  # noqa: B010 - replacing a builtin on purpose
     if os.environ.get("FROND_REPL_POLICY", "strict") != "off":
         sys.addaudithook(_audit)
@@ -513,6 +572,13 @@ def main() -> None:
                 send(session.execute(request))
             except BaseException as exc:  # never let the loop die on a protocol hiccup
                 send({"type": "done", "status": "error", "error": f"worker failure: {exc!r}", "stdout": ""})
+        elif request.get("type") == "fork":
+            try:
+                reply = session.fork()
+            except OSError as exc:
+                reply = {"type": "fork_failed", "error": repr(exc)}
+            if reply is not None:  # None: this is the copy, already announced on its own channel
+                send(reply)
 
 
 def _no_input(prompt: object = "", /) -> str:
