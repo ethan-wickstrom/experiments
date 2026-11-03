@@ -237,6 +237,9 @@ class _RootHooks(Hooks):
         self.agent.emit(StepPlanned(step, reasoning, code))
 
     def exec_started(self, step: int) -> None:
+        timeline = self.agent.timeline
+        if self.agent.config.scopes and timeline is not None:  # where a scope this step opens will rewind to (F38)
+            self.agent._step_world = timeline.snapshot()
         self.agent.emit(ExecStarted(step))
 
     def exec_finished(self, step: int, output: str, error: str | None, duration: float, final: bool) -> None:
@@ -511,6 +514,7 @@ class Agent:
         if self.timeline is not None:
             self.timeline.warm()
         self._world = ""  # the world after the latest step, for its step-log record
+        self._step_world = ""  # the world as the current main-line step began, with scopes on (F38)
         self.observations = Observations(workspace.root)  # what the model read this turn (freshness, H3)
         self.scopes = Scopes()  # the open scopes of this turn (H5)
         self._in_branch = False  # a FORK branch runs: scopes belong to the main line
@@ -783,7 +787,9 @@ class Agent:
             """Start a subtask that will take several steps (reproduce the bug, rewrite parse()). Finish it with
             close_scope(result), or abandon_scope(reason) if the approach fails. Scopes nest."""
             self._outside_branch()
-            world = self.timeline.snapshot() if self.timeline is not None else ""
+            # the world as this step began: abandoning cuts the whole step from context, so it reverts the whole
+            # step too, edits made before open_scope included (F38)
+            world = self._step_world or (self.timeline.snapshot() if self.timeline is not None else "")
             depth = self.scopes.open(str(goal), self._step, world, list(self.pool.root.names))
             return f"opened scope {depth}: {goal}"
 
@@ -801,16 +807,24 @@ class Agent:
             scope = self.scopes.innermost()
             if scope is None:
                 raise ValueError("there is no open scope to abandon")
-            parts = []
             now = self.timeline.snapshot() if self.timeline is not None and scope.world else ""
-            if self.timeline is not None and scope.world and not now:
-                parts.append(f"Nothing was reverted: workspace snapshots stopped ({self.timeline.reason}).")
-            elif self.timeline is not None and scope.world:
-                undone = self.timeline.revert(scope.world, now)
-                self.workspace.invalidate()
-                parts.append(f"Reverted: {', '.join(undone.restored) or 'no files'}.")
-                if undone.conflicts:
-                    parts.append(f"Kept, since they changed again in the same places: {', '.join(undone.conflicts)}.")
+            if not now:  # F39: cutting the attempt from context without reverting it would misstate the workspace
+                why = self.timeline.reason if self.timeline is not None and self.timeline.reason else "they are off"
+                raise RuntimeError(
+                    f"this scope cannot be abandoned: its workspace changes cannot be reverted (snapshots: {why}). "
+                    "Call close_scope(result) instead, and say in it that the approach failed and what it changed."
+                )
+            assert self.timeline is not None
+            undone = self.timeline.revert(scope.world, now)
+            self.workspace.invalidate()
+            parts = [f"Reverted: {', '.join(undone.restored) or 'no files'}."]
+            if undone.conflicts:
+                parts.append(f"Kept, since they changed again in the same places: {', '.join(undone.conflicts)}.")
+            if undone.unrestorable:  # F40: still changed, so the note in context must say so
+                parts.append(
+                    "Still changed, since they were too large or unreadable to have been kept: "
+                    f"{', '.join(undone.unrestorable)}."
+                )
             now = [line for line in self.pool.root.names if line not in scope.names]  # new or changed since
             changed = sorted({line.split(":", 1)[0].split("(", 1)[0].strip() for line in now})
             parts.append(f"REPL names changed since it opened, now stale: {', '.join(changed) or 'none'}.")
