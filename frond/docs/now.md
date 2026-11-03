@@ -8,7 +8,7 @@ E0a, the oracle sweep, is in its fourth run, started 10:30 UTC. The third run sc
 
 ## Next, in order (research-first, D16)
 
-1. The review findings in the ledger (F1–F49), batch by batch. Done: the bench and the analysis (F2–F11, F47). Next, the ones in frond's default configuration, which E0 measures: freshness (F16–F21), the turn's snapshots and undo (F12–F15), the store's collection (F45, F46). Then each arm's mechanism: FORK and the forkable REPL (F22–F31), the tools arm (F32–F37, F48), scopes (F38–F40), and the rest.
+1. The review findings in the ledger (F1–F49), batch by batch. Done: the bench and the analysis (F2–F11, F47), freshness (F16–F21). Next, the rest of frond's default configuration, which E0 measures: the turn's snapshots and undo (F12–F15), the store's collection (F45, F46). Then each arm's mechanism: FORK and the forkable REPL (F22–F31), the tools arm (F32–F37, F48), scopes (F38–F40), and the rest.
 2. E0, as soon as REQ-1 arrives: `bench/experiments/e0-pilot.toml`. First run `smoke.toml` with the real key's environment (free: it stops at the first call only with a bad key; with a real one it is one short run).
 3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), sample sizes from the variance, and the program's budget (a new REQ).
 4. E1–E6 and E11 in the order in `research.md`.
