@@ -103,6 +103,7 @@ class Trial:
     exception: str = ""
     config: dict[str, Any] = field(default_factory=dict)  # frond's recorded configuration, to check the arm's setup
     model: str = ""  # the model Harbor gave the agent (its trial config), for any agent; "" for the oracle
+    turns: int | None = None  # the turns a reference agent took, where Harbor records them (Terminus 2), for G39
 
 
 def load_prices(path: Path = BENCH / "prices.toml") -> dict[str, dict[str, float]]:
@@ -169,6 +170,7 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
             output=int(agent.get("n_output_tokens") or 0),
         )
         cost = agent.get("cost_usd")
+    episodes = ((result.get("agent_result") or {}).get("metadata") or {}).get("n_episodes")
     counters: dict[str, float] = {}
     config: dict[str, Any] = {}
     try:
@@ -192,7 +194,19 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
         exception=str(exception.get("exception_type") or ""),
         config=config,
         model=str(((result.get("config") or {}).get("agent") or {}).get("model_name") or config.get("model") or ""),
+        turns=int(episodes) if isinstance(episodes, (int, float)) else None,
     )
+
+
+def stopped_by_bound(trial: Trial, arm: Arm) -> bool | None:
+    """Whether a reference agent's trial ended at the per-trial bound its arm set (G39, D50): its turn cap reached, or
+    95% of its dollar cap spent (the agent stops itself near the cap, not exactly at it). None: no bound, or no record
+    that could tell."""
+    if "max_budget_usd" in arm.options:
+        return None if trial.cost is None else trial.cost >= 0.95 * float(arm.options["max_budget_usd"])
+    if "max_turns" in arm.options:
+        return None if trial.turns is None else trial.turns >= int(arm.options["max_turns"])
+    return None
 
 
 def expected_config(arm: Arm) -> dict[str, Any]:
@@ -339,6 +353,10 @@ def arm_summary(trials: list[Trial], spec: Spec, arm: Arm) -> dict[str, Any]:
         # one entry per distinct frond configuration the arm's trials ran with: more than one means a setup error
         "configurations": sorted({json.dumps(t.config, sort_keys=True) for t in scored if t.config}),
     }
+    judged = [stopped_by_bound(t, arm) for t in scored]
+    if any(j is not None for j in judged):  # a reference arm with a per-trial bound: how often it bound (G39)
+        out["stopped_by_bound"] = sum(1 for j in judged if j)
+        out["bound_judged"] = sum(1 for j in judged if j is not None)
     for key in TOKEN_KEYS:
         out[f"{key}_tokens_per_trial"] = fmean(t.tokens.get(key, 0) for t in scored) if scored else None
     total_input = sum(t.tokens.get("input", 0) for t in scored)
@@ -459,6 +477,12 @@ def report(summary: dict[str, Any]) -> str:
         if arm.get("provider_errors_per_trial"):
             rate = _fmt(arm["provider_errors_per_trial"], 2)
             lines += ["", f"Model calls that failed inside sub-agents or llm_query in {name}: {rate} per trial."]
+        if "stopped_by_bound" in arm:
+            lines += [
+                "",
+                f"Trials of {name} that ended at their per-trial bound: {arm['stopped_by_bound']} of "
+                f"{arm['bound_judged']} (D50).",
+            ]
         if arm["never_passed"]:
             lines += ["", f"Never passed in {name}: {', '.join(arm['never_passed'])}."]
     return "\n".join(lines) + "\n"

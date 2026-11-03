@@ -13,7 +13,7 @@ E0a is done: 53 of the 55 tasks that start pass under the reference solutions, a
 1. E0: analyse with `uv run python -m bench.analyze bench/experiments/e0-pilot.toml --out bench/results/<date>-e0`; the report's protocol table gives adherence per step (D46). On the first 8 Haiku trials: pass 0/8, $0.04 a trial, 88% of input from cache, 32% of replies off protocol (21% recovered, 11% cost a step). Record the run's spending in `bench/budget.toml` (D49).
 2. Review findings: all closed (F1–F68: fixed, verified or declined). New ones go into the ledger as they arrive; REQ-3 holds Devin's unposted security findings.
 3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), E0b's spec (2 more trials per task on that model, for the variance that sizes E1–E6), and the program's budget, as a new REQ from E0's measured costs: E1 alone, at 56 tasks × 3 trials × 2 arms, is several hundred dollars on Sonnet.
-4. E1–E6 and E11 in the order in `research.md`, once the budget allows; G39 (how often E11's bounds bind) before E11's analysis.
+4. E1–E6 and E11 in the order in `research.md`, once the budget allows.
 5. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner
