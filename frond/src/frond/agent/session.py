@@ -29,7 +29,7 @@ from frond.agent.adapter import FrondAdapter, escape_marker, user_tag
 from frond.agent.control import TurnCancelled, TurnControl
 from frond.agent.diffing import make_diff
 from frond.agent.freshness import Observations
-from frond.agent.lm import build_lm, caches_by_marks, context_window, last_usage, total_cost
+from frond.agent.lm import PROVIDER_ERRORS, build_lm, caches_by_marks, context_window, last_usage, total_cost
 from frond.agent.metrics import RunMetrics
 from frond.agent.policy import Approver, Mode, Policy
 from frond.agent.prompts import CodingTurn, Compaction, Investigation
@@ -118,19 +118,6 @@ class TurnRecord:
     undone: bool = False  # /undo reverted this turn's changes
     error_kind: str = ""  # "provider" when the model provider failed (rate limit, outage, auth), else the type
     steers: list[str] = field(default_factory=list)  # messages the user sent while the turn ran
-
-
-# Failures of the model provider, not of the agent: a run that ends on one says nothing about the harness, so research
-# exports flag it and the analysis does not score it (ledger G22). A context overflow or an invalid request is the
-# harness's own doing and stays an ordinary failure.
-PROVIDER_ERRORS: tuple[type[Exception], ...] = (
-    dspy.LMAuthError,
-    dspy.LMBillingError,
-    dspy.LMRateLimitError,
-    dspy.LMTimeoutError,
-    dspy.LMServerError,
-    dspy.LMTransportError,
-)
 
 
 def _changed(record: TurnRecord) -> bool:
@@ -286,6 +273,9 @@ class _RootHooks(Hooks):
     def code_rejected(self, step: int) -> None:
         self.agent.metrics.bump("syntax_errors")
 
+    def provider_error(self) -> None:
+        self.agent.metrics.bump("provider_errors")
+
 
 class _BranchHooks(Hooks):
     """A FORK branch's loop (ledger B7): its steps are logged and shown under its own card, and it reads its own
@@ -317,6 +307,9 @@ class _BranchHooks(Hooks):
 
     def summarize(self, transcript: str) -> str | None:
         return self.agent._summarize(transcript)  # within the branch's calls, so its cost is the branch's
+
+    def provider_error(self) -> None:
+        self.agent.metrics.bump("provider_errors")
 
     def folded(self, steps: int, before: int, after: int) -> None:
         self.agent.metrics.bump("compactions")
@@ -411,6 +404,9 @@ class _SubHooks(Hooks):
 
     def summarize(self, transcript: str) -> str | None:
         return self.agent._summarize(transcript, self.agent.sub_lm)
+
+    def provider_error(self) -> None:
+        self.agent.metrics.bump("provider_errors")
 
     def folded(self, steps: int, before: int, after: int) -> None:
         self.agent.metrics.bump("compactions")
@@ -943,6 +939,8 @@ class Agent:
             report = "(cancelled)"
             raise
         except Exception as exc:
+            if isinstance(exc, PROVIDER_ERRORS):
+                self.metrics.bump("provider_errors")
             report = f"sub-agent failed: {describe_error(exc)}"
             raise RuntimeError(report) from exc
         finally:

@@ -132,6 +132,8 @@ def load(path: Path) -> Spec:
     names = {a.name for a in arms}
     if len(names) != len(arms):
         raise ValueError(f"{path}: arm names repeat")
+    if len({c.id for c in claims}) != len(claims):  # results are keyed by id: a repeat would drop a claim (F7)
+        raise ValueError(f"{path}: claim ids repeat")
     for claim in claims:
         if claim.kind not in KINDS:
             raise ValueError(f"{path}: claim {claim.id} has kind {claim.kind!r}; expected one of {KINDS}")

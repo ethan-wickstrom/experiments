@@ -367,3 +367,39 @@ Each stays closed unless new evidence reopens it:
 - Decision: after marking a PR ready, wait for the Codex and Devin reviews, which arrive within about two minutes, and keep working meanwhile. Verify each finding like any other claim, fix the real ones in the same PR, and answer the rest in their threads with what was traced. Then merge. If a review has not arrived within 15 minutes, merge, and read the PR's reviews again later. Findings found on PRs merged without their reviews go into the ledger when found.
 - Why: D17 rejected waiting because nobody acted on the reviews. On #17 all three of Devin's findings were real, and one biased H4's control arm (G27–G29). The PR had merged within seconds, which also ends the session's subscription to its events, so the findings sat unread. The local suite did not catch them: it tested what the arm was meant to do, not every path into it.
 - Rejected: merging at once (it shipped G27–G29); making a review a hard gate (the bots can be slow or down).
+
+## D41 · Cost claims use a studentized bootstrap, specs that may stop early decide by stopping-valid rules, and misconfigured trials are not scored (2026-11-03, active)
+- Decision:
+  - a ratio claim (treated cost / control cost below b) is tested on the per-task values treated − b × control, whose mean is below 0 exactly when the ratio of the totals is below b, by a one-sided bootstrap-t: resampled statistics are centred on the sample mean and studentized (`stats.bootstrap_t_below`). Fewer than 5 tasks, or values that do not vary, give p = 1. The percentile interval of the ratio stays, as a description;
+  - a spec with `stop_early` decides each claim by a rule fixed before the run and valid at any stopping time: a pass-rate claim by its betting confidence sequence, any other claim by its fixed-size p-value times the number of planned looks (batches) times the number of claims, against alpha. A spec without `stop_early` keeps Holm on fixed-size p-values;
+  - every trial's recorded configuration is checked against its arm's model and options; a trial that contradicts them did not run the arm, so it is unscored and listed, like an infrastructure failure, and the next valid trial counts instead.
+- Why:
+  - the old ratio test took the share of percentile-bootstrap ratios on the far side of the bound, which follows neither of Hall and Wilson's guidelines for bootstrap tests (resample under the null, use a pivotal statistic). On skewed null data with 20 tasks it rejected 14% of the time at a nominal 5%; the bootstrap-t rejected 6.7% (F5);
+  - a fixed-size test read at a batch the data chose to stop at does not keep its error rate, as `research.md` already said, yet the analysis decided by Holm in every spec (F10). The union bound over looks makes the decision valid whatever the stopping rule, and cost, unlike pass rate, has no useful bound for a confidence sequence;
+  - an arm misconfigured the same way in every trial looked consistent in the report (F9).
+- Rejected:
+  - a t-test on the same per-task values: costs are skewed, and the bootstrap-t corrects for skew at the same cost in code;
+  - a sign-flip permutation test: a ratio hypothesis is not a sharp null, so flipping signs is not justified by the design;
+  - alpha-spending boundaries (O'Brien–Fleming) for early stopping: they rest on a Brownian approximation of each test statistic's path, which the exact Wilcoxon and the bootstrap tests do not give, and more machinery for a union bound's few looks;
+  - a confidence sequence for cost: a betting sequence needs bounded values, and the only bound (steps × context × price, about $29 a trial on Sonnet 5.5) makes it far too wide to decide anything;
+  - dropping `stop_early`: it is what keeps a capped key's budget for more experiments;
+  - scoring misconfigured trials, or failing the whole analysis on one: the first mixes setups into an arm, the second loses every valid trial to one bad one.
+- Consequence: cost claims in early-stopping specs pay a factor of 2–4 in p (2 to 4 planned looks) for the option to stop. `research.md` states the rules.
+- Evidence: `tests/test_bench.py` (`BootstrapTTest`, `test_a_spec_that_may_stop_early_decides_by_rules_valid_at_any_stop`, `test_a_trial_that_did_not_run_its_arm_is_not_scored`).
+
+## D42 · An experiment runs one version of frond (2026-11-03, active)
+- Decision:
+  - the adapter installs frond's wheel under constraints exported from `uv.lock`, so every trial runs the locked versions of every dependency;
+  - a jobs directory is bound to the digest of its spec and to a digest of the files a trial's frond is built from (`src/`, the adapter, `pyproject.toml`, `uv.lock`). Resuming it after either changed is refused; `--allow-changed-source` allows a source change, for one that cannot affect the arms, and each run records it.
+- Why: the arms differ in one mechanism each, and a change to frond, or to a dependency resolved at install time, between batches would be a second difference, invisible in the report (F8, G31).
+- Rejected:
+  - pinning only DSPy: litellm and the rest still floated between containers;
+  - binding jobs to the git commit: documentation commits would block every resume, and a dirty tree would hide real changes;
+  - refusing any source change without an override: a change to the TUI cannot touch a benchmark arm.
+- Evidence: `test_jobs_of_another_spec_or_source_are_not_resumed`; a constrained install in a scratch tool directory ran `frond --version` with DSPy 3.4.1.
+
+## D43 · The owner's grant is enforced twice: a Console spend limit, and a runner that will not start a job past the cap (2026-11-03, active)
+- Decision: `bench/budget.toml` holds the program's cap ($100, the owner's grant of 2026-11-03). Before each Harbor job, `bench.matrix` totals what every trial under `jobs/` cost at list prices, adds the most the job could cost (its remaining trials times the costliest measured trial of its model times 1.5, or before any measurement a per-model guess scaled by the arm's step limit), and stops if the sum passes the cap. Preflight refuses an arm whose model has no price or no guess. The key lives in a Console workspace whose spend limit is the same $100, which stops a job midway.
+- Why: the runner sees only finished trials, so it cannot stop a job that runs over; the Console limit can, but it fails a job halfway, after money is spent on trials that may be unusable. Checking before each job keeps the runner from starting what the cap cannot pay for.
+- Rejected: the Console limit alone (a job that hits it leaves a half-run batch); a check inside each trial (Harbor runs trials in parallel containers with no shared ledger); a guess with the margin applied too (it would put E0's plan, $45-75 by its own estimate, above the cap before any measurement).
+- Evidence: `tests/test_bench.py::BudgetTest`, including that E0 fits the cap on the guesses alone ($70.50).

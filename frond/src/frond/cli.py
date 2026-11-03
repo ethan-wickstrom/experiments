@@ -362,12 +362,12 @@ def export_run(agent: Agent, directory: Path) -> None:
             )
             f.write(json.dumps(dataclasses.asdict(clean), ensure_ascii=False) + "\n")
     usage = {"model": agent.config.model, "sub_model": agent.config.sub_model, **usage_totals(agent.lm, agent.sub_lm)}
-    (directory / "usage.json").write_text(redact(json.dumps(usage, indent=1)))
+    (directory / "usage.json").write_text(redact.json(usage, indent=1))
     with open(directory / "calls.jsonl", "w", encoding="utf-8") as f:
         roles = [("main", agent.lm)] + ([("sub", agent.sub_lm)] if agent.sub_lm is not agent.lm else [])
         for role, lm in roles:
             for record in call_records(lm, role, agent.metrics.branch_calls if lm is agent.lm else None):
-                f.write(redact(json.dumps(record, default=str)) + "\n")
+                f.write(redact.json(record) + "\n")
     this_run = [r for r in agent.history if r.first_seq > agent.steps.loaded]
     metrics = {
         "config": dataclasses.asdict(agent.config),  # what the run was configured with, to check each arm's setup
@@ -379,7 +379,7 @@ def export_run(agent: Agent, directory: Path) -> None:
         "scopes": {"opened": agent.scopes.opened, "closed": agent.scopes.closed, "abandoned": agent.scopes.abandoned},
         **agent.metrics.as_dict(),
     }
-    (directory / "metrics.json").write_text(redact(json.dumps(metrics, indent=1)))
+    (directory / "metrics.json").write_text(redact.json(metrics, indent=1))
     last = agent.history[-1] if agent.history else None
     (directory / "answer.md").write_text(redact((last.response or last.error or "") if last else ""), encoding="utf-8")
 

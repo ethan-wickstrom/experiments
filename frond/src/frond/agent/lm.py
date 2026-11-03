@@ -23,6 +23,19 @@ PROVIDER_DEFAULTS: tuple[tuple[str, str, str], ...] = (
 NATIVE_PREFIXES = ("anthropic/", "openai/", "gemini/", "xai/")
 
 
+# Failures of the model provider, not of the agent: a run that ends on one says nothing about the harness, so research
+# exports flag it and the analysis does not score it (ledger G22). A context overflow or an invalid request is the
+# harness's own doing and stays an ordinary failure.
+PROVIDER_ERRORS: tuple[type[Exception], ...] = (
+    dspy.LMAuthError,
+    dspy.LMBillingError,
+    dspy.LMRateLimitError,
+    dspy.LMTimeoutError,
+    dspy.LMServerError,
+    dspy.LMTransportError,
+)
+
+
 def caches_by_marks(model: str) -> bool:
     """True for providers that cache only up to blocks marked as breakpoints (Anthropic); the others cache any
     repeated prefix on their own."""

@@ -23,6 +23,7 @@ class RunMetrics:
     stale_actions: int = 0  # edits, writes and deletes of files changed since the model read them (H3, B5)
     compactions: int = 0  # times early steps were folded or summarised to fit the budget (H4, A5)
     summaries: int = 0  # LLM summary calls made by the summary context policy (H4)
+    provider_errors: int = 0  # provider failures in sub-agents and llm_query, which the turn survived (F47)
     tool_calls: Counter[str] = field(default_factory=Counter)
     tool_failures: Counter[str] = field(default_factory=Counter)  # calls that raised: the model got an error back
     forks: list[list[dict[str, Any]]] = field(default_factory=list)  # each FORK's branches: outcome, steps (H2)
@@ -58,6 +59,7 @@ class RunMetrics:
             "stale_actions": self.stale_actions,
             "compactions": self.compactions,
             "summaries": self.summaries,
+            "provider_errors": self.provider_errors,
             "tool_calls": dict(sorted(self.tool_calls.items())),
             "tool_failures": dict(sorted(self.tool_failures.items())),
             "failed_edits": sum(self.tool_failures[n] for n in ("edit", "patch", "write")),

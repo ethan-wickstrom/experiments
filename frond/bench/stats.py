@@ -3,7 +3,7 @@
 The task is the unit. Each arm's trials on a task give that task's mean; comparisons use per-task paired differences.
 
 Fixed-size analysis, at the end of an experiment: the exact Wilcoxon signed-rank test, percentile bootstrap intervals
-over tasks, and Holm's correction across the pre-registered claims.
+over tasks, a studentized bootstrap test for means, and Holm's correction across the pre-registered claims.
 
 Sequential analysis, after every batch: a betting confidence sequence for the mean difference (Waudby-Smith and
 Ramdas, "Estimating means of bounded random variables by betting", JRSS-B 2024, arXiv 2010.09686). It holds at all
@@ -85,6 +85,43 @@ def bootstrap_interval[T](
     low = values[max(0, math.floor((1 - level) / 2 * resamples))]
     high = values[min(resamples - 1, math.ceil((1 + level) / 2 * resamples) - 1)]
     return low, high
+
+
+def bootstrap_t_below(xs: Sequence[float], *, resamples: int = 10_000, seed: int = 0, min_n: int = 5) -> float:
+    """One-sided p-value for H0: mean >= 0 against mean < 0, by the studentized bootstrap (bootstrap-t).
+
+    Each resample's t is centred on the sample mean, which imposes the null, and divided by its own standard error,
+    which makes it close to pivotal: Hall and Wilson's two guidelines for bootstrap tests (Biometrics 47, 1991). A
+    percentile bootstrap of the estimate meets neither, and claims significance for any estimate on the right side of
+    the bound once the sample barely varies. With fewer than ``min_n`` values, or none that differ, the data say
+    nothing about the spread, and p is 1.
+    """
+    n = len(xs)
+    if n < min_n:
+        return 1.0
+    mean, spread = sum(xs) / n, _stdev(xs)
+    if spread == 0:
+        return 1.0
+    observed = mean / (spread / math.sqrt(n))
+    rng = random.Random(seed)
+    at_or_below = 0
+    for _ in range(resamples):
+        sample = rng.choices(xs, k=n)
+        at_or_below += _t(sum(sample) / n - mean, _stdev(sample), n) <= observed
+    return (1 + at_or_below) / (resamples + 1)
+
+
+def _t(shift: float, spread: float, n: int) -> float:
+    """A resample's studentized shift; when every draw was the same value, infinite on the side it moved (0 if none)."""
+    if spread:
+        return shift / (spread / math.sqrt(n))
+    return math.copysign(math.inf, shift) if shift else 0.0
+
+
+def _stdev(xs: Sequence[float]) -> float:
+    n = len(xs)
+    mean = sum(xs) / n
+    return math.sqrt(sum((x - mean) ** 2 for x in xs) / (n - 1)) if n > 1 else 0.0
 
 
 def holm(pvalues: dict[str, float]) -> dict[str, float]:

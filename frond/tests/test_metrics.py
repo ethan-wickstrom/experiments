@@ -158,6 +158,21 @@ class ProviderFailureTest(WorkspaceCase):
         self.assertIsNone(scored.reward)  # reported as an infrastructure failure, never scored
         self.assertEqual(scored.exception, "provider failure")
 
+    def test_a_provider_failure_the_turn_survives_is_counted(self):  # F47
+        steps = [
+            Step("Ask.", "try:\n    llm_query('hi')\nexcept Exception as exc:\n    print('failed:', exc)"),
+            Step("Done.", "SUBMIT(response='ok')"),
+        ]
+
+        def refuse(prompt: str) -> str:
+            raise dspy.LMRateLimitError("too many requests")
+
+        agent, _ = scripted_agent(self, steps, sub_answer=refuse)
+        record = agent.run_turn("go")
+        self.assertEqual((record.status, record.response), ("done", "ok"))  # still the agent's run, and scored
+        self.assertEqual(agent.metrics.provider_errors, 1)
+        self.assertEqual(agent.metrics.as_dict()["provider_errors"], 1)
+
     def test_an_agent_error_stays_the_agents(self):
         agent, engine = scripted_agent(self, [Step("Go.", "print(1)")])
         with mock.patch.object(engine, "_completion", side_effect=ValueError("bad output")):

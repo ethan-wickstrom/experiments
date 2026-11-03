@@ -36,6 +36,7 @@ from dspy.utils.exceptions import format_error_for_lm
 
 from frond.agent.adapter import NOTE_CODE, STEER_CODE, FoldEntry, UserEntry, escape_marker, user_tag
 from frond.agent.control import TurnCancelled
+from frond.agent.lm import PROVIDER_ERRORS
 from frond.agent.prompts import FORK_GUIDE, SCOPES_GUIDE, TOOL_AGENT_INSTRUCTIONS
 from frond.agent.repl import ForkRequest
 from frond.agent.scopes import ScopeOp
@@ -179,6 +180,9 @@ class Hooks:
 
     def code_rejected(self, step: int) -> None:
         """The step's code did not compile."""
+
+    def provider_error(self) -> None:
+        """A model call inside an llm_query or a sub-agent failed for the provider's reasons (F47)."""
 
 
 def _clip(text: str, limit: int) -> str:
@@ -402,8 +406,12 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             target = sub_lm if sub_lm is not None else dspy.settings.lm
             if target is None:
                 raise dspy.LMNotConfiguredError("No LM configured for llm_query")
-            with dspy.context(send_stream=None):
-                response = target(prompt)
+            try:
+                with dspy.context(send_stream=None):
+                    response = target(prompt)
+            except PROVIDER_ERRORS:
+                hooks.provider_error()  # the turn goes on, but a run that saw them is not like one that did not
+                raise
             if isinstance(response, dspy.lm15.Response):
                 return response.text or ""
             if isinstance(response, list) and response:
