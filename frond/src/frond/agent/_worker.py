@@ -308,6 +308,7 @@ class Session:
         self.max_branches = 1  # FORK exists when the host allows two or more branches
         self.executing = False
         threading.Thread(target=self._read, name="frond-worker-reader", daemon=True).start()
+        self.own_threads = set(threading.enumerate())  # the worker's, as against those the agent's code starts (F24)
 
     def _read(self) -> None:
         for line in self.inp:
@@ -341,15 +342,31 @@ class Session:
         _, fds, _, _ = socket.recv_fds(FORKS, 1, 1)
         if not fds:
             return {"type": "fork_failed", "error": "no channel arrived"}
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)  # forking with idle daemon threads; see below
-            pid = os.fork()
+        # Threads the agent's code left running would not come along, and a lock one of them holds at the fork
+        # would stay held in every copy, which then hangs on it (F24): refuse, and say which threads.
+        threads = [t.name for t in threading.enumerate() if t not in self.own_threads and t.is_alive()]  # by identity
+        if threads:
+            os.close(fds[0])
+            return {
+                "type": "fork_failed",
+                "error": f"threads your code started are still running ({', '.join(threads)}); a copy would not "
+                "have them, and a lock one holds would stay held in it. Stop them, then FORK",
+            }
+        original = os.getpid()
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)  # forking with idle daemon threads; see below
+                pid = os.fork()
+        except OSError:
+            os.close(fds[0])  # F25: the channel for a copy that never existed
+            raise
         if pid:
             os.close(fds[0])
             return {"type": "forked", "pid": pid}
         # The copy. Only this thread exists here; the reader thread did not come along, and the locks it may
         # hold (stdin's buffer) are never touched again: inherited descriptors are replaced at the OS level.
         os.setsid()  # its own process group, so the host can interrupt and kill it alone
+        _die_with_parent(original)  # F22: a copy outlives no original, even one whose host was killed
         signal.signal(signal.SIGCHLD, signal.SIG_DFL)
         devnull = os.open(os.devnull, os.O_RDWR)
         os.dup2(devnull, 0)  # the original's input
@@ -366,7 +383,10 @@ class Session:
         self.ids = itertools.count(1)
         self.pending, self.pending_lock, self.commands = {}, threading.Lock(), queue.Queue()
         threading.Thread(target=self._read, name="frond-worker-reader", daemon=True).start()
-        send({"type": "ready", "pid": os.getpid(), "python": sys.version.split()[0], "sandbox": _SANDBOX})
+        # the host removes this directory when it shuts the copy down, however the copy ends (F23)
+        send(
+            {"type": "ready", "pid": os.getpid(), "python": sys.version.split()[0], "sandbox": _SANDBOX, "scratch": own}
+        )
         return None
 
     def call_tool(self, name: str, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
@@ -610,6 +630,22 @@ def main() -> None:
                 reply = {"type": "fork_failed", "error": repr(exc)}
             if reply is not None:  # None: this is the copy, already announced on its own channel
                 send(reply)
+
+
+def _die_with_parent(parent: int) -> None:
+    """Have Linux kill this process when its parent, the original worker, exits (PR_SET_PDEATHSIG). Elsewhere, or
+    when it cannot be set, the host's shutdown of the original still shuts its copies down."""
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        import ctypes
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.prctl(1, signal.SIGKILL, 0, 0, 0)  # PR_SET_PDEATHSIG
+        if os.getppid() != parent:  # the parent was gone before the call took effect
+            os._exit(0)
+    except (OSError, AttributeError):
+        pass
 
 
 def _no_input(prompt: object = "", /) -> str:

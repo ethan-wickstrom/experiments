@@ -323,6 +323,7 @@ class JobManager:
 
     def __init__(self, log_dir: Path, emit: Emit) -> None:
         self.log_dir = log_dir
+        log_dir.mkdir(parents=True, exist_ok=True)  # a branch's or sub-agent's own directory may not exist yet (F29)
         self.emit = emit
         self._jobs: dict[int, Job] = {}
         self._ids = itertools.count(1)

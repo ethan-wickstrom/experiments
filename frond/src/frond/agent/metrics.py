@@ -36,6 +36,7 @@ class RunMetrics:
     tool_failures: Counter[str] = field(default_factory=Counter)  # calls that raised: the model got an error back
     forks: list[list[dict[str, Any]]] = field(default_factory=list)  # each FORK's branches: outcome, steps (H2)
     branch_calls: dict[int, str] = field(default_factory=dict)  # main-LM call index -> the branch that made it
+    sub_branch_calls: dict[int, str] = field(default_factory=dict)  # the same for the sub-model's calls (F30)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def bump(self, counter: str, by: int = 1) -> None:
