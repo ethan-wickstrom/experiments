@@ -550,6 +550,24 @@ def fake_trial(
 
 
 class AnalyzeTest(BenchCase):
+    def test_the_report_shows_protocol_adherence_per_step(self):  # E0's first question (D46)
+        arms = {
+            "haiku": {
+                "steps_per_trial": 20.0,
+                "parse_failures_per_trial": 5.0,
+                "parse_recovered_per_trial": 3.0,
+                "unparsed_steps_per_trial": 2.0,
+                "cut_off_replies_per_trial": None,
+                "syntax_errors_per_trial": 1.0,
+                "sub_parse_failures_per_trial": 0.0,
+            },
+            "empty": {"steps_per_trial": None},
+        }
+        table = "\n".join(analyze.protocol_table(arms))
+        self.assertIn("| haiku | 20.0 | 0.250 | 0.150 | 0.100 | – | 0.050 | 0.00/trial |", table)
+        self.assertNotIn("| empty |", table)
+        self.assertEqual(analyze.protocol_table({"empty": {"steps_per_trial": None}}), [])
+
     def test_a_clear_win_holds_and_infrastructure_failures_do_not_count(self):
         names = [f"t{i:02d}" for i in range(16)]
         s = spec.load(self.write_spec(SPEC.format(tasks=", ".join(f'"{n}"' for n in names))))
