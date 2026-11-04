@@ -22,6 +22,7 @@ import hashlib
 import json
 import math
 import tomllib
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
@@ -89,6 +90,9 @@ CONFIG_OPTIONS: dict[str, Any] = {
     "scopes": lambda value: value == "on",
 }
 
+# An arm refused more often than this is flagged (D61): E0b's rate on the screening model at high effort, 3 in 16.
+REFUSAL_FLAG = (3, 16)
+
 
 @dataclass
 class Trial:
@@ -105,6 +109,7 @@ class Trial:
     config: dict[str, Any] = field(default_factory=dict)  # frond's recorded configuration, to check the arm's setup
     model: str = ""  # the model Harbor gave the agent (its trial config), for any agent; "" for the oracle
     turns: int | None = None  # the turns a reference agent took, where Harbor records them (Terminus 2), for G39
+    refusal: str = ""  # the category of a provider refusal that ended the trial (G43, G46), "" when none
 
 
 def load_prices(path: Path = BENCH / "prices.toml") -> dict[str, dict[str, float]]:
@@ -174,8 +179,10 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
     episodes = ((result.get("agent_result") or {}).get("metadata") or {}).get("n_episodes")
     counters: dict[str, float] = {}
     config: dict[str, Any] = {}
+    refusal = ""
     try:
         metrics = json.loads((export / "metrics.json").read_text(encoding="utf-8"))
+        refusal = str(metrics.get("refusal") or "")
         counters = {key: float(metrics[key]) for key in COUNTERS if isinstance(metrics.get(key), (int, float))}
         config = metrics.get("config") or {}
         if metrics.get("error_kind") == "provider":  # the model provider failed, not the agent (ledger G22)
@@ -196,6 +203,7 @@ def load_trial(directory: Path, arm: str, prices: dict[str, dict[str, float]]) -
         config=config,
         model=str(((result.get("config") or {}).get("agent") or {}).get("model_name") or config.get("model") or ""),
         turns=int(episodes) if isinstance(episodes, (int, float)) else None,
+        refusal=refusal,
     )
 
 
@@ -340,6 +348,10 @@ def arm_summary(trials: list[Trial], spec: Spec, arm: Arm) -> dict[str, Any]:
         # tasks short of their planned valid trials: a job that failed or has not run yet (F6)
         "incomplete_tasks": sorted(task for task in spec.tasks if sum(t.task == task for t in scored) < planned),
         "infrastructure_failures": [f"{t.task} ({t.exception})" for t in trials if t.reward is None],
+        # refused trials are unscored, so an arm the classifier refuses more is missing more of its data (D61, B20)
+        "refusals": dict(sorted(Counter(t.refusal for t in trials if t.refusal).items())),
+        "refused_trials": sum(1 for t in trials if t.refusal),
+        "all_trials": len(trials),
         "pass_rate": fmean(passes.values()) if passes else None,
         "pass_rate_interval": list(bootstrap_interval(list(passes.values()), fmean, seed=spec.seed))
         if passes
@@ -475,6 +487,20 @@ def report(summary: dict[str, Any]) -> str:
         if arm["infrastructure_failures"]:
             failures = ", ".join(arm["infrastructure_failures"])
             lines += ["", f"Infrastructure failures and misconfigured trials in {name}, not scored: {failures}."]
+        if arm.get("refused_trials"):
+            categories = ", ".join(f"{k} {v}" for k, v in arm["refusals"].items())
+            share = arm["refused_trials"] / arm["all_trials"]
+            flag = (
+                f" That is more than E0b's {REFUSAL_FLAG[0]} in {REFUSAL_FLAG[1]}: its scored trials may be a biased"
+                " sample (D61)."
+                if share > REFUSAL_FLAG[0] / REFUSAL_FLAG[1]
+                else ""
+            )
+            lines += [
+                "",
+                f"Refused by the provider in {name}: {arm['refused_trials']} of {arm['all_trials']} trials"
+                f" ({categories}).{flag}",
+            ]
         if arm.get("provider_errors_per_trial"):
             rate = _fmt(arm["provider_errors_per_trial"], 2)
             lines += ["", f"Model calls that failed inside sub-agents or llm_query in {name}: {rate} per trial."]

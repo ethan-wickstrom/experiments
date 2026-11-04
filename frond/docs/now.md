@@ -9,7 +9,7 @@ Nothing runs. E0c is done (`bench/results/2026-11-04-e0c/`): medium effort passe
 ## Next, in order (research-first, D16)
 
 1. E1–E6 and E11 in `research.md`'s order, at high effort (D61), once REQ-4's remaining money is granted.
-2. B20, before E1: the analysis reports refusals per arm and flags an arm refused more than 3 in 16 (D61). A rule that compares arms states how it counts unscorable trials.
+2. A rule that compares arms states how it counts unscorable trials (D61); the analysis reports refusals per arm and flags an arm refused more than 3 in 16 (B20).
 3. G51: mitigated by D59 (an unfinished step is exported; a trial's agent gets 2 hours). Find the cause when an export next shows an unfinished step.
 4. G50 (thinking cut off at the 32k output limit): Opus had 1 cut-off reply in E0b's 16 trials, against Sonnet's 5 in one E0 trial, so on the screening model it may need nothing; decide before E1.
 5. Review findings as they arrive (F1–F78 closed); REQ-3 holds Devin's unposted security findings.
