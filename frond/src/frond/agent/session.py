@@ -686,6 +686,7 @@ class Agent:
     def run_turn(self, request: str, attachments: dict[str, str] | None = None) -> TurnRecord:
         attachments = attachments or {}
         self.control.reset()
+        self._in_flight = None  # a step an earlier turn was cancelled during is that turn's, not this one's
         record = TurnRecord(next(self._turns), request)
         head = ""
         if self.timeline is not None:
