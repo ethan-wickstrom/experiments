@@ -1,0 +1,76 @@
+{
+ "experiment": "E0c",
+ "title": "Effort on the screening model: medium, against E0b's high",
+ "spec": "bench/experiments/e0c-effort.toml",
+ "spec_sha256": "fd326b7c5177",
+ "alpha": 0.05,
+ "excluded_tasks": [],
+ "arms": {
+  "medium": {
+   "tasks": 5,
+   "trials": 10,
+   "planned_trials": 16,
+   "incomplete_tasks": [
+    "biped-contact-dynamics",
+    "glycan-ms2-elucidation",
+    "hof-topology-interpenetration"
+   ],
+   "infrastructure_failures": [
+    "biped-contact-dynamics (provider failure)",
+    "glycan-ms2-elucidation (provider failure)",
+    "hof-topology-interpenetration (provider failure)",
+    "biped-contact-dynamics (provider failure)",
+    "glycan-ms2-elucidation (provider failure)",
+    "hof-topology-interpenetration (provider failure)"
+   ],
+   "pass_rate": 0.5,
+   "pass_rate_interval": [
+    0.1,
+    0.9
+   ],
+   "cost_per_trial": 1.34558509,
+   "cost_per_solved": 2.69117018,
+   "never_passed": [
+    "layout-config-recreation",
+    "ontology-kg-querying"
+   ],
+   "within_task_variance": 0.1,
+   "between_task_variance": 0.2,
+   "configurations": [
+    "{\"approval\": \"yolo\", \"arm\": \"rlm\", \"context\": \"fold\", \"context_window\": null, \"effort\": \"medium\", \"fork\": 1, \"freshness\": true, \"layout\": \"turns\", \"max_llm_calls\": 80, \"max_output_chars\": 16000, \"max_steps\": 40, \"model\": \"anthropic/claude-opus-5-5\", \"prompt_cache\": true, \"protocol\": \"json\", \"repl_policy\": \"strict\", \"repl_sandbox\": true, \"scopes\": false, \"step_timeout\": 600, \"sub_effort\": null, \"sub_model\": \"anthropic/claude-haiku-5-5\", \"subagent_steps\": 16, \"worlds\": true}"
+   ],
+   "input_tokens_per_trial": 876503.2,
+   "cache_read_tokens_per_trial": 756872.6,
+   "cache_write_tokens_per_trial": 73145.9,
+   "output_tokens_per_trial": 32429.5,
+   "cache_read_share": 0.8635137897956334,
+   "agent_seconds_per_trial": 683.6978525000001,
+   "failed_edits_per_trial": 0.0,
+   "stale_actions_per_trial": 0.0,
+   "parse_failures_per_trial": 0.0,
+   "parse_recovered_per_trial": 0.0,
+   "unparsed_steps_per_trial": 0.0,
+   "cut_off_replies_per_trial": 0.0,
+   "sub_cut_off_replies_per_trial": 0.0,
+   "sub_parse_failures_per_trial": 0.0,
+   "sub_parse_recovered_per_trial": 0.0,
+   "sub_unparsed_steps_per_trial": 0.0,
+   "syntax_errors_per_trial": 0.3,
+   "compactions_per_trial": 0.0,
+   "summaries_per_trial": 0.0,
+   "steps_per_trial": 21.9,
+   "branch_steps_per_trial": 0.0,
+   "provider_errors_per_trial": 0.0
+  }
+ },
+ "claims": {},
+ "per_task": {
+  "medium": {
+   "layout-config-recreation": 0.0,
+   "layout-config-recreation2": 1.0,
+   "mvcc-lsm-compaction": 0.5,
+   "nextjs-performance": 1.0,
+   "ontology-kg-querying": 0.0
+  }
+ }
+}

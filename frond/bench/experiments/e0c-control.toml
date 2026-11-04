@@ -1,0 +1,32 @@
+# E0c's same-day control (ledger E0c): Opus 5.5 at high effort, one trial on each of E0c's 8 tasks, run the day
+# E0c's medium arm ran. E0c's comparison arm was E0b's high-effort trials, a day earlier. E0c's medium arm was refused
+# in 6 of 16 trials against E0b's 3 of 16, including both trials of a task E0b's high arm passed twice, so
+# drift in the API and the effort level cannot be told apart.
+# Fixed before the first trial: if this arm is refused in at most 1 of its 8 trials, the refusals are taken as
+# effort's, and high stays the screening effort, since medium would lose about a third of its trials; if in 2 or more,
+# they are taken as the day's, and E0c's own rule stands, which picks medium. Within the $40 the owner approved for
+# E0c (REQ-4): E0c's medium arm cost $18.02, and this arm is at most $36 by the guard, about $12 expected.
+id = "E0c-control"
+title = "E0c's same-day control: high effort"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = [
+  "biped-contact-dynamics",
+  "glycan-ms2-elucidation",
+  "hof-topology-interpenetration",
+  "layout-config-recreation",
+  "layout-config-recreation2",
+  "mvcc-lsm-compaction",
+  "nextjs-performance",
+  "ontology-kg-querying",
+]
+trials = 1
+batch = 8
+seed = 0
+concurrency = 2
+agent_timeout_multiplier = 0.25  # TB 4.0's 8-hour agent timeout becomes 2 hours (D59, G51)
+
+[[arms]]
+name = "high"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { effort = "high", protocol = "json" }

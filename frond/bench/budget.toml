@@ -86,3 +86,8 @@ why = "2026-11-04: E0b, 16 Opus 5.5 trials, from their usage.json; the trial int
 [[spent]]
 usd = 4.13
 why = "2026-11-04: G47's replay of a refused request, 6 Opus 5.5 calls outside Harbor, four of which thought until the 32,000-token limit"
+
+[[spent]]
+jobs = "E0c"
+usd = 18.02
+why = "2026-11-04: E0c, 16 Opus 5.5 trials at medium effort, from their usage.json"
