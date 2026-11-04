@@ -19,6 +19,7 @@ This file is not part of the frond package and needs ``harbor`` (written against
 
 from __future__ import annotations
 
+import asyncio
 import json
 import shlex
 import subprocess
@@ -153,6 +154,15 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+# Interrupt frond in the task container, as Ctrl-C does, and wait up to 30 seconds for it to export, then kill it. The
+# bracket keeps the pattern from matching this command's own shell, as a bare `pgrep -f` would (G51).
+STOP_FROND = (
+    "pkill -INT -f '[b]in/frond -p' || exit 0; "
+    "for i in $(seq 30); do pgrep -f '[b]in/frond -p' >/dev/null || exit 0; sleep 1; done; "
+    "pkill -KILL -f '[b]in/frond -p'; exit 0"
+)
+
+
 class FrondOptions(InstalledAgentOptions):
     max_steps: Annotated[int | None, Cli("--max-steps")] = Field(
         default=None, description="REPL steps per turn before frond wraps up (frond's default: 40)"
@@ -227,17 +237,23 @@ class Frond(BaseInstalledAgent):
             raise ValueError("frond needs a model: pass -m provider/name")
         logs = self.environment_logs_dir.as_posix()
         env = {**self.model_connection.env, "FROND_INSTRUCTION": instruction}
-        await self.exec_as_agent(
-            environment,
-            env=env,
-            command=(
-                f'{PATH}; task="$FROND_INSTRUCTION"; unset FROND_INSTRUCTION; '
-                f"frond -p --yolo --model {shlex.quote(self.model_name)} {self.build_cli_flags()} "
-                f'--export {logs}/{EXPORT} "$task" </dev/null 2>{logs}/frond-progress.log; rc=$?; '
-                # Harbor classifies failures (rate limits, auth) from stderr: give it the tail of frond's progress.
-                f"tail -n 40 {logs}/frond-progress.log >&2; exit $rc"
-            ),
-        )
+        try:
+            await self.exec_as_agent(
+                environment,
+                env=env,
+                command=(
+                    f'{PATH}; task="$FROND_INSTRUCTION"; unset FROND_INSTRUCTION; '
+                    f"frond -p --yolo --model {shlex.quote(self.model_name)} {self.build_cli_flags()} "
+                    f'--export {logs}/{EXPORT} "$task" </dev/null 2>{logs}/frond-progress.log; rc=$?; '
+                    # Harbor classifies failures (rate limits, auth) from stderr: give it the tail of frond's progress.
+                    f"tail -n 40 {logs}/frond-progress.log >&2; exit $rc"
+                ),
+            )
+        except asyncio.CancelledError:
+            # Harbor's agent timeout cancels the exec, but Docker does not pass that on to frond, which would run on
+            # unrecorded and never export its cost (D59, reviewed on #52): interrupt it and give it time to export.
+            await self.exec_as_agent(environment, command=STOP_FROND)
+            raise
 
     def populate_context_post_run(self, context: AgentContext) -> None:
         export = self.logs_dir / EXPORT

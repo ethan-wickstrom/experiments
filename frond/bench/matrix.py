@@ -114,6 +114,9 @@ def command(spec: Spec, cell: Cell, jobs: Path, ca: Path | None) -> list[str]:
         argv += ["--ak", f"{key}={value}"]
     if spec.timeout_multiplier != 1.0:
         argv += ["--timeout-multiplier", str(spec.timeout_multiplier)]
+    if spec.agent_timeout_multiplier != 1.0:  # a stuck trial holds a slot for the task's whole timeout otherwise (G51)
+        # Harbor takes it in place of --timeout-multiplier for the agent, not on top of it
+        argv += ["--agent-timeout-multiplier", str(spec.agent_timeout_multiplier)]
     if ca is not None:
         argv += ["--extra-docker-compose", str(OVERLAY)]
     for task in cell.tasks:

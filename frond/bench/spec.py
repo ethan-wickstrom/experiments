@@ -81,6 +81,7 @@ class Spec:
     claims: tuple[Claim, ...]
     excluded: tuple[str, ...] = ()  # tasks left out, with the reason recorded by the exclusion file
     timeout_multiplier: float = 1.0
+    agent_timeout_multiplier: float = 1.0  # of each task's agent timeout; TB 4.0 specs set 0.25: 2 hours (D59)
     stop_early: bool = False  # stop after a batch at which every pass-rate claim's confidence sequence decides
     path: Path | None = None
 
@@ -153,6 +154,7 @@ def load(path: Path) -> Spec:
         claims=claims,
         excluded=tuple(excluded),
         timeout_multiplier=float(data.get("timeout_multiplier", 1.0)),
+        agent_timeout_multiplier=float(data.get("agent_timeout_multiplier", 1.0)),
         stop_early=bool(data.get("stop_early", False)),
         path=path,
     )

@@ -14,6 +14,7 @@ trials = 3
 batch = 14  # four looks over the 51 tasks E0a and D57 leave (14, 14, 14, 9), D44
 seed = 2
 concurrency = 2
+agent_timeout_multiplier = 0.25  # TB 4.0's 8-hour agent timeout becomes 2 hours (D59, G51)
 stop_early = true
 
 [[arms]]

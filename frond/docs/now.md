@@ -9,10 +9,10 @@ Nothing runs. E0b is done (`bench/results/2026-11-04-e0b/`): 5 of 13 scored Opus
 ## Next, in order (research-first, D16)
 
 1. G47: find what in frond's prompt Anthropic's classifier reads as "reverse engineering or duplicating model outputs". Replay a refused trial's request (rebuild it from its step log with frond's adapter) with one part changed at a time, several calls per variant, within the grant's remaining $36. Record what is found in `decisions.md`.
-2. G51: record each step's code when it starts; bound a benchmark trial's wall time; and find why step 34 of E0b's `layout-config-recreation` outlived its limit if the recording shows it.
+2. G51: mitigated by D59 (an unfinished step is exported; a trial's agent gets 2 hours). Find the cause when an export next shows an unfinished step.
 3. G50 (thinking cut off at the 32k output limit): Opus had 1 cut-off reply in E0b's 16 trials, against Sonnet's 5 in one E0 trial, so on the screening model it may need nothing; decide before E1.
 4. E1–E6 and E11 in the order in `research.md`, once REQ-4 is granted; a partial grant starts E1 first.
-5. Review findings as they arrive (F1–F72 closed); REQ-3 holds Devin's unposted security findings.
+5. Review findings as they arrive (F1–F76 closed); REQ-3 holds Devin's unposted security findings.
 6. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner

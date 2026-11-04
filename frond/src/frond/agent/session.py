@@ -235,6 +235,8 @@ class _RootHooks(Hooks):
         self.agent._report_usage()
 
     def step_planned(self, step: int, reasoning: str, code: str) -> None:
+        turn = self.agent._current.index if self.agent._current else 0
+        self.agent._in_flight = (turn, step, reasoning, code)  # for an export if the run ends during it (G51)
         self.agent.emit(StepPlanned(step, reasoning, code))
 
     def exec_started(self, step: int) -> None:
@@ -258,6 +260,7 @@ class _RootHooks(Hooks):
     def record_step(self, step: int, reasoning: str, code: str, output: str, error: bool) -> int | None:
         turn = self.agent._current.index if self.agent._current else 0
         world, self.agent._world = self.agent._world, ""
+        self.agent._in_flight = None
         return self.agent.steps.add(
             "step", turn=turn, step=step, reasoning=reasoning, code=code, output=output, error=error, world=world
         )
@@ -517,6 +520,9 @@ class Agent:
         if self.timeline is not None:
             self.timeline.warm()
         self._world = ""  # the world after the latest step, for its step-log record
+        self._in_flight: tuple[int, int, str, str] | None = (
+            None  # the main line's step running now: turn, step, note, code
+        )
         self._step_world = ""  # the world as the current main-line step began, with scopes on (F38)
         self.observations = Observations(workspace.root)  # what the model read this turn (freshness, H3)
         self.scopes = Scopes()  # the open scopes of this turn (H5)
@@ -680,6 +686,7 @@ class Agent:
     def run_turn(self, request: str, attachments: dict[str, str] | None = None) -> TurnRecord:
         attachments = attachments or {}
         self.control.reset()
+        self._in_flight = None  # a step an earlier turn was cancelled during is that turn's, not this one's
         record = TurnRecord(next(self._turns), request)
         head = ""
         if self.timeline is not None:

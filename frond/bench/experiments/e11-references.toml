@@ -14,6 +14,7 @@ trials = 2
 batch = 11
 seed = 11
 concurrency = 2
+agent_timeout_multiplier = 0.25  # TB 4.0's 8-hour agent timeout becomes 2 hours (D59, G51)
 
 [[arms]]
 name = "frond"
