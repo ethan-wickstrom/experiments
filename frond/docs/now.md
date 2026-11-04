@@ -1,6 +1,6 @@
 # Now
 
-Updated 2026-11-04, second session: E0 and E0b are done. Each code step replies with one JSON object held to its schema (D53), and the tools arm acts by native tool calls (D55). The screening model is Opus 5.5 (D56), on 51 TB 4.0 tasks (D57), at about $1.50 a trial. E0b's variance sets E1–E3 at 3 trials per task (`research.md`). The reasoning-extraction refusals are explained (D60): they come during long thinking, a risk per thinking token, not a phrase in frond's prompt. E1–E6 need money: REQ-4. $68.12 of the $100 grant is spent.
+Updated 2026-11-04, second session: E0 and E0b are done. Each code step replies with one JSON object held to its schema (D53), and the tools arm acts by native tool calls (D55). The screening model is Opus 5.5 (D56), on 51 TB 4.0 tasks (D57), at about $1.50 a trial. E0b's variance sets E1–E3 at 3 trials per task (`research.md`). The reasoning-extraction refusals come during long thinking, and more often the longer it runs (D60); whether thinking is the cause is a hypothesis E0c tests (G47). E1–E6 need money: REQ-4. $68.12 of the $100 grant is spent.
 
 ## In flight
 
@@ -11,13 +11,12 @@ Nothing runs. E0b is done (`bench/results/2026-11-04-e0b/`): 5 of 13 scored Opus
 1. E0c (effort on the screening model, D60) and then E1–E6 and E11, once REQ-4 is granted; a partial grant starts E0c and E1.
 2. G51: mitigated by D59 (an unfinished step is exported; a trial's agent gets 2 hours). Find the cause when an export next shows an unfinished step.
 3. G50 (thinking cut off at the 32k output limit): Opus had 1 cut-off reply in E0b's 16 trials, against Sonnet's 5 in one E0 trial, so on the screening model it may need nothing; decide before E1.
-4. Review findings as they arrive (F1–F76 closed); REQ-3 holds Devin's unposted security findings.
+4. Review findings as they arrive (F1–F77 closed); REQ-3 holds Devin's unposted security findings.
 5. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner
 
 - REQ-4: money for E0c and E1–E6 on Opus 5.5, about $2,400 at E0's and E0b's measured cost; E0c about $40, E1 about $500. Spent so far $68.12 of the $100 grant.
-- REQ-5: Codex review credits; Codex hit its usage limit on #51. Until then D58 holds.
 - REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12, one on #23, one on #33), visible only in the owner's Devin account. Low priority.
 
 ## Facts a fresh session needs
