@@ -4,12 +4,12 @@ Updated 2026-11-04, second session: E0 and E0b are done. Each code step replies 
 
 ## In flight
 
-E0c's same-day control runs next: `bench/experiments/e0c-control.toml`, Opus 5.5 at high effort, one trial on each of E0c's 8 tasks, from a frozen worktree of `main` (`/home/user/run-e0c`, D47): `uv run python -m bench.matrix bench/experiments/e0c-control.toml`, log `frond/jobs/E0c-control/run.log`. About $12. Its reading is fixed in the spec: at most 1 refusal in 8 keeps high; 2 or more lets E0c's rule pick medium. E0c's medium arm is done (`bench/results/2026-11-04-e0c/`): 5 of 10 scored passed, $18.02, 6 of 16 refused.
+Nothing runs. E0c is done (`bench/results/2026-11-04-e0c/`): medium effort passed 5 of 10 scored trials at $1.13 a trial, but 6 of 16 were refused against high's 3 of 16, and D61 keeps high as the screening effort. E0 and E0b are done (`bench/results/2026-11-03-e0/`, `bench/results/2026-11-04-e0b/`). The frozen worktree `/home/user/run-e0c` can be removed.
 
 ## Next, in order (research-first, D16)
 
-1. E0c's control: analyse it, apply its fixed reading, amend D26 for E1–E5 if medium wins, record its spending.
-2. E1–E6 and E11 in `research.md`'s order, once REQ-4's remaining money is granted.
+1. E1–E6 and E11 in `research.md`'s order, at high effort (D61), once REQ-4's remaining money is granted.
+2. B20, before E1: the analysis reports refusals per arm and flags an arm refused more than 3 in 16 (D61). A rule that compares arms states how it counts unscorable trials.
 3. G51: mitigated by D59 (an unfinished step is exported; a trial's agent gets 2 hours). Find the cause when an export next shows an unfinished step.
 4. G50 (thinking cut off at the 32k output limit): Opus had 1 cut-off reply in E0b's 16 trials, against Sonnet's 5 in one E0 trial, so on the screening model it may need nothing; decide before E1.
 5. Review findings as they arrive (F1–F78 closed); REQ-3 holds Devin's unposted security findings.
