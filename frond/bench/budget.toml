@@ -82,3 +82,7 @@ why = "2026-11-03: E0 on the json protocol (D53), from usage.json: Haiku's 10 tr
 jobs = "E0b"
 usd = 24.17
 why = "2026-11-04: E0b, 16 Opus 5.5 trials, from their usage.json; the trial interrupted for G51 is included"
+
+[[spent]]
+usd = 4.13
+why = "2026-11-04: G47's replay of a refused request, 6 Opus 5.5 calls outside Harbor, four of which thought until the 32,000-token limit"
