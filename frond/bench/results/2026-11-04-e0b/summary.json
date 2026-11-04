@@ -1,0 +1,76 @@
+{
+ "experiment": "E0b",
+ "title": "Variance on the screening model: two trials per task",
+ "spec": "bench/experiments/e0b-variance.toml",
+ "spec_sha256": "c57bc572c32b",
+ "alpha": 0.05,
+ "excluded_tasks": [],
+ "arms": {
+  "opus": {
+   "tasks": 7,
+   "trials": 13,
+   "planned_trials": 16,
+   "incomplete_tasks": [
+    "biped-contact-dynamics",
+    "glycan-ms2-elucidation"
+   ],
+   "infrastructure_failures": [
+    "biped-contact-dynamics (provider failure)",
+    "biped-contact-dynamics (provider failure)",
+    "glycan-ms2-elucidation (provider failure)"
+   ],
+   "pass_rate": 0.35714285714285715,
+   "pass_rate_interval": [
+    0.07142857142857142,
+    0.7142857142857143
+   ],
+   "cost_per_trial": 1.7327236461538464,
+   "cost_per_solved": 4.50508148,
+   "never_passed": [
+    "glycan-ms2-elucidation",
+    "layout-config-recreation",
+    "layout-config-recreation2",
+    "ontology-kg-querying"
+   ],
+   "within_task_variance": 0.08333333333333333,
+   "between_task_variance": 0.19387755102040816,
+   "configurations": [
+    "{\"approval\": \"yolo\", \"arm\": \"rlm\", \"context\": \"fold\", \"context_window\": null, \"effort\": \"high\", \"fork\": 1, \"freshness\": true, \"layout\": \"turns\", \"max_llm_calls\": 80, \"max_output_chars\": 16000, \"max_steps\": 40, \"model\": \"anthropic/claude-opus-5-5\", \"prompt_cache\": true, \"protocol\": \"json\", \"repl_policy\": \"strict\", \"repl_sandbox\": true, \"scopes\": false, \"step_timeout\": 600, \"sub_effort\": null, \"sub_model\": \"anthropic/claude-haiku-5-5\", \"subagent_steps\": 16, \"worlds\": true}"
+   ],
+   "input_tokens_per_trial": 968341.6153846154,
+   "cache_read_tokens_per_trial": 819571.3076923077,
+   "cache_write_tokens_per_trial": 102311.23076923077,
+   "output_tokens_per_trial": 43570.846153846156,
+   "cache_read_share": 0.8463658843855247,
+   "agent_seconds_per_trial": 1058.0273567692307,
+   "failed_edits_per_trial": 0.0,
+   "stale_actions_per_trial": 0.0,
+   "parse_failures_per_trial": 0.0,
+   "parse_recovered_per_trial": 0.0,
+   "unparsed_steps_per_trial": 0.0,
+   "cut_off_replies_per_trial": 0.0,
+   "sub_cut_off_replies_per_trial": 0.0,
+   "sub_parse_failures_per_trial": 0.0,
+   "sub_parse_recovered_per_trial": 0.0,
+   "sub_unparsed_steps_per_trial": 0.0,
+   "syntax_errors_per_trial": 0.3076923076923077,
+   "compactions_per_trial": 0.0,
+   "summaries_per_trial": 0.0,
+   "steps_per_trial": 19.23076923076923,
+   "branch_steps_per_trial": 0.0,
+   "provider_errors_per_trial": 0.0
+  }
+ },
+ "claims": {},
+ "per_task": {
+  "opus": {
+   "glycan-ms2-elucidation": 0.0,
+   "hof-topology-interpenetration": 1.0,
+   "layout-config-recreation": 0.0,
+   "layout-config-recreation2": 0.0,
+   "mvcc-lsm-compaction": 0.5,
+   "nextjs-performance": 1.0,
+   "ontology-kg-querying": 0.0
+  }
+ }
+}
