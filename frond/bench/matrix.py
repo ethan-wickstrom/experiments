@@ -114,6 +114,9 @@ def command(spec: Spec, cell: Cell, jobs: Path, ca: Path | None) -> list[str]:
         argv += ["--ak", f"{key}={value}"]
     if spec.timeout_multiplier != 1.0:
         argv += ["--timeout-multiplier", str(spec.timeout_multiplier)]
+    # a trial whose agent never returns holds a slot for the whole task timeout otherwise (G51); E0 and E0b's
+    # longest trials took about an hour, so a quarter of TB 4.0's 8 hours leaves room
+    argv += ["--agent-timeout-multiplier", str(spec.agent_timeout_multiplier)]
     if ca is not None:
         argv += ["--extra-docker-compose", str(OVERLAY)]
     for task in cell.tasks:

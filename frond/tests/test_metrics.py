@@ -264,6 +264,37 @@ class UnparsedStepTest(WorkspaceCase):
                 self.assertEqual(sub, expected)
 
 
+class UnfinishedStepTest(WorkspaceCase):
+    def test_a_step_the_run_ends_during_is_exported_with_its_code(self):  # G51: E0b's stuck step left no code
+        import threading
+
+        steps = [Step("Wait for the job.", "import time\nwhile True:\n    time.sleep(0.2)")]
+        agent, _ = scripted_agent(self, steps)
+        timer = threading.Timer(
+            1.5, agent.control.cancel
+        )  # run_turn runs here, not on the agent thread cancel() checks
+        timer.start()
+        self.addCleanup(timer.cancel)
+        agent.run_turn("go")
+        out = Path(tempfile.mkdtemp(prefix="frond-export-"))
+        self.addCleanup(shutil.rmtree, out, True)
+        export_run(agent, out)
+        records = [json.loads(line) for line in (out / "steps.jsonl").read_text().splitlines()]
+        last = records[-1]
+        self.assertTrue(last.get("unfinished"))
+        self.assertIn("while True", last["code"])
+        self.assertEqual(last["reasoning"], "Wait for the job.")
+
+    def test_a_finished_turn_leaves_nothing_unfinished(self):
+        agent, _ = scripted_agent(self, [Step("Done.", "SUBMIT(response='ok')")])
+        agent.run_turn("go")
+        out = Path(tempfile.mkdtemp(prefix="frond-export-"))
+        self.addCleanup(shutil.rmtree, out, True)
+        export_run(agent, out)
+        records = [json.loads(line) for line in (out / "steps.jsonl").read_text().splitlines()]
+        self.assertFalse(any(r.get("unfinished") for r in records))
+
+
 class UsageTotalsTest(unittest.TestCase):
     def test_every_provider_shape_is_counted(self):
         anthropic = SimpleNamespace(

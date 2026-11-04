@@ -384,6 +384,19 @@ def export_run(agent: Agent, directory: Path) -> None:
                 record, reasoning=redact(record.reasoning), code=redact(record.code), output=redact(record.output)
             )
             f.write(json.dumps(dataclasses.asdict(clean), ensure_ascii=False) + "\n")
+        if agent._in_flight is not None:  # the run ended during a step: what it was running (G51)
+            turn, step, reasoning, code = agent._in_flight
+            unfinished = {
+                "kind": "step",
+                "turn": turn,
+                "step": step,
+                "reasoning": redact(reasoning),
+                "code": redact(code),
+                "output": "(the run ended while this step was running)",
+                "error": True,
+                "unfinished": True,
+            }
+            f.write(json.dumps(unfinished, ensure_ascii=False) + "\n")
     usage = {"model": agent.config.model, "sub_model": agent.config.sub_model, **usage_totals(agent.lm, agent.sub_lm)}
     (directory / "usage.json").write_text(redact.json(usage, indent=1))
     with open(directory / "calls.jsonl", "w", encoding="utf-8") as f:
