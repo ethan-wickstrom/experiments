@@ -1,29 +1,30 @@
 # Now
 
-Updated 2026-11-03, second session: the program's first model calls. Under DSPy's field markers about a third of every model's replies were off the protocol (G48), so each code step now replies with one JSON object held to its schema by structured output (D53), and E0 restarts on it. Sonnet 5.5 still refuses some calls (G47); refusals now keep their category (G46). E0 runs from a frozen worktree (D47). Every review finding is closed (F1–F68).
+Updated 2026-11-03, second session: the program's first model calls. E0 is done on the json protocol (D53), where 1 reply in Haiku's 325 was off it, against about a third under DSPy's field markers (G48). The screening model is Opus 5.5 (D56): 3 of 7 scored trials passed, at $1.33 a trial. Tasks its cyber classifier refuses are excluded (D57). The tools arm acts by native tool calls (D55). E1–E6 need money: REQ-4.
 
 ## In flight
 
-E0, the pilot, runs on the json protocol, started 20:05 from a worktree of `main` at D53's merge (25ba8f9) (`/home/user/run-e0`, D47), whose `frond/jobs` links to this checkout's `frond/jobs`: `uv run python -m bench.matrix bench/experiments/e0-pilot.toml`, log `frond/jobs/E0/run.log`. One trial per model on 10 tasks, Haiku, then Sonnet, then Opus (D48); the runner stops before any job that could pass $100 (D43). Four earlier starts are kept for the guard: `jobs/E0-aborted-1` (G36), `jobs/E0-protocol-v1` (G41), `jobs/E0-protocol-v2` (G45) and `jobs/E0-markers`, the fourth: Haiku and Sonnet on the markers, stopped before Opus for G48 (`bench/results/2026-11-03-e0-markers/`: Haiku 0 of 10 at $0.06 a trial, Sonnet 1 of 8 scored at $1.08, 29% and 31% of replies off the protocol, two Sonnet trials refused). None of them is E0's. A VM restart kills the run and Docker: run `scripts/dev-env.sh`, then rerun, which resumes finished jobs.
+E0b, variance on the screening model, runs next: `bench/experiments/e0b-variance.toml`, two Opus trials on each of E0's 8 tasks that D57 keeps, in one job, from a frozen worktree of `main` (`/home/user/run-e0b`, D47) whose `frond/jobs` links to this checkout's: `uv run python -m bench.matrix bench/experiments/e0b-variance.toml`, log `frond/jobs/E0b/run.log`. About $21 expected; the guard allows it (D43). A VM restart kills the run and Docker: run `scripts/dev-env.sh`, then rerun from the same worktree, which resumes.
 
-E0a is done: 53 of the 55 tasks that start pass under the reference solutions, and the three that fail here are excluded (`bench/results/2026-11-03-e0a-oracle/`).
+E0 is done (`bench/results/2026-11-03-e0/`): Haiku 0 of 10, Sonnet 1 of 7 scored, Opus 3 of 7 scored, at $0.04, $0.91 and $1.33 a trial; 89–92% of input read from cache. Its earlier starts are kept for the guard: `jobs/E0-aborted-1` (G36), `jobs/E0-protocol-v1` (G41), `jobs/E0-protocol-v2` (G45), `jobs/E0-markers` (G48, `bench/results/2026-11-03-e0-markers/`). E0a is done: 53 of the 55 tasks that start pass under the reference solutions (`bench/results/2026-11-03-e0a-oracle/`).
 
 ## Next, in order (research-first, D16)
 
-1. E0: analyse with `uv run python -m bench.analyze bench/experiments/e0-pilot.toml --out bench/results/<date>-e0`; the report's protocol table gives adherence per step (D46), which on the json protocol should be whole except for cut-off and refused replies. Compare its pass rates and costs with the markers run (`bench/results/2026-11-03-e0-markers/`). Record the run's spending in `bench/budget.toml` (D49), and each refusal's category (G47).
-2. Review findings: all closed (F1–F68: fixed, verified or declined). New ones go into the ledger as they arrive; REQ-3 holds Devin's unposted security findings.
-3. From E0: the screening model (record it in `decisions.md`, then amend E1–E5 before their first trial), E0b's spec (2 more trials per task on that model, for the variance that sizes E1–E6), and the program's budget, as a new REQ from E0's measured costs: E1 alone, at 56 tasks × 3 trials × 2 arms, is several hundred dollars on Sonnet.
-4. E1–E6 and E11 in the order in `research.md`, once the budget allows; the tools arm now acts by native tool calls (D55).
+1. E0b: analyse with `uv run python -m bench.analyze bench/experiments/e0b-variance.toml --out bench/results/<date>-e0b`, whose within-task variance comes from each task's two trials; record its spending (D49). From its within- and between-task variance, set E1–E6's sample sizes in `research.md`, and amend REQ-4's estimate. Check whether `biped-contact-dynamics` is still refused after a cut-off (G47).
+2. E1–E6 and E11 in the order in `research.md`, once REQ-4 is granted; a partial grant starts E1 first.
+3. G50 (thinking cut off at the 32k output limit), measured on E0b's trials before E1: a larger `max_tokens`, a task budget, or nothing.
+4. Review findings as they arrive (F1–F71 closed); REQ-3 holds Devin's unposted security findings.
 5. B13 (a TUI world view of branches and scopes), B17 (stop latency).
 
 ## Waiting on the owner
 
+- REQ-4: money for E1–E6 on Opus 5.5, about $2,400 at E0's measured cost; E1 alone about $500. Spent so far $39.82 of the $100 grant.
 - REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12, one on #23, one on #33), visible only in the owner's Devin account. Low priority.
 
 ## Facts a fresh session needs
 
 - The key: `CLAUDE_API_KEY` in the environment (REQ-1). Never print it; `echo ${#CLAUDE_API_KEY}` shows that it is there. The runner passes it to Harbor as `ANTHROPIC_API_KEY`. After any paid run, `grep -rlF "$CLAUDE_API_KEY" frond/jobs | wc -l` must print 0.
-- Spending: after every paid run, and for every trial killed before it wrote its cost, add a `[[spent]]` entry to `bench/budget.toml` and commit it, or the next VM's guard will not know about the money (G37, D49). 2026-11-03's second session spent $2.36 before E0's fourth start, and $0.11 on D53's probe and smoke runs.
+- Spending: after every paid run, and for every trial killed before it wrote its cost, add a `[[spent]]` entry to `bench/budget.toml` and commit it, or the next VM's guard will not know about the money (G37, D49). Every 2026-11-03 run is recorded there: $39.82 by E0's end.
 - Paid runs: the paid smoke is `smoke.toml --arms frond` (D45). An experiment runs from a frozen worktree whose `frond/jobs` links here (D47); the runner also stops if frond's source changes between jobs (G35).
 - A run lasts only while the session is active: the container is suspended about a minute after a turn ends, killing detached processes, unless a background task of the session is still running (G44). Wait on a paid run with a background task that ends when the run does; after a restart, run `scripts/dev-env.sh` and rerun the spec, which resumes.
 - Docker: `frond/scripts/dev-env.sh` starts dockerd and serves Docker Hub pulls from mirror.gcr.io, because Docker Hub rate-limits this VM's IP. It also makes Docker's default runtime runc behind a wrapper that sets umask 022, because dockerd 29 runs with umask 0 and `docker exec` inherits it (G26, D39). Start dockerd only through the script; the matrix runner refuses a daemon whose `docker exec` umask is not 0022.

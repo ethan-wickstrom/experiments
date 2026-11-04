@@ -1,0 +1,5 @@
+# TB 4.0 tasks whose E0 trial on the screening model, Opus 5.5, was refused by Anthropic's cyber classifier
+# (`stop_details.category: cyber`), and refused on Sonnet 5.5 too. A refused trial is unscored (G43), and no harness
+# mechanism the experiments compare changes what the classifier reads in a task, so the experiments exclude them (D57).
+kv-live-surgery  # Opus: cyber at step 9; Sonnet: reasoning_extraction ("reverse engineering") at step 18
+uefi-bootkit  # Opus: cyber at step 18; Sonnet: cyber at step 25

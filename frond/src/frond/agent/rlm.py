@@ -691,7 +691,7 @@ class FrondRLM(dspy.RLM):  # ty: ignore[invalid-base]  (RLM is wrapped by @exper
             fields, empty = "`[[ ## code ## ]]` with one ```python block", ""
         why = (  # G38: a reply cut off at the output limit is no format error, and needs a shorter step, not markers
             "Your reply reached the output limit and was cut off before it ended, so nothing ran. Take a smaller "
-            "step: write less code or reasoning at once."
+            "step: do less in this one."  # G47: no word asks about the model's reasoning
             if cut_off
             else NO_CALL
             if native

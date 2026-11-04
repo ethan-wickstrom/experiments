@@ -489,3 +489,15 @@ Each stays closed unless new evidence reopens it:
   - `strict: true` per tool: DSPy's request layer cannot carry it ("no per-tool strict slot"). Arguments are therefore not schema-guaranteed, and a bad call reaches the model as a tool error, as before;
   - forced tool choice: Opus and Sonnet 5.5 refuse it.
 - Evidence: `test_a_reply_without_a_call_is_an_error_step`, `test_a_turn_of_single_tool_calls_fixes_and_answers` (stable call ids, tool specs), `test_the_markers_protocol_keeps_the_field_format`. Probes on Haiku, Sonnet and Opus 5.5 accepted a rebuilt history with tool calls and no thinking blocks. A smoke task in the tools arm passed on each of the three in 3–4 steps with no reply off the protocol, $0.10 in all.
+
+## D56 · The screening model is Opus 5.5 (2026-11-03, active, amends E1–E5's specs)
+- Decision: E1–E5 run on Opus 5.5 at high effort, the model E0 picked by the rule in `research.md`: the cheapest whose pass rate on E0's tasks lies between 20% and 80%. The Opus guess in `bench/budget.toml` becomes $3.00 a trial, above E0's worst measured trial.
+- Why: on the json protocol (`bench/results/2026-11-03-e0/`), Haiku 5.5 passed 0 of 10, Sonnet 5.5 1 of 7 scored (14%, 95% CI 0–43%) and Opus 5.5 3 of 7 (43%, 14–86%); three trials of each of Sonnet and Opus were refused and are unscored. Only Opus is in range. It is also the cheaper per solved task: $3.61 against Sonnet's $6.40, since its trials take fewer steps (20.7 against 23.1) at twice the price per token. An Opus trial cost $1.33 on average, a quarter of the $5 D48 assumed.
+- Rejected: Sonnet, at the low end of its interval but below the rule's floor on its estimate, and refused as often as Opus; Haiku, which solved nothing on either protocol; waiting for E0b before choosing (E0b runs on the screening model, so it needs the choice).
+- Consequence: the screening and the confirming model are the same, so `research.md`'s step "confirm the winners on Opus" is no longer a separate run. E0b's variance and the budget (REQ-4) size E1–E6.
+
+## D57 · Tasks the screening model's cyber classifier refuses are excluded from E1–E6 (2026-11-03, active)
+- Decision: `bench/datasets/terminal-bench@4.0.0-refused-cyber.txt` lists `kv-live-surgery` and `uefi-bootkit`, and E1–E3 exclude it, which leaves 51 TB 4.0 tasks. A task joins the list when its trials on the screening model are refused with `stop_details.category: cyber`.
+- Why: a refused trial is unscored (G43), so such a task costs money and contributes nothing to a comparison. And no mechanism the experiments compare changes the task's content, which is what the cyber classifier reads. Both tasks were refused on Opus as `cyber` (at steps 9 and 18), and on Sonnet too.
+- Rejected: keeping them (about $0.60 a refused trial for no data point); excluding `biped-contact-dynamics` too, whose refusals are `reasoning_extraction` after a cut-off reply, which a harness change may avoid (G47), so E0b keeps it; a fallback model for refused calls (it would change the model under test, D51).
+- Revisit: if a later run on the screening model passes the classifier on a listed task, it returns to the population.

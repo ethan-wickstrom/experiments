@@ -1,8 +1,7 @@
 # E1, hypothesis H1 (research.md): code actions in a persistent REPL solve at least as many tasks as one JSON tool
 # call per step with the same tools, at lower cost. Both arms run frond's harness; only the action space differs
 # (D33). The tools arm gets 100 steps against 40, since each of its steps is a single call.
-# The model is provisional: E0 picks the screening model by the rule in research.md, and any change is recorded in
-# decisions.md before the first trial. Sample size follows E0's variance; these are the planned upper bounds.
+# The model is Opus 5.5, the screening model E0 chose by the rule in research.md (D56). Sample size follows E0's variance; these are the planned upper bounds.
 id = "E1"
 title = "H1: code actions in a persistent REPL against one tool call per step"
 dataset = "terminal-bench/terminal-bench@4.0.0"
@@ -10,9 +9,10 @@ tasks = "datasets/terminal-bench@4.0.0.txt"
 exclude = [
   "datasets/terminal-bench@4.0.0-exceeds-4cpu-nogpu.txt",
   "results/2026-11-03-e0a-oracle/oracle-failures.txt",
+  "datasets/terminal-bench@4.0.0-refused-cyber.txt",  # D57
 ]
 trials = 3
-batch = 14  # four looks over the 53 tasks E0a leaves (14, 14, 14, 11), D44
+batch = 14  # four looks over the 51 tasks E0a and D57 leave (14, 14, 14, 9), D44
 seed = 1
 concurrency = 2
 stop_early = true
@@ -20,13 +20,13 @@ stop_early = true
 [[arms]]
 name = "rlm"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { arm = "rlm", max_steps = "40", effort = "high" }
 
 [[arms]]
 name = "react"
 agent = "frond_harbor:Frond"
-model = "anthropic/claude-sonnet-5-5"
+model = "anthropic/claude-opus-5-5"
 options = { arm = "react", max_steps = "100", effort = "high" }
 
 [[claims]]
