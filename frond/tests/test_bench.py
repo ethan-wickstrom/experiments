@@ -662,7 +662,9 @@ class AnalyzeTest(BenchCase):
         self.assertEqual(arms["treatment"]["refusals"], {"reasoning_extraction": 6})
         self.assertEqual(arms["treatment"]["trials"], 10)  # refused trials are not scored
         text = analyze.report(summary)
-        self.assertIn("Refused by the provider in treatment: 6 of 16 trials (reasoning_extraction 6). That is more", text)
+        self.assertIn(
+            "Refused by the provider in treatment: 6 of 16 trials (reasoning_extraction 6). That is more", text
+        )
         self.assertIn("Refused by the provider in control: 1 of 16 trials (cyber 1).\n", text + "\n")
 
     def test_a_trial_that_did_not_run_its_arm_is_not_scored(self):
