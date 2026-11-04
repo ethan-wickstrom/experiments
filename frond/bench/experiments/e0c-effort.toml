@@ -1,0 +1,34 @@
+# E0c: effort on the screening model (ledger E0c, D60). Descriptive, so no claims: Opus 5.5 at medium effort, two
+# trials on each of E0b's 8 tasks, compared with E0b's two high-effort trials of each (bench/results/2026-11-04-e0b/).
+# It measures what lowering effort does: pass rate, cost, thinking tokens and refusals; it cannot attribute the
+# refusals to thinking length, the prompt or the task (D60, F78).
+# The high arm is E0b's because the owner approved $40 for E0c (REQ-4), which one arm of 16 trials fits and two do
+# not. frond's code steps are unchanged since E0b (later changes touched the tools arm, timeouts and exports only),
+# but the arms run a day apart, so drift in the API falls on one of them.
+# Decision rule, fixed before the first trial: medium becomes the screening effort, amending D26 for E1-E5, if its
+# pass rate is no more than one scored trial in eight below E0b's high (E0b's within-task variance cannot tell less
+# from noise at this size) and it costs less per trial; otherwise high stays. Refusals per trial are reported either way.
+id = "E0c"
+title = "Effort on the screening model: medium, against E0b's high"
+dataset = "terminal-bench/terminal-bench@4.0.0"
+tasks = [
+  "biped-contact-dynamics",
+  "glycan-ms2-elucidation",
+  "hof-topology-interpenetration",
+  "layout-config-recreation",
+  "layout-config-recreation2",
+  "mvcc-lsm-compaction",
+  "nextjs-performance",
+  "ontology-kg-querying",
+]
+trials = 2
+batch = 8
+seed = 0
+concurrency = 2
+agent_timeout_multiplier = 0.25  # TB 4.0's 8-hour agent timeout becomes 2 hours (D59, G51)
+
+[[arms]]
+name = "medium"
+agent = "frond_harbor:Frond"
+model = "anthropic/claude-opus-5-5"
+options = { effort = "medium", protocol = "json" }

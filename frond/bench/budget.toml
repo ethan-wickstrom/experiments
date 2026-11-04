@@ -1,7 +1,7 @@
-# The program's spending cap for model calls (ledger REQ-1, decision D43): the owner's grant of 2026-11-03.
-# The key's Console workspace has the same spend limit, which stops a job midway; bench/matrix.py refuses to start a
-# Harbor job that could take the total past it.
-usd = 100.0
+# The program's spending cap for model calls (decision D43): the owner's grant of $100 on 2026-11-03 (REQ-1) and of
+# $40 more on 2026-11-04 for E0c (REQ-4). The key's Console workspace should have the same spend limit, which stops a
+# job midway; bench/matrix.py refuses to start a Harbor job that could take the total past it.
+usd = 140.0
 
 # A job's trials are assumed to cost the most one trial of their model has cost so far, times this margin.
 margin = 1.5
