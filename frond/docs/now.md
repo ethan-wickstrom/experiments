@@ -4,7 +4,7 @@ Updated 2026-11-03, second session: the program's first model calls. E0 is done 
 
 ## In flight
 
-E0b, variance on the screening model, runs next: `bench/experiments/e0b-variance.toml`, two jobs of one Opus trial on each of E0's 8 tasks that D57 keeps, from a frozen worktree of `main` (`/home/user/run-e0b`, D47) whose `frond/jobs` links to this checkout's: `uv run python -m bench.matrix bench/experiments/e0b-variance.toml`, log `frond/jobs/E0b/run.log`. About $21 expected; the guard allows it (D43). A VM restart kills the run and Docker: run `scripts/dev-env.sh`, then rerun from the same worktree, which resumes.
+E0b, variance on the screening model, runs next: `bench/experiments/e0b-variance.toml`, two Opus trials on each of E0's 8 tasks that D57 keeps, in one job, from a frozen worktree of `main` (`/home/user/run-e0b`, D47) whose `frond/jobs` links to this checkout's: `uv run python -m bench.matrix bench/experiments/e0b-variance.toml`, log `frond/jobs/E0b/run.log`. About $21 expected; the guard allows it (D43). A VM restart kills the run and Docker: run `scripts/dev-env.sh`, then rerun from the same worktree, which resumes.
 
 E0 is done (`bench/results/2026-11-03-e0/`): Haiku 0 of 10, Sonnet 1 of 7 scored, Opus 3 of 7 scored, at $0.04, $0.91 and $1.33 a trial; 89–92% of input read from cache. Its earlier starts are kept for the guard: `jobs/E0-aborted-1` (G36), `jobs/E0-protocol-v1` (G41), `jobs/E0-protocol-v2` (G45), `jobs/E0-markers` (G48, `bench/results/2026-11-03-e0-markers/`). E0a is done: 53 of the 55 tasks that start pass under the reference solutions (`bench/results/2026-11-03-e0a-oracle/`).
 
