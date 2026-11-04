@@ -10,7 +10,7 @@ E0 is done (`bench/results/2026-11-03-e0/`): Haiku 0 of 10, Sonnet 1 of 7 scored
 
 ## Next, in order (research-first, D16)
 
-1. E0b: analyse with `uv run python -m bench.analyze bench/experiments/e0b-variance.toml --out bench/results/<date>-e0b`, together with E0's Opus trials for three per task; record its spending (D49). From its within- and between-task variance, set E1–E6's sample sizes in `research.md`, and amend REQ-4's estimate. Check whether `biped-contact-dynamics` is still refused after a cut-off (G47).
+1. E0b: analyse with `uv run python -m bench.analyze bench/experiments/e0b-variance.toml --out bench/results/<date>-e0b`, whose within-task variance comes from each task's two trials; record its spending (D49). From its within- and between-task variance, set E1–E6's sample sizes in `research.md`, and amend REQ-4's estimate. Check whether `biped-contact-dynamics` is still refused after a cut-off (G47).
 2. E1–E6 and E11 in the order in `research.md`, once REQ-4 is granted; a partial grant starts E1 first.
 3. G50 (thinking cut off at the 32k output limit), measured on E0b's trials before E1: a larger `max_tokens`, a task budget, or nothing.
 4. Review findings as they arrive (F1–F71 closed); REQ-3 holds Devin's unposted security findings.
