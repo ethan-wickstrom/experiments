@@ -18,6 +18,7 @@ Nothing runs. E0b is done (`bench/results/2026-11-04-e0b/`): 5 of 13 scored Opus
 ## Waiting on the owner
 
 - REQ-4: money for E1–E6 on Opus 5.5, about $2,400 at E0's and E0b's measured cost; E1 alone about $500. Spent so far $63.99 of the $100 grant.
+- REQ-5: Codex review credits; Codex hit its usage limit on #51. Until then D58 holds.
 - REQ-3: Devin's unposted security findings (three on PR #2, three on #11, one on #12, one on #23, one on #33), visible only in the owner's Devin account. Low priority.
 
 ## Facts a fresh session needs

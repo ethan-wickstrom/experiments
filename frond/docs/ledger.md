@@ -43,6 +43,7 @@ Only what the agent cannot get itself (D16).
 | REQ-2 | Docker or Daytona for benchmark runs | Harbor runs a TB 4.0 task | closed: not needed | `dockerd` runs in the VM (D23); oracle run passed 2026-11-03 |
 | REQ-3 | Devin's security findings that Devin did not post: three on PR #2, three on #11, one on #12, one on #23, one on #33 (git state; links under `.git` are no longer followed, in case that was it) | each copied here, then fixed or declined | open, low priority | needs the owner's Devin account (was I3); the review pages are `app.devin.ai/review/ethan-wickstrom/experiments/pull/<n>` |
 | REQ-4 | Money for E1–E6 on Opus 5.5, the screening model (D56): about $2,400 at E0's and E0b's measured $1.33–$1.51 a trial (E1 about $510, E2 $590, E3 $410, E4 and E5 about $400 each at 150 steps, E6 $120), with E1–E3 at 51 tasks × 3 trials, as E0b's variance supports (`research.md`); E1 alone needs about $500 | E1 can start | open: asked 2026-11-03 | the $100 grant (REQ-1) holds E0, E0b and the probes: $64.00 spent after E0b. Each experiment runs only when the cap in `bench/budget.toml` covers its worst case (D43), so a partial grant starts E1 first |
+| REQ-5 | Codex review credits: Codex stopped reviewing on 2026-11-04 (#51) at the account's usage limit for code reviews | Codex reviews PRs again | open: asked 2026-11-04 | until then D58: docs-only PRs merge on their checks, code PRs get an independent agent's review |
 
 ## Experiments
 
