@@ -545,6 +545,7 @@ def fake_trial(
     cost_tokens: int = 1000,
     started: str = "",
     config: dict | None = None,
+    refusal: str = "",
 ):
     """A trial directory as Harbor and frond's adapter leave it."""
     directory = job / f"{task}__{n}"
@@ -562,6 +563,8 @@ def fake_trial(
     call = {"model": "claude-opus-5-5", "usage": {"input": cost_tokens, "cache_read": 0, "cache_write": 0, "output": 0}}
     (directory / "agent" / "frond" / "calls.jsonl").write_text(json.dumps(call) + "\n")
     metrics = {"failed_edits": 1, "steps": 10, "config": config if config is not None else TREATMENT}
+    if refusal:  # the provider refused a call: the trial ends as its failure, unscored (G43)
+        metrics.update(error_kind="provider", refusal=refusal)
     (directory / "agent" / "frond" / "metrics.json").write_text(json.dumps(metrics))
 
 
@@ -643,6 +646,26 @@ class AnalyzeTest(BenchCase):
         text = analyze.report(summary)
         self.assertIn("| pass | superiority | 16 |", text)
         self.assertIn("Infrastructure failures and misconfigured trials in treatment", text)
+
+    def test_refusals_are_counted_per_arm_and_flagged_above_e0bs_rate(self):  # B20, D61
+        names = [f"t{i:02d}" for i in range(8)]
+        s = spec.load(self.write_spec(SPEC.format(tasks=", ".join(f'"{n}"' for n in names))))
+        control, treatment = self.dir / "T1-control-b01", self.dir / "T1-treatment-b01"
+        for i, task in enumerate(names):
+            for n in range(2):
+                fake_trial(control, task, n, reward=1.0, config=CONTROL, refusal="cyber" if (i, n) == (0, 0) else "")
+                refused = "reasoning_extraction" if i < 3 else ""
+                fake_trial(treatment, task, n, reward=1.0, refusal=refused)
+        summary = analyze.analyze(s, analyze.job_dirs(s, self.dir), analyze.load_prices())
+        arms = summary["arms"]
+        self.assertEqual((arms["control"]["refused_trials"], arms["control"]["all_trials"]), (1, 16))
+        self.assertEqual(arms["treatment"]["refusals"], {"reasoning_extraction": 6})
+        self.assertEqual(arms["treatment"]["trials"], 10)  # refused trials are not scored
+        text = analyze.report(summary)
+        self.assertIn(
+            "Refused by the provider in treatment: 6 of 16 trials (reasoning_extraction 6). That is more", text
+        )
+        self.assertIn("Refused by the provider in control: 1 of 16 trials (cyber 1).\n", text + "\n")
 
     def test_a_trial_that_did_not_run_its_arm_is_not_scored(self):
         names = [f"t{i:02d}" for i in range(4)]
