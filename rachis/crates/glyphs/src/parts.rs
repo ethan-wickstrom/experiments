@@ -23,12 +23,7 @@ pub fn mirror(knots: &[Knot], cx: f64) -> Vec<Knot> {
 pub fn flip(knots: &[Knot], cy: f64) -> Vec<Knot> {
     knots
         .iter()
-        .map(|k| Knot {
-            z: pt(k.z.x, 2.0 * cy - k.z.y),
-            dir: k.dir.map(|d| -d),
-            pen: k.pen.map(|a| -a),
-            ..*k
-        })
+        .map(|k| Knot { z: pt(k.z.x, 2.0 * cy - k.z.y), dir: k.dir.map(|d| -d), pen: k.pen.map(|a| -a), ..*k })
         .collect()
 }
 
@@ -36,34 +31,18 @@ pub fn flip(knots: &[Knot], cy: f64) -> Vec<Knot> {
 pub fn turn(knots: &[Knot], cx: f64, cy: f64) -> Vec<Knot> {
     knots
         .iter()
-        .map(|k| Knot {
-            z: pt(2.0 * cx - k.z.x, 2.0 * cy - k.z.y),
-            dir: k.dir.map(|d| d + 180.0),
-            ..*k
-        })
+        .map(|k| Knot { z: pt(2.0 * cx - k.z.x, 2.0 * cy - k.z.y), dir: k.dir.map(|d| d + 180.0), ..*k })
         .collect()
 }
 
 /// `knots` moved `dx` to the right.
 pub fn shifted(knots: &[Knot], dx: f64) -> Vec<Knot> {
-    knots
-        .iter()
-        .map(|k| Knot {
-            z: pt(k.z.x + dx, k.z.y),
-            ..*k
-        })
-        .collect()
+    knots.iter().map(|k| Knot { z: pt(k.z.x + dx, k.z.y), ..*k }).collect()
 }
 
 /// `knots` moved by (dx, dy).
 pub fn moved(knots: &[Knot], dx: f64, dy: f64) -> Vec<Knot> {
-    knots
-        .iter()
-        .map(|k| Knot {
-            z: pt(k.z.x + dx, k.z.y + dy),
-            ..*k
-        })
-        .collect()
+    knots.iter().map(|k| Knot { z: pt(k.z.x + dx, k.z.y + dy), ..*k }).collect()
 }
 
 /// A vertical stroke centred on x, cut square at y0 and y1.
@@ -104,14 +83,7 @@ pub struct Arch {
 
 impl Default for Arch {
     fn default() -> Arch {
-        Arch {
-            stem: None,
-            hair: None,
-            branch: None,
-            lean: 0.54,
-            spring: 58.0,
-            drop: 1.08,
-        }
+        Arch { stem: None, hair: None, branch: None, lean: 0.54, spring: 58.0, drop: 1.08 }
     }
 }
 
@@ -148,13 +120,7 @@ pub struct Bowl {
 
 impl Default for Bowl {
     fn default() -> Bowl {
-        Bowl {
-            stem: None,
-            hair: None,
-            branch: 0.30,
-            spring: 58.0,
-            lean: 0.50,
-        }
+        Bowl { stem: None, hair: None, branch: 0.30, spring: 58.0, lean: 0.50 }
     }
 }
 
@@ -197,42 +163,20 @@ pub fn cut_pen(x: f64, y: f64, t: f64, dir: f64, pen: f64) -> Knot {
 /// centre line.
 pub fn diag(x0: f64, y0: f64, x1: f64, y1: f64, t: f64) -> Vec<Knot> {
     let breadth = t * (x1 - x0).hypot(y1 - y0) / (y1 - y0).abs();
-    vec![
-        knot(x0, y0, breadth).pen(0.0).line(),
-        knot(x1, y1, breadth).pen(0.0),
-    ]
+    vec![knot(x0, y0, breadth).pen(0.0).line(), knot(x1, y1, breadth).pen(0.0)]
 }
 
 /// A stem centred on `x` that runs from `y_from` towards `y_edge`, turns a rounded corner and ends as a
 /// horizontal foot whose outer edge lies on `y_edge` and whose vertical cut is at `x_end`. `r` is the radius of
 /// the corner on the centre line. It is the tail of l, t and j and the hook of f.
-pub fn elbow(
-    x: f64,
-    y_from: f64,
-    y_edge: f64,
-    x_end: f64,
-    sw: f64,
-    hw: f64,
-    k: f64,
-    r: f64,
-) -> Vec<Knot> {
+pub fn elbow(x: f64, y_from: f64, y_edge: f64, x_end: f64, sw: f64, hw: f64, k: f64, r: f64) -> Vec<Knot> {
     let down = y_from > y_edge;
     let right = x_end > x;
-    let yc = if down {
-        y_edge + hw / 2.0
-    } else {
-        y_edge - hw / 2.0
-    };
+    let yc = if down { y_edge + hw / 2.0 } else { y_edge - hw / 2.0 };
     vec![
         knot(x, y_from, sw).pen(0.0).line(),
-        knot(x, if down { yc + r } else { yc - r }, sw)
-            .pen(0.0)
-            .dir(if down { -90.0 } else { 90.0 })
-            .k(k),
-        knot(if right { x + r } else { x - r }, yc, hw)
-            .pen(90.0)
-            .dir(if right { 0.0 } else { 180.0 })
-            .line(),
+        knot(x, if down { yc + r } else { yc - r }, sw).pen(0.0).dir(if down { -90.0 } else { 90.0 }).k(k),
+        knot(if right { x + r } else { x - r }, yc, hw).pen(90.0).dir(if right { 0.0 } else { 180.0 }).line(),
         knot(x_end, yc, hw).pen(90.0),
     ]
 }
@@ -268,16 +212,7 @@ pub fn vee_x(x0: f64, x1: f64, y_top: f64, y_bot: f64, t: f64, apex: f64, y: f64
 /// The bowl of D, P, B and R: a bar from the stem centred on `xl` along the top, a round side whose outer edge
 /// reaches `x_edge`, and a bar back along the bottom. The outer edge spans `y0` to `y1`; `flat` is the length of
 /// the straight part of each bar, measured from `xl`.
-pub fn dbowl(
-    xl: f64,
-    x_edge: f64,
-    y0: f64,
-    y1: f64,
-    sw: f64,
-    hw: f64,
-    k: f64,
-    flat: f64,
-) -> Vec<Knot> {
+pub fn dbowl(xl: f64, x_edge: f64, y0: f64, y1: f64, sw: f64, hw: f64, k: f64, flat: f64) -> Vec<Knot> {
     let (yt, yb) = (y1 - hw / 2.0, y0 + hw / 2.0);
     let xc = x_edge - sw / 2.0;
     vec![

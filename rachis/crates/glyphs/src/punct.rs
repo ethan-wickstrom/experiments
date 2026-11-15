@@ -6,9 +6,7 @@
 
 use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
 
-use crate::parts::{
-    Bowl, bowl, cut, cut_pen, dbowl, diag, flip, hbar, mirror, ring, turn, vee, vstem,
-};
+use crate::parts::{Bowl, bowl, cut, cut_pen, dbowl, diag, flip, hbar, mirror, ring, turn, vee, vstem};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Measurements this group derives from the parameters. Each is a candidate for params.py.
@@ -108,11 +106,7 @@ fn bullet(g: &mut Draw) {
 fn triangle_bullet(g: &mut Draw) {
     let p = g.p;
     let h = 1.6 * p.punct;
-    g.poly(&[
-        pt(p.mid() - 0.8 * h, p.axis + h),
-        pt(p.mid() - 0.8 * h, p.axis - h),
-        pt(p.mid() + 0.9 * h, p.axis),
-    ]);
+    g.poly(&[pt(p.mid() - 0.8 * h, p.axis + h), pt(p.mid() - 0.8 * h, p.axis - h), pt(p.mid() + 0.9 * h, p.axis)]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -120,10 +114,7 @@ fn triangle_bullet(g: &mut Draw) {
 
 fn exclam_knots(p: &Params, x: f64, scale: f64) -> Vec<Knot> {
     let w = p.cap_stem * scale;
-    vec![
-        knot(x, p.cap, 1.12 * w).pen(0.0).line(),
-        knot(x, mark_foot(p), 0.84 * w).pen(0.0),
-    ]
+    vec![knot(x, p.cap, 1.12 * w).pen(0.0).line(), knot(x, mark_foot(p), 0.84 * w).pen(0.0)]
 }
 
 /// The hook of the question mark between `x0` and `x1`, ending in a short stem centred on `xs`.
@@ -134,10 +125,7 @@ fn question_knots(p: &Params, x0: f64, x1: f64, xs: f64, sw: f64, hw: f64) -> Ve
         cut(x0, p.cap - 0.175 * p.cap, hw * 1.04, 44.0),
         knot(cx, top, hw).dir(0.0).k(p.sq),
         knot(x1 - sw / 2.0, p.cap * 0.735, sw).dir(-90.0),
-        knot(xs, p.cap * 0.455, sw * 0.96)
-            .pen(0.0)
-            .dir(-90.0)
-            .line(),
+        knot(xs, p.cap * 0.455, sw * 0.96).pen(0.0).dir(-90.0).line(),
         knot(xs, mark_foot(p), sw * 0.90).pen(0.0),
     ]
 }
@@ -157,25 +145,14 @@ fn exclamdown(g: &mut Draw) {
 fn question(g: &mut Draw) {
     let p = g.p;
     let xs = p.mid() + 6.0;
-    g.stroke(&question_knots(
-        p,
-        122.0,
-        p.width - 116.0,
-        xs,
-        p.cap_stem,
-        p.cap_hair,
-    ));
+    g.stroke(&question_knots(p, 122.0, p.width - 116.0, xs, p.cap_stem, p.cap_hair));
     g.dot(xs, dot_y(p), p.punct);
 }
 
 fn questiondown(g: &mut Draw) {
     let p = g.p;
     let xs = p.mid() + 6.0;
-    g.stroke(&turn(
-        &question_knots(p, 122.0, p.width - 116.0, xs, p.cap_stem, p.cap_hair),
-        p.mid(),
-        p.xh / 2.0,
-    ));
+    g.stroke(&turn(&question_knots(p, 122.0, p.width - 116.0, xs, p.cap_stem, p.cap_hair), p.mid(), p.xh / 2.0));
     g.dot(p.width - xs, p.xh - dot_y(p), p.punct);
 }
 
@@ -209,13 +186,7 @@ fn quotedbl(g: &mut Draw) {
 
 fn grave(g: &mut Draw) {
     let p = g.p;
-    g.stroke(&diag(
-        p.mid() - 96.0,
-        p.asc,
-        p.mid() + 96.0,
-        p.asc - 270.0,
-        p.stem * 1.12,
-    ));
+    g.stroke(&diag(p.mid() - 96.0, p.asc, p.mid() + 96.0, p.asc - 270.0, p.stem * 1.12));
 }
 
 /// the dot of a curly quote, relative to the period
@@ -407,12 +378,7 @@ fn hyphen_nonbreaking(g: &mut Draw) {
 
 fn endash(g: &mut Draw) {
     let p = g.p;
-    g.stroke(&hbar(
-        p.mid() - 238.0,
-        p.mid() + 238.0,
-        p.axis,
-        dash_weight(p),
-    ));
+    g.stroke(&hbar(p.mid() - 238.0, p.mid() + 238.0, p.axis, dash_weight(p)));
 }
 
 fn figuredash(g: &mut Draw) {
@@ -462,12 +428,7 @@ fn at(g: &mut Draw) {
         p.width - 196.0,
         by0,
         by1,
-        Bowl {
-            stem: Some(sw),
-            hair: Some(hw),
-            branch: 0.26,
-            ..Bowl::default()
-        },
+        Bowl { stem: Some(sw), hair: Some(hw), branch: 0.26, ..Bowl::default() },
     );
     g.stroke(&mirror(&inner, p.mid()));
 }
@@ -491,13 +452,7 @@ fn ampersand(g: &mut Draw) {
         knot(xb - us / 2.0, p.cap * 0.765, us).dir(-90.0),
         knot(x0 + sw / 2.0, p.cap * 0.265, sw).dir(-90.0).k(p.sq),
         knot(x0 + 208.0, bot, hw).dir(0.0),
-        cut_pen(
-            right + 6.0 - arm.w / 2.0,
-            p.cap * 0.46,
-            hw * 1.04,
-            64.0,
-            0.0,
-        ),
+        cut_pen(right + 6.0 - arm.w / 2.0, p.cap * 0.46, hw * 1.04, 64.0, 0.0),
     ]);
 }
 
@@ -508,12 +463,7 @@ fn dollar(g: &mut Draw) {
     g.use_char('S', 0.0, 0.0);
     let w = p.cap_stem * 0.92;
     let reach = 96.0;
-    g.stroke(&vstem(
-        p.mid() + 2.0,
-        p.cap - p.cap_hair / 2.0,
-        p.cap + reach,
-        w,
-    ));
+    g.stroke(&vstem(p.mid() + 2.0, p.cap - p.cap_hair / 2.0, p.cap + reach, w));
     g.stroke(&vstem(p.mid() - 2.0, -reach, p.cap_hair / 2.0, w));
 }
 
@@ -526,22 +476,8 @@ fn percent(g: &mut Draw) {
     let p = g.p;
     let (_, hw) = small_strokes(p);
     let (w, h) = (246.0, 308.0);
-    g.stroke_closed(&percent_ring(
-        p,
-        22.0,
-        22.0 + w,
-        p.cap + p.over - h,
-        p.cap + p.over,
-        1.0,
-    ));
-    g.stroke_closed(&percent_ring(
-        p,
-        p.width - 22.0 - w,
-        p.width - 22.0,
-        -p.over,
-        -p.over + h,
-        1.0,
-    ));
+    g.stroke_closed(&percent_ring(p, 22.0, 22.0 + w, p.cap + p.over - h, p.cap + p.over, 1.0));
+    g.stroke_closed(&percent_ring(p, p.width - 22.0 - w, p.width - 22.0, -p.over, -p.over + h, 1.0));
     g.stroke(&diag(112.0, 0.0, p.width - 112.0, p.cap, hw * 1.08));
 }
 
@@ -549,14 +485,7 @@ fn perthousand(g: &mut Draw) {
     let p = g.p;
     let (_, hw) = small_strokes(p);
     let (w, h) = (190.0, 270.0);
-    g.stroke_closed(&percent_ring(
-        p,
-        8.0,
-        8.0 + w,
-        p.cap + p.over - h,
-        p.cap + p.over,
-        0.84,
-    ));
+    g.stroke_closed(&percent_ring(p, 8.0, 8.0 + w, p.cap + p.over - h, p.cap + p.over, 0.84));
     g.stroke_closed(&percent_ring(
         p,
         p.width - 4.0 - 2.0 * w + 6.0,
@@ -565,14 +494,7 @@ fn perthousand(g: &mut Draw) {
         -p.over + h,
         0.84,
     ));
-    g.stroke_closed(&percent_ring(
-        p,
-        p.width - 4.0 - w,
-        p.width - 4.0,
-        -p.over,
-        -p.over + h,
-        0.84,
-    ));
+    g.stroke_closed(&percent_ring(p, p.width - 4.0 - w, p.width - 4.0, -p.over, -p.over + h, 0.84));
     g.stroke(&diag(84.0, 0.0, 330.0, p.cap, hw * 0.96));
 }
 
@@ -672,29 +594,14 @@ const MARK_BOT: f64 = -110.0;
 fn dagger(g: &mut Draw) {
     let p = g.p;
     g.stroke(&vstem(p.mid(), MARK_BOT, p.cap, p.cap_stem));
-    g.stroke(&hbar(
-        p.mid() - 196.0,
-        p.mid() + 196.0,
-        p.cap * 0.66,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(p.mid() - 196.0, p.mid() + 196.0, p.cap * 0.66, p.cap_hair));
 }
 
 fn daggerdbl(g: &mut Draw) {
     let p = g.p;
     g.stroke(&vstem(p.mid(), MARK_BOT, p.cap, p.cap_stem));
-    g.stroke(&hbar(
-        p.mid() - 196.0,
-        p.mid() + 196.0,
-        p.cap * 0.66,
-        p.cap_hair,
-    ));
-    g.stroke(&hbar(
-        p.mid() - 196.0,
-        p.mid() + 196.0,
-        p.cap + MARK_BOT - p.cap * 0.66,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(p.mid() - 196.0, p.mid() + 196.0, p.cap * 0.66, p.cap_hair));
+    g.stroke(&hbar(p.mid() - 196.0, p.mid() + 196.0, p.cap + MARK_BOT - p.cap * 0.66, p.cap_hair));
 }
 
 /// The upper stroke of the section sign in the box (x0, y0)-(x1, y1): the top half of an S, its spine, and a
@@ -753,15 +660,7 @@ fn paragraph(g: &mut Draw) {
     let k = 0.75 * p.sq;
     let upper = pt(xc, yt) * k + (pt(xf, yt) + pt(xc, ym)) / 2.0 * (1.0 - k);
     let lower = pt(xc, ybc) * k + (pt(xf, ybc) + pt(xc, ym)) / 2.0 * (1.0 - k);
-    g.poly(&[
-        pt(x1, yt),
-        pt(xf, yt),
-        upper,
-        pt(xc, ym),
-        lower,
-        pt(xf, ybc),
-        pt(x1, ybc),
-    ]);
+    g.poly(&[pt(x1, yt), pt(xf, yt), upper, pt(xc, ym), lower, pt(xf, ybc), pt(x1, ybc)]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -799,10 +698,7 @@ fn small_a(g: &mut Draw, x0: f64, x1: f64, y0: f64, y1: f64, f: f64) {
     g.stroke(&[
         cut(x0 + 16.0, y1 - 0.21 * h, hw * 1.04, 40.0),
         knot(crest, top, hw).dir(0.0).k(p.sq),
-        knot(xr, top - 0.9 * (xr - crest), sw)
-            .pen(0.0)
-            .dir(-90.0)
-            .line(),
+        knot(xr, top - 0.9 * (xr - crest), sw).pen(0.0).dir(-90.0).line(),
         knot(xr, y0, sw).pen(0.0),
     ]);
     let bt = y0 + 0.59 * h;
@@ -811,17 +707,10 @@ fn small_a(g: &mut Draw, x0: f64, x1: f64, y0: f64, y1: f64, f: f64) {
     let bx = x0 + 0.52 * (xr - sw / 2.0 - x0);
     g.stroke(&[
         knot(xr, bt - hw / 2.0, hw).pen(90.0).dir(180.0).line(),
-        knot(bx + 16.0, bt - hw / 2.0, hw)
-            .pen(90.0)
-            .dir(180.0)
-            .k(p.sq),
+        knot(bx + 16.0, bt - hw / 2.0, hw).pen(90.0).dir(180.0).k(p.sq),
         knot(x0 + sw / 2.0, (bt + y0) / 2.0, sw).dir(-90.0).k(p.sq),
         knot(bx, bot, hw).dir(0.0),
-        Knot::at(
-            pt(xr - sw / 2.0 + 3.0, y0 + 0.19 * h) + ((j / 2.0) * V::unit(52.0)).right(),
-            j,
-        )
-        .dir(52.0),
+        Knot::at(pt(xr - sw / 2.0 + 3.0, y0 + 0.19 * h) + ((j / 2.0) * V::unit(52.0)).right(), j).dir(52.0),
     ]);
 }
 
@@ -834,16 +723,7 @@ fn small_R(g: &mut Draw, x0: f64, x1: f64, y0: f64, y1: f64, f: f64) {
     let x = x0 + sw / 2.0;
     let waist = y0 + 0.45 * h;
     g.stroke(&vstem(x, y0, y1, sw));
-    g.stroke(&dbowl(
-        x,
-        x1 - 6.0,
-        waist - hw / 2.0,
-        y1,
-        sw,
-        hw,
-        p.sq,
-        0.34 * (x1 - x0),
-    ));
+    g.stroke(&dbowl(x, x1 - 6.0, waist - hw / 2.0, y1, sw, hw, p.sq, 0.34 * (x1 - x0)));
     let leg = diag(0.0, waist, x1 - 0.55 * sw, y0, sw * 0.96)[1];
     g.stroke(&[knot((x0 + x1) / 2.0, waist, sw * 0.96).line(), leg]);
 }
@@ -922,40 +802,19 @@ fn _ordinal_bar(g: &mut Draw) -> f64 {
 fn ordmasculine(g: &mut Draw) {
     let p = g.p;
     let y0 = _ordinal_bar(g);
-    g.stroke_closed(&small_ring(
-        p,
-        ORDINAL.0 + 6.0,
-        ORDINAL.1 - 6.0,
-        y0 - p.over / 2.0,
-        p.cap + p.over,
-        1.0,
-    ));
+    g.stroke_closed(&small_ring(p, ORDINAL.0 + 6.0, ORDINAL.1 - 6.0, y0 - p.over / 2.0, p.cap + p.over, 1.0));
 }
 
 fn ordfeminine(g: &mut Draw) {
     let p = g.p;
     let y0 = _ordinal_bar(g);
-    small_a(
-        g,
-        ORDINAL.0 + 12.0,
-        ORDINAL.1 - 14.0,
-        y0,
-        p.cap + p.over,
-        1.0,
-    );
+    small_a(g, ORDINAL.0 + 12.0, ORDINAL.1 - 14.0, y0, p.cap + p.over, 1.0);
 }
 
 fn degree(g: &mut Draw) {
     let p = g.p;
     let d = 276.0;
-    g.stroke_closed(&small_ring(
-        p,
-        p.mid() - d / 2.0,
-        p.mid() + d / 2.0,
-        p.cap + p.over - d,
-        p.cap + p.over,
-        1.0,
-    ));
+    g.stroke_closed(&small_ring(p, p.mid() - d / 2.0, p.mid() + d / 2.0, p.cap + p.over - d, p.cap + p.over, 1.0));
 }
 
 fn numero(g: &mut Draw) {
@@ -963,20 +822,8 @@ fn numero(g: &mut Draw) {
     let (_, hw) = small_strokes(p);
     small_N(g, 22.0, 318.0, 0.0, p.cap, 0.94);
     let (x0, x1) = (356.0, p.width - 14.0);
-    g.stroke_closed(&small_ring(
-        p,
-        x0,
-        x1,
-        p.cap + p.over - 300.0,
-        p.cap + p.over,
-        0.9,
-    ));
-    g.stroke(&hbar(
-        x0 + 8.0,
-        x1 - 8.0,
-        p.cap - 392.0 + hw / 2.0,
-        hw * 0.9,
-    ));
+    g.stroke_closed(&small_ring(p, x0, x1, p.cap + p.over - 300.0, p.cap + p.over, 0.9));
+    g.stroke(&hbar(x0 + 8.0, x1 - 8.0, p.cap - 392.0 + hw / 2.0, hw * 0.9));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -987,24 +834,11 @@ fn currency(g: &mut Draw) {
     let (_sw, hw) = small_strokes(p);
     let cy = p.cap / 2.0;
     let r = 158.0;
-    g.stroke_closed(&small_ring(
-        p,
-        p.mid() - r,
-        p.mid() + r,
-        cy - r,
-        cy + r,
-        1.08,
-    ));
+    g.stroke_closed(&small_ring(p, p.mid() - r, p.mid() + r, cy - r, cy + r, 1.08));
     let (a, b) = (0.62 * r, 240.0);
     for sx in [-1.0, 1.0] {
         for sy in [-1.0, 1.0] {
-            g.stroke(&diag(
-                p.mid() + sx * a,
-                cy + sy * a,
-                p.mid() + sx * b,
-                cy + sy * b,
-                hw * 1.08,
-            ));
+            g.stroke(&diag(p.mid() + sx * a, cy + sy * a, p.mid() + sx * b, cy + sy * b, hw * 1.08));
         }
     }
 }
@@ -1041,12 +875,7 @@ fn yen(g: &mut Draw) {
     g.poly(&vee(34.0, p.width - 34.0, p.cap, yv, t, sw));
     g.stroke(&vstem(p.mid(), 0.0, yv + sw, sw));
     for y in [p.cap * 0.40, p.cap * 0.40 - 1.9 * hw] {
-        g.stroke(&hbar(
-            p.mid() - 190.0,
-            p.mid() + 190.0,
-            y - hw * 0.45,
-            hw * 0.9,
-        ));
+        g.stroke(&hbar(p.mid() - 190.0, p.mid() + 190.0, y - hw * 0.45, hw * 0.9));
     }
 }
 

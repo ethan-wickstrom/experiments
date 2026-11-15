@@ -49,14 +49,8 @@ impl Model {
         type Key = (usize, isize, Vec<usize>, Vec<i8>, Vec<f64>);
         let key = |loc: &Vec<f64>| -> Key {
             let involved: Vec<usize> = (0..axes).filter(|&a| loc[a] != 0.0).collect();
-            let on_point = involved
-                .iter()
-                .filter(|&&a| axis_points[a].contains(&loc[a]))
-                .count();
-            let signs = involved
-                .iter()
-                .map(|&a| if loc[a] < 0.0 { -1 } else { 1 })
-                .collect();
+            let on_point = involved.iter().filter(|&&a| axis_points[a].contains(&loc[a])).count();
+            let signs = involved.iter().map(|&a| if loc[a] < 0.0 { -1 } else { 1 }).collect();
             let sizes = involved.iter().map(|&a| loc[a].abs()).collect();
             (involved.len(), -(on_point as isize), involved, signs, sizes)
         };
@@ -102,9 +96,7 @@ impl Model {
                     continue; // a master on other axes does not take part
                 }
                 let inside = (0..axes).all(|a| match (region[a], prev[a]) {
-                    (Some((lower, peak, upper)), Some((_, p, _))) => {
-                        p == peak || (lower < p && p < upper)
-                    }
+                    (Some((lower, peak, upper)), Some((_, p, _))) => p == peak || (lower < p && p < upper),
                     _ => true,
                 });
                 if !inside {
@@ -114,8 +106,7 @@ impl Model {
                 let mut best: Vec<(usize, Tent)> = Vec::new();
                 let mut best_ratio = -1.0;
                 for a in 0..axes {
-                    let (Some((lower, peak, upper)), Some((_, val, _))) = (region[a], prev[a])
-                    else {
+                    let (Some((lower, peak, upper)), Some((_, val, _))) = (region[a], prev[a]) else {
                         continue;
                     };
                     let (cut, ratio) = if val < peak {
@@ -154,12 +145,7 @@ impl Model {
                     .collect()
             })
             .collect();
-        Ok(Model {
-            axes,
-            order,
-            supports,
-            weights,
-        })
+        Ok(Model { axes, order, supports, weights })
     }
 
     pub fn axis_count(&self) -> usize {
@@ -178,10 +164,7 @@ impl Model {
     /// The regions of the non-default masters, in model order: one tent per axis ((0, 0, 0) where the axis is
     /// not involved).
     pub fn regions(&self) -> Vec<Vec<Tent>> {
-        self.supports[1..]
-            .iter()
-            .map(|s| s.iter().map(|t| t.unwrap_or((0.0, 0.0, 0.0))).collect())
-            .collect()
+        self.supports[1..].iter().map(|s| s.iter().map(|t| t.unwrap_or((0.0, 0.0, 0.0))).collect()).collect()
     }
 
     /// The differences each master makes. `values` are in the caller's master order; the result is in model
@@ -205,11 +188,7 @@ impl Model {
 
     /// The value at `location`, from the master values in the caller's order.
     pub fn interpolate(&self, values: &[f64], location: &[f64]) -> f64 {
-        self.deltas(values)
-            .iter()
-            .zip(self.scalars(location))
-            .map(|(d, s)| d * s)
-            .sum()
+        self.deltas(values).iter().zip(self.scalars(location)).map(|(d, s)| d * s).sum()
     }
 }
 
@@ -230,11 +209,7 @@ fn scalar(location: &[f64], support: &[Option<Tent>]) -> f64 {
         if v <= lower || upper <= v {
             return 0.0;
         }
-        out *= if v < peak {
-            (v - lower) / (peak - lower)
-        } else {
-            (v - upper) / (peak - upper)
-        };
+        out *= if v < peak { (v - lower) / (peak - lower) } else { (v - upper) / (peak - upper) };
     }
     out
 }
@@ -246,10 +221,7 @@ mod tests {
     #[test]
     fn two_ends_of_one_axis() {
         let m = Model::new(&[vec![-1.0], vec![0.0], vec![1.0]]).unwrap();
-        assert_eq!(
-            m.regions(),
-            vec![vec![(-1.0, -1.0, 0.0)], vec![(0.0, 1.0, 1.0)]]
-        );
+        assert_eq!(m.regions(), vec![vec![(-1.0, -1.0, 0.0)], vec![(0.0, 1.0, 1.0)]]);
         // values in the caller's order: light 60, regular 88, bold 134
         assert_eq!(m.deltas(&[60.0, 88.0, 134.0]), vec![88.0, -28.0, 46.0]);
         assert_eq!(m.interpolate(&[60.0, 88.0, 134.0], &[0.5]), 111.0);
@@ -260,19 +232,10 @@ mod tests {
     #[test]
     fn an_intermediate_master_cuts_the_region_beyond_it() {
         let m = Model::new(&[vec![0.0], vec![0.5], vec![1.0]]).unwrap();
-        assert_eq!(
-            m.regions(),
-            vec![vec![(0.0, 0.5, 1.0)], vec![(0.5, 1.0, 1.0)]]
-        );
+        assert_eq!(m.regions(), vec![vec![(0.0, 0.5, 1.0)], vec![(0.5, 1.0, 1.0)]]);
         // a value that is not linear in the axis is still reproduced at every master
         let values = [10.0, 30.0, 40.0];
-        for (loc, want) in [
-            (0.0, 10.0),
-            (0.5, 30.0),
-            (1.0, 40.0),
-            (0.25, 20.0),
-            (0.75, 35.0),
-        ] {
+        for (loc, want) in [(0.0, 10.0), (0.5, 30.0), (1.0, 40.0), (0.25, 20.0), (0.75, 35.0)] {
             assert!((m.interpolate(&values, &[loc]) - want).abs() < 1e-12);
         }
     }
@@ -280,20 +243,11 @@ mod tests {
     #[test]
     fn a_corner_master_holds_only_what_the_axes_do_not_explain() {
         // default, the end of each axis, and the corner
-        let m = Model::new(&[
-            vec![0.0, 0.0],
-            vec![1.0, 0.0],
-            vec![0.0, 1.0],
-            vec![1.0, 1.0],
-        ])
-        .unwrap();
+        let m = Model::new(&[vec![0.0, 0.0], vec![1.0, 0.0], vec![0.0, 1.0], vec![1.0, 1.0]]).unwrap();
         let d = m.deltas(&[100.0, 110.0, 130.0, 145.0]);
         assert_eq!(d, vec![100.0, 10.0, 30.0, 5.0]);
         assert!(
-            (m.interpolate(&[100.0, 110.0, 130.0, 145.0], &[0.5, 0.5])
-                - (100.0 + 5.0 + 15.0 + 1.25))
-                .abs()
-                < 1e-12
+            (m.interpolate(&[100.0, 110.0, 130.0, 145.0], &[0.5, 0.5]) - (100.0 + 5.0 + 15.0 + 1.25)).abs() < 1e-12
         );
     }
 

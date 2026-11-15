@@ -1,7 +1,7 @@
 //! Structural checks on glyph programs: what must hold before a font is built from them.
 
-use crate::glyph::{Glyph, Registry, build};
-use crate::params::{Params, italic_masters, upright_masters};
+use crate::glyph::{Glyph, Registry};
+use crate::params::{Params, faces};
 
 /// Glyphs may reach this far past the cell's sides before the check remarks on it.
 const SIDE_ALLOWANCE: f64 = 4.0;
@@ -30,10 +30,13 @@ pub fn check_glyphs(registry: &Registry, names: Option<&[String]>) -> Report {
             report.problems.push(format!("{name}: no such glyph"));
             continue;
         };
-        for group in [upright_masters(), italic_masters()] {
-            let built: Vec<(&Params, Glyph)> = group.iter().map(|p| (p, build(spec, p))).collect();
+        for group in faces().into_iter().filter(|f| f.has(spec.module)).map(|f| f.masters) {
+            let built: Vec<(&Params, Glyph)> = group.iter().map(|p| (p, registry.build(spec, p))).collect();
             let mut failed = false;
             for (p, g) in &built {
+                if p.mono && g.advance != if spec.opt.mark { 0.0 } else { spec.opt.advance.unwrap_or(p.width) } {
+                    report.problems.push(format!("{name} [{}]: advance {} in a fixed-pitch face", p.name, g.advance));
+                }
                 for e in &g.errors {
                     report.problems.push(format!("{name} [{}]: {e}", p.name));
                     failed = true;
@@ -55,41 +58,20 @@ pub fn check_glyphs(registry: &Registry, names: Option<&[String]>) -> Report {
             for (p, g) in &built {
                 for (base, _) in &g.components {
                     if registry.get(base).is_none() {
-                        report
-                            .problems
-                            .push(format!("{name}: component {base:?} is not a glyph"));
+                        report.problems.push(format!("{name}: component {base:?} is not a glyph"));
                     }
-                }
-                let expected = if spec.opt.mark {
-                    0.0
-                } else {
-                    spec.opt.advance.unwrap_or(p.width)
-                };
-                if g.advance != expected {
-                    report.problems.push(format!(
-                        "{name} [{}]: advance {}, expected {expected}",
-                        p.name, g.advance
-                    ));
                 }
                 for (i, c) in g.contours.iter().enumerate() {
                     if c.area().abs() < 1.0 {
-                        report
-                            .problems
-                            .push(format!("{name} [{}]: contour {i} has no area", p.name));
+                        report.problems.push(format!("{name} [{}]: contour {i} has no area", p.name));
                     }
                     let wild = c.segs.iter().any(|s| {
-                        [s.start(), s.end()].iter().any(|z| {
-                            !z.x.is_finite()
-                                || !z.y.is_finite()
-                                || z.x.abs() > 1e5
-                                || z.y.abs() > 1e5
-                        })
+                        [s.start(), s.end()]
+                            .iter()
+                            .any(|z| !z.x.is_finite() || !z.y.is_finite() || z.x.abs() > 1e5 || z.y.abs() > 1e5)
                     });
                     if wild {
-                        report.problems.push(format!(
-                            "{name} [{}]: contour {i} has a wild coordinate",
-                            p.name
-                        ));
+                        report.problems.push(format!("{name} [{}]: contour {i} has a wild coordinate", p.name));
                     }
                 }
                 let Some((x0, y0, x1, y1)) = g.bounds() else {
@@ -100,16 +82,12 @@ pub fn check_glyphs(registry: &Registry, names: Option<&[String]>) -> Report {
                 };
                 if !spec.opt.upright && !p.italic() && !spec.opt.mark {
                     if x0 < -SIDE_ALLOWANCE || x1 > g.advance + SIDE_ALLOWANCE {
-                        report.notes.push(format!(
-                            "{name} [{}]: reaches outside its cell: x from {x0:.0} to {x1:.0}",
-                            p.name
-                        ));
+                        report
+                            .notes
+                            .push(format!("{name} [{}]: reaches outside its cell: x from {x0:.0} to {x1:.0}", p.name));
                     }
                     if y1 > p.asc + 260.0 || y0 < p.desc - 120.0 {
-                        report.notes.push(format!(
-                            "{name} [{}]: very tall or deep: y from {y0:.0} to {y1:.0}",
-                            p.name
-                        ));
+                        report.notes.push(format!("{name} [{}]: very tall or deep: y from {y0:.0} to {y1:.0}", p.name));
                     }
                 }
             }

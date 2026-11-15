@@ -41,12 +41,7 @@ impl Cell {
 
     /// The rectangle between the given fractions of the cell's width and height.
     pub fn part(&self, fx0: f64, fy0: f64, fx1: f64, fy1: f64) -> Rect {
-        (
-            self.x0 + fx0 * self.w(),
-            self.y0 + fy0 * self.h(),
-            self.x0 + fx1 * self.w(),
-            self.y0 + fy1 * self.h(),
-        )
+        (self.x0 + fx0 * self.w(), self.y0 + fy0 * self.h(), self.x0 + fx1 * self.w(), self.y0 + fy1 * self.h())
     }
 }
 
@@ -102,18 +97,8 @@ pub fn union(rects: &[Rect]) -> Vec<Vec<V>> {
         (v * 1e6).round() as i64
     }
 
-    let xs: Vec<i64> = rects
-        .iter()
-        .flat_map(|r| [key(r.0), key(r.2)])
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
-    let ys: Vec<i64> = rects
-        .iter()
-        .flat_map(|r| [key(r.1), key(r.3)])
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect();
+    let xs: Vec<i64> = rects.iter().flat_map(|r| [key(r.0), key(r.2)]).collect::<BTreeSet<_>>().into_iter().collect();
+    let ys: Vec<i64> = rects.iter().flat_map(|r| [key(r.1), key(r.3)]).collect::<BTreeSet<_>>().into_iter().collect();
     let ix: BTreeMap<i64, i64> = xs.iter().enumerate().map(|(i, &v)| (v, i as i64)).collect();
     let iy: BTreeMap<i64, i64> = ys.iter().enumerate().map(|(j, &v)| (v, j as i64)).collect();
     let mut inside: BTreeSet<(i64, i64)> = BTreeSet::new();
@@ -149,11 +134,7 @@ pub fn union(rects: &[Rect]) -> Vec<Vec<V>> {
             let choices = leaving.get_mut(&at).unwrap();
             // where two pieces touch at a corner there are two ways on: turn left, which keeps the pieces apart
             let left = (at.0 - heading.1, at.1 + heading.0);
-            let nxt = if choices.len() > 1 && choices.contains(&left) {
-                left
-            } else {
-                choices[0]
-            };
+            let nxt = if choices.len() > 1 && choices.contains(&left) { left } else { choices[0] };
             let pos = choices.iter().position(|&c| c == nxt).unwrap();
             choices.remove(pos);
             if choices.is_empty() {
@@ -175,10 +156,8 @@ pub fn union(rects: &[Rect]) -> Vec<Vec<V>> {
             })
             .map(|k| path[k])
             .collect();
-        let lp: Vec<V> = corners
-            .iter()
-            .map(|&(i, j)| pt(xs[i as usize] as f64 / 1e6, ys[j as usize] as f64 / 1e6))
-            .collect();
+        let lp: Vec<V> =
+            corners.iter().map(|&(i, j)| pt(xs[i as usize] as f64 / 1e6, ys[j as usize] as f64 / 1e6)).collect();
         let m = lp.len();
         let area: f64 = (0..m)
             .map(|k| {
@@ -255,14 +234,7 @@ pub fn breadth(p: &Params, style: char) -> f64 {
 /// notch; with nothing to meet, it stops at the centre. The outer line of a double corner does the same, and its
 /// inner line stops inside the inner line of the other arm. A single line that meets a double line across its
 /// path stops inside the nearer of the two lines, unless it goes on from the other side.
-pub fn past_centre(
-    p: &Params,
-    style: char,
-    offset: f64,
-    opposite: char,
-    low: char,
-    high: char,
-) -> f64 {
+pub fn past_centre(p: &Params, style: char, offset: f64, opposite: char, low: char, high: char) -> f64 {
     let inner = double_offset(p) - light(p) / 2.0; // from the centre to the inner edge of a double arm's line
     if style != 'd' {
         let doubles = (low == 'd') as i32 + (high == 'd') as i32;
@@ -274,11 +246,7 @@ pub fn past_centre(
         let top = if rank(high) > rank(low) { high } else { low };
         return breadth(p, top);
     }
-    let (near, far) = if offset < 0.0 {
-        (low, high)
-    } else {
-        (high, low)
-    };
+    let (near, far) = if offset < 0.0 { (low, high) } else { (high, low) };
     if near == 'd' {
         return -inner;
     }
@@ -297,22 +265,14 @@ pub fn arm_rects(p: &Params, arms: &str) -> Vec<Rect> {
     for (style, opposite, towards_origin) in [(left, right, true), (right, left, false)] {
         for (offset, t) in strips(p, style) {
             let reach = past_centre(p, style, offset, opposite, down, up);
-            let (xa, xb) = if towards_origin {
-                (c.x0, c.cx + reach)
-            } else {
-                (c.cx - reach, c.x1)
-            };
+            let (xa, xb) = if towards_origin { (c.x0, c.cx + reach) } else { (c.cx - reach, c.x1) };
             rects.push((xa, c.cy + offset - t / 2.0, xb, c.cy + offset + t / 2.0));
         }
     }
     for (style, opposite, towards_origin) in [(down, up, true), (up, down, false)] {
         for (offset, t) in strips(p, style) {
             let reach = past_centre(p, style, offset, opposite, left, right);
-            let (ya, yb) = if towards_origin {
-                (c.y0, c.cy + reach)
-            } else {
-                (c.cy - reach, c.y1)
-            };
+            let (ya, yb) = if towards_origin { (c.y0, c.cy + reach) } else { (c.cy - reach, c.y1) };
             rects.push((c.cx + offset - t / 2.0, ya, c.cx + offset + t / 2.0, yb));
         }
     }
@@ -345,10 +305,7 @@ fn dashed(g: &mut Draw, count: f64, style: char, horizontal: bool) {
     let period = (if horizontal { c.w() } else { c.h() }) / count;
     for k in 0..count as i32 {
         let k = k as f64;
-        let (a, b) = (
-            k * period + DASH_GAP / 2.0,
-            (k + 1.0) * period - DASH_GAP / 2.0,
-        );
+        let (a, b) = (k * period + DASH_GAP / 2.0, (k + 1.0) * period - DASH_GAP / 2.0);
         if horizontal {
             g.rect(c.x0 + a, c.cy - t, c.x0 + b, c.cy + t);
         } else {
@@ -407,12 +364,7 @@ fn diagonal_rising(g: &mut Draw) {
     let p = g.p;
     let c = cell(p);
     let h = diagonal_half(p);
-    g.poly(&[
-        pt(c.x0 - h, c.y0),
-        pt(c.x0 + h, c.y0),
-        pt(c.x1 + h, c.y1),
-        pt(c.x1 - h, c.y1),
-    ]);
+    g.poly(&[pt(c.x0 - h, c.y0), pt(c.x0 + h, c.y0), pt(c.x1 + h, c.y1), pt(c.x1 - h, c.y1)]);
 }
 
 /// ╲ diagonal from the upper left corner to the lower right
@@ -420,12 +372,7 @@ fn diagonal_falling(g: &mut Draw) {
     let p = g.p;
     let c = cell(p);
     let h = diagonal_half(p);
-    g.poly(&[
-        pt(c.x1 - h, c.y0),
-        pt(c.x1 + h, c.y0),
-        pt(c.x0 + h, c.y1),
-        pt(c.x0 - h, c.y1),
-    ]);
+    g.poly(&[pt(c.x1 - h, c.y0), pt(c.x1 + h, c.y0), pt(c.x0 + h, c.y1), pt(c.x0 - h, c.y1)]);
 }
 
 /// ╳ both diagonals, as one outline
@@ -490,10 +437,7 @@ fn blocks() -> Vec<(u32, Vec<Rect>)> {
 fn block(g: &mut Draw, parts: &[Rect]) {
     let p = g.p;
     let c = cell(p);
-    let rects: Vec<Rect> = parts
-        .iter()
-        .map(|&(a, b, d, e)| c.part(a, b, d, e))
-        .collect();
+    let rects: Vec<Rect> = parts.iter().map(|&(a, b, d, e)| c.part(a, b, d, e)).collect();
     fill(g, &rects);
 }
 
@@ -513,12 +457,7 @@ pub fn shade_counts(c: &Cell) -> (i64, i64) {
 
 fn square(c: &Cell, i: i64, j: i64) -> Rect {
     let (i, j) = (i as f64, j as f64);
-    (
-        c.x0 + i * SHADE,
-        c.y0 + j * SHADE,
-        c.x0 + (i + 1.0) * SHADE,
-        c.y0 + (j + 1.0) * SHADE,
-    )
+    (c.x0 + i * SHADE, c.y0 + j * SHADE, c.x0 + (i + 1.0) * SHADE, c.y0 + (j + 1.0) * SHADE)
 }
 
 /// ░ light shade: one square in four
@@ -628,14 +567,7 @@ pub fn chevron_points(p: &Params) -> Vec<V> {
     let slope = c.w().hypot(c.h() / 2.0);
     let v = light(p) * slope / c.w(); // the line's thickness measured up the cell's edge
     let h = light(p) * slope / (c.h() / 2.0); // and measured along the centre line
-    vec![
-        pt(c.x0, c.y0),
-        pt(c.x1, c.cy),
-        pt(c.x0, c.y1),
-        pt(c.x0, c.y1 - v),
-        pt(c.x1 - h, c.cy),
-        pt(c.x0, c.y0 + v),
-    ]
+    vec![pt(c.x0, c.y0), pt(c.x1, c.cy), pt(c.x0, c.y1), pt(c.x0, c.y1 - v), pt(c.x1 - h, c.cy), pt(c.x0, c.y0 + v)]
 }
 
 fn arrow_right(g: &mut Draw) {
@@ -662,11 +594,7 @@ fn chevron_left(g: &mut Draw) {
 /// Half of the typeface's superellipse, from the cell's lower left corner round by the middle of its right edge
 /// to the upper left corner, drawn `inset` inside the cell.
 fn half_round(c: &Cell, inset: f64, k: f64) -> (Seg, Seg) {
-    let (bottom, tip, top) = (
-        pt(c.x0, c.y0 + inset),
-        pt(c.x1 - inset, c.cy),
-        pt(c.x0, c.y1 - inset),
-    );
+    let (bottom, tip, top) = (pt(c.x0, c.y0 + inset), pt(c.x1 - inset, c.cy), pt(c.x0, c.y1 - inset));
     let (rx, ry) = (tip.x - c.x0, c.cy - bottom.y);
     (
         Seg::Cubic(bottom, bottom + pt(k * rx, 0.0), tip - pt(0.0, k * ry), tip),
@@ -679,14 +607,7 @@ pub fn round_contour(p: &Params, outline: bool, left: bool) -> Contour {
     let (a, b) = half_round(&c, 0.0, p.sq);
     let segs = if outline {
         let (e, f) = half_round(&c, light(p), p.sq);
-        vec![
-            a,
-            b,
-            Seg::Line(b.end(), f.end()),
-            f.reversed(),
-            e.reversed(),
-            Seg::Line(e.start(), a.start()),
-        ]
+        vec![a, b, Seg::Line(b.end(), f.end()), f.reversed(), e.reversed(), Seg::Line(e.start(), a.start())]
     } else {
         vec![a, b, Seg::Line(b.end(), a.start())]
     };
@@ -713,9 +634,7 @@ pub fn register(reg: &mut Registry) {
         }
     }
     for (cp, count, style, horizontal) in DASHED {
-        reg.code(cp, Opt::UPRIGHT, move |g: &mut Draw| {
-            dashed(g, count, style, horizontal)
-        });
+        reg.code(cp, Opt::UPRIGHT, move |g: &mut Draw| dashed(g, count, style, horizontal));
     }
     reg.code(0x256D, Opt::UPRIGHT, arc_down_right);
     reg.code(0x256E, Opt::UPRIGHT, arc_down_left);
@@ -731,22 +650,15 @@ pub fn register(reg: &mut Registry) {
     reg.code(0x2592, Opt::UPRIGHT, shade_medium);
     reg.code(0x2593, Opt::UPRIGHT, shade_dark);
     for bits in 0..256u32 {
-        reg.code(0x2800 + bits, Opt::UPRIGHT, move |g: &mut Draw| {
-            braille(g, bits)
-        });
+        reg.code(0x2800 + bits, Opt::UPRIGHT, move |g: &mut Draw| braille(g, bits));
     }
     reg.code(0xE0B0, Opt::UPRIGHT, arrow_right);
     reg.code(0xE0B1, Opt::UPRIGHT, chevron_right);
     reg.code(0xE0B2, Opt::UPRIGHT, arrow_left);
     reg.code(0xE0B3, Opt::UPRIGHT, chevron_left);
-    for (cp, outline, left) in [
-        (0xE0B4, false, false),
-        (0xE0B5, true, false),
-        (0xE0B6, false, true),
-        (0xE0B7, true, true),
-    ] {
-        reg.code(cp, Opt::UPRIGHT, move |g: &mut Draw| {
-            round(g, outline, left)
-        });
+    for (cp, outline, left) in
+        [(0xE0B4, false, false), (0xE0B5, true, false), (0xE0B6, false, true), (0xE0B7, true, true)]
+    {
+        reg.code(cp, Opt::UPRIGHT, move |g: &mut Draw| round(g, outline, left));
     }
 }

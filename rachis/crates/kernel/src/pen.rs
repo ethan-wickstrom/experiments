@@ -8,9 +8,7 @@
 //! Every stroke expands to the same number of segments whatever its numbers are, so the masters of a variable
 //! font are point-compatible by construction: a glyph program run with a heavier pen yields the same structure.
 
-use crate::geom::{
-    EPS, Node, Seg, V, hobby_directions, hobby_segment, intersect, pt, segment_bounds,
-};
+use crate::geom::{EPS, Node, Seg, V, hobby_directions, hobby_segment, intersect, lame_corner, pt, segment_bounds};
 
 /// A point on a stroke's centre line, and the pen there.
 ///
@@ -30,6 +28,9 @@ pub struct Knot {
     pub t_in: f64,
     pub t_out: f64,
     pub k: Option<f64>,
+    /// Makes the curve from this knot to the next a quadrant of the superellipse of this exponent (2 is an
+    /// ellipse, 5/2 is Piet Hein's), as two cubics. It takes precedence over `k`.
+    pub n: Option<f64>,
 }
 
 /// A knot at (x, y) with a pen `w` broad, held perpendicular to the path.
@@ -39,16 +40,7 @@ pub fn knot(x: f64, y: f64, w: f64) -> Knot {
 
 impl Knot {
     pub fn at(z: V, w: f64) -> Knot {
-        Knot {
-            z,
-            w,
-            pen: None,
-            dir: None,
-            line: false,
-            t_in: 1.0,
-            t_out: 1.0,
-            k: None,
-        }
+        Knot { z, w, pen: None, dir: None, line: false, t_in: 1.0, t_out: 1.0, k: None, n: None }
     }
 
     /// Hold the pen's edge at `degrees`.
@@ -72,6 +64,12 @@ impl Knot {
     /// Make the curve to the next knot a superelliptic corner of squareness `k`.
     pub fn k(mut self, k: f64) -> Knot {
         self.k = Some(k);
+        self
+    }
+
+    /// Make the curve to the next knot a quadrant of the superellipse of exponent `n`.
+    pub fn n(mut self, n: f64) -> Knot {
+        self.n = Some(n);
         self
     }
 
@@ -119,23 +117,15 @@ impl Contour {
     }
 
     pub fn reversed(&self) -> Contour {
-        Contour {
-            segs: self.segs.iter().rev().map(Seg::reversed).collect(),
-        }
+        Contour { segs: self.segs.iter().rev().map(Seg::reversed).collect() }
     }
 
     pub fn oriented(self, counter_clockwise: bool) -> Contour {
-        if (self.area() > 0.0) == counter_clockwise {
-            self
-        } else {
-            self.reversed()
-        }
+        if (self.area() > 0.0) == counter_clockwise { self } else { self.reversed() }
     }
 
     pub fn mapped(&self, f: impl Fn(V) -> V) -> Contour {
-        Contour {
-            segs: self.segs.iter().map(|s| s.mapped(&f)).collect(),
-        }
+        Contour { segs: self.segs.iter().map(|s| s.mapped(&f)).collect() }
     }
 
     /// Every on-curve and off-curve point, in order.
@@ -152,10 +142,7 @@ impl Contour {
 
     /// The contour's structure, which must agree between the masters of a variable font.
     pub fn signature(&self) -> String {
-        self.segs
-            .iter()
-            .map(|s| if s.is_line() { 'L' } else { 'C' })
-            .collect()
+        self.segs.iter().map(|s| if s.is_line() { 'L' } else { 'C' }).collect()
     }
 
     pub fn bounds(&self) -> Option<(f64, f64, f64, f64)> {
@@ -165,12 +152,7 @@ impl Contour {
 
 pub fn polygon(points: &[V]) -> Contour {
     let n = points.len();
-    Contour::new(
-        (0..n)
-            .map(|i| Seg::Line(points[i], points[(i + 1) % n]))
-            .collect(),
-    )
-    .oriented(true)
+    Contour::new((0..n).map(|i| Seg::Line(points[i], points[(i + 1) % n])).collect()).oriented(true)
 }
 
 pub fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Contour {
@@ -181,12 +163,7 @@ pub fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Contour {
 /// ellipse, and larger values are squarer (at 1 the shape fills 95% of its box).
 pub fn superellipse(cx: f64, cy: f64, rx: f64, ry: f64, k: f64) -> Contour {
     let c = pt(cx, cy);
-    let (e, n, w, s) = (
-        c + pt(rx, 0.0),
-        c + pt(0.0, ry),
-        c - pt(rx, 0.0),
-        c - pt(0.0, ry),
-    );
+    let (e, n, w, s) = (c + pt(rx, 0.0), c + pt(0.0, ry), c - pt(rx, 0.0), c - pt(0.0, ry));
     let (hx, hy) = (pt(k * rx, 0.0), pt(0.0, k * ry));
     Contour::new(vec![
         Seg::Cubic(e, e + hy, n + hx, n),
@@ -207,10 +184,7 @@ fn half_pen(knot: &Knot, travel: V) -> Result<V, String> {
     let u = V::unit(angle);
     let side = u.dot(right);
     if side.abs() < 1e-6 {
-        return Err(format!(
-            "the pen at ({}, {}) lies along the path",
-            knot.z.x, knot.z.y
-        ));
+        return Err(format!("the pen at ({}, {}) lies along the path", knot.z.x, knot.z.y));
     }
     Ok(u * (knot.w / 2.0) * if side > 0.0 { 1.0 } else { -1.0 })
 }
@@ -220,21 +194,14 @@ fn corner_cubic(z0: V, z1: V, d0: V, d1: V, k: f64) -> Option<Seg> {
     if (apex - z0).dot(d0) <= 0.0 || (z1 - apex).dot(d1) <= 0.0 {
         return None;
     }
-    Some(Seg::Cubic(
-        z0,
-        z0 + (apex - z0) * k,
-        z1 + (apex - z1) * k,
-        z1,
-    ))
+    Some(Seg::Cubic(z0, z0 + (apex - z0) * k, z1 + (apex - z1) * k, z1))
 }
 
 /// One side of a curved stroke segment: a cubic with the centre line's end tangents that passes through the
 /// centre line's midpoint displaced by the interpolated pen. For an arc of a circle and a constant pen it is the
 /// standard cubic approximation of the concentric arc.
 fn offset_cubic(center: &Seg, h0: V, h1: V, side: f64, d0: V, d1: V) -> Seg {
-    let Seg::Cubic(c0, cc1, cc2, c3) = *center else {
-        unreachable!("offset_cubic takes a cubic")
-    };
+    let Seg::Cubic(c0, cc1, cc2, c3) = *center else { unreachable!("offset_cubic takes a cubic") };
     let p0 = c0 + h0 * side;
     let p3 = c3 + h1 * side;
     let (t0, t1) = (d0.norm(), d1.norm());
@@ -255,25 +222,33 @@ fn offset_cubic(center: &Seg, h0: V, h1: V, side: f64, d0: V, d1: V) -> Seg {
     // nearly parallel end tangents: scale the centre line's handles with the chord
     let c_chord = (c3 - c0).abs();
     let r = if c_chord > EPS { chord / c_chord } else { 1.0 };
-    Seg::Cubic(
-        p0,
-        p0 + t0 * ((cc1 - c0).abs() * r),
-        p3 - t1 * ((c3 - cc2).abs() * r),
-        p3,
-    )
+    Seg::Cubic(p0, p0 + t0 * ((cc1 - c0).abs() * r), p3 - t1 * ((c3 - cc2).abs() * r), p3)
 }
 
-/// The centre line's segments, and the direction of arrival and of departure at every knot.
-pub fn centerline(knots: &[Knot], closed: bool) -> Result<(Vec<Seg>, Vec<V>, Vec<V>), String> {
+/// The centre line of a stroke: for each interval between two knots its segments (one, or two for a superelliptic
+/// corner), and the direction of arrival and of departure at every knot.
+pub struct Skeleton {
+    pub pieces: Vec<Vec<Seg>>,
+    pub arrive: Vec<V>,
+    pub depart: Vec<V>,
+}
+
+impl Skeleton {
+    /// The centre line's segments in order, without the division into intervals.
+    pub fn segs(&self) -> Vec<Seg> {
+        self.pieces.iter().flatten().copied().collect()
+    }
+}
+
+/// The centre line through `knots`, interval by interval.
+pub fn skeleton(knots: &[Knot], closed: bool) -> Result<Skeleton, String> {
     let n = knots.len();
     if n < 2 {
         return Err("a stroke needs two knots".into());
     }
     let nseg = if closed { n } else { n - 1 };
     let straight: Vec<bool> = (0..nseg).map(|i| knots[i].line).collect();
-    let chord: Vec<V> = (0..nseg)
-        .map(|i| knots[(i + 1) % n].z - knots[i].z)
-        .collect();
+    let chord: Vec<V> = (0..nseg).map(|i| knots[(i + 1) % n].z - knots[i].z).collect();
     if chord.iter().any(|c| c.abs() < EPS) {
         return Err("consecutive knots coincide".into());
     }
@@ -321,13 +296,7 @@ pub fn centerline(knots: &[Knot], closed: bool) -> Result<(Vec<Seg>, Vec<V>, Vec
         let nodes: Vec<Node> = knots
             .iter()
             .enumerate()
-            .map(|(i, k)| Node {
-                z: k.z,
-                dir: d_out[i],
-                curl: 1.0,
-                t_in: k.t_in,
-                t_out: k.t_out,
-            })
+            .map(|(i, k)| Node { z: k.z, dir: d_out[i], curl: 1.0, t_in: k.t_in, t_out: k.t_out })
             .collect();
         let dirs = hobby_directions(&nodes, true)?;
         for i in 0..n {
@@ -336,12 +305,8 @@ pub fn centerline(knots: &[Knot], closed: bool) -> Result<(Vec<Seg>, Vec<V>, Vec
         }
     } else {
         for s in 0..nseg {
-            let starts_run = !straight[s]
-                && if closed {
-                    straight[(s + nseg - 1) % nseg]
-                } else {
-                    s == 0 || straight[s - 1]
-                };
+            let starts_run =
+                !straight[s] && if closed { straight[(s + nseg - 1) % nseg] } else { s == 0 || straight[s - 1] };
             if !starts_run {
                 continue;
             }
@@ -371,13 +336,7 @@ pub fn centerline(knots: &[Knot], closed: bool) -> Result<(Vec<Seg>, Vec<V>, Vec
                     } else {
                         d_out[i].or(d_in[i])
                     };
-                    Node {
-                        z: knots[i].z,
-                        dir: fixed,
-                        curl: 1.0,
-                        t_in: knots[i].t_in,
-                        t_out: knots[i].t_out,
-                    }
+                    Node { z: knots[i].z, dir: fixed, curl: 1.0, t_in: knots[i].t_in, t_out: knots[i].t_out }
                 })
                 .collect();
             let dirs = hobby_directions(&nodes, false)?;
@@ -401,30 +360,31 @@ pub fn centerline(knots: &[Knot], closed: bool) -> Result<(Vec<Seg>, Vec<V>, Vec
         depart.push(d);
     }
 
-    let mut segs = Vec::with_capacity(nseg);
+    let mut pieces = Vec::with_capacity(nseg);
     for i in 0..nseg {
         let (a, b) = (&knots[i], &knots[(i + 1) % n]);
         if straight[i] {
-            segs.push(Seg::Line(a.z, b.z));
+            pieces.push(vec![Seg::Line(a.z, b.z)]);
             continue;
         }
         let j = (i + 1) % n;
-        let corner =
-            a.k.and_then(|k| corner_cubic(a.z, b.z, depart[i], arrive[j], k));
-        segs.push(
-            corner
-                .unwrap_or_else(|| hobby_segment(a.z, b.z, depart[i], arrive[j], a.t_out, b.t_in)),
-        );
+        if let Some(two) = a.n.and_then(|e| lame_corner(a.z, b.z, depart[i], arrive[j], e)) {
+            pieces.push(two.to_vec());
+            continue;
+        }
+        let corner = a.k.and_then(|k| corner_cubic(a.z, b.z, depart[i], arrive[j], k));
+        pieces.push(vec![corner.unwrap_or_else(|| hobby_segment(a.z, b.z, depart[i], arrive[j], a.t_out, b.t_in))]);
     }
-    Ok((segs, arrive, depart))
+    Ok(Skeleton { pieces, arrive, depart })
 }
 
 /// The outline of the stroke through `knots`: one contour for an open stroke, two (outer, then inner) for a
 /// closed one. Outer contours run counter-clockwise, inner ones clockwise.
 pub fn expand(knots: &[Knot], closed: bool) -> Result<Vec<Contour>, String> {
     let n = knots.len();
-    let (segs, arrive, depart) = centerline(knots, closed)?;
-    let nseg = segs.len();
+    let Skeleton { pieces, arrive, depart } = skeleton(knots, closed)?;
+    let nseg = pieces.len();
+    let straight = |i: usize| pieces[i][0].is_line();
 
     // The pen's right-hand offset at each knot, on arrival and on departure. They differ only at a corner.
     let mut h_in: Vec<V> = Vec::with_capacity(n);
@@ -447,8 +407,7 @@ pub fn expand(knots: &[Knot], closed: bool) -> Result<Vec<Contour>, String> {
             None
         };
         let after = if closed || i < n - 1 { Some(i) } else { None };
-        let mitred =
-            matches!((before, after), (Some(b), Some(f)) if segs[b].is_line() && segs[f].is_line());
+        let mitred = matches!((before, after), (Some(b), Some(f)) if straight(b) && straight(f));
         if mitred {
             // two straight segments meet: each side turns at the intersection of its two edges
             let right = intersect(k.z + ha, a, k.z + hd, d).ok_or("a mitre has no corner")?;
@@ -465,21 +424,32 @@ pub fn expand(knots: &[Knot], closed: bool) -> Result<Vec<Contour>, String> {
         let mut path: Vec<Seg> = Vec::new();
         for i in 0..nseg {
             let j = (i + 1) % n;
-            match segs[i] {
-                Seg::Line(p0, p1) => {
-                    path.push(Seg::Line(p0 + h_out[i] * side, p1 + h_in[j] * side))
+            // the pen at each end of the interval, as a complex multiple of the right normal there, so that it
+            // can be blended along the interval: breadth and skew together
+            let (r0, r1) = (h_out[i].cdiv(depart[i].right()), h_in[j].cdiv(arrive[j].right()));
+            let count = pieces[i].len();
+            for (m, piece) in pieces[i].iter().enumerate() {
+                let (d_a, h_a) = if m == 0 {
+                    (depart[i], h_out[i])
+                } else {
+                    let d = piece.tangent(0.0).norm();
+                    (d, r0.lerp(r1, m as f64 / count as f64).cmul(d.right()))
+                };
+                let (d_b, h_b) = if m + 1 == count {
+                    (arrive[j], h_in[j])
+                } else {
+                    let d = piece.tangent(1.0).norm();
+                    (d, r0.lerp(r1, (m + 1) as f64 / count as f64).cmul(d.right()))
+                };
+                match *piece {
+                    Seg::Line(p0, p1) => path.push(Seg::Line(p0 + h_a * side, p1 + h_b * side)),
+                    Seg::Cubic(..) => path.push(offset_cubic(piece, h_a, h_b, side, d_a, d_b)),
                 }
-                Seg::Cubic(..) => path.push(offset_cubic(
-                    &segs[i], h_out[i], h_in[j], side, depart[i], arrive[j],
-                )),
             }
             let last = !closed && i == nseg - 1;
             if !last && h_in[j] != h_out[j] {
                 // a corner between a curve and something else: bevel it
-                path.push(Seg::Line(
-                    knots[j].z + h_in[j] * side,
-                    knots[j].z + h_out[j] * side,
-                ));
+                path.push(Seg::Line(knots[j].z + h_in[j] * side, knots[j].z + h_out[j] * side));
             }
         }
         sides.push(path);
@@ -489,11 +459,7 @@ pub fn expand(knots: &[Knot], closed: bool) -> Result<Vec<Contour>, String> {
 
     if closed {
         let (a, b) = (Contour::new(right_path), Contour::new(left_path));
-        let (outer, inner) = if a.area().abs() >= b.area().abs() {
-            (a, b)
-        } else {
-            (b, a)
-        };
+        let (outer, inner) = if a.area().abs() >= b.area().abs() { (a, b) } else { (b, a) };
         return Ok(vec![outer.oriented(true), inner.oriented(false)]);
     }
     let back: Vec<Seg> = left_path.iter().rev().map(Seg::reversed).collect();
@@ -589,20 +555,10 @@ mod tests {
 
     #[test]
     fn two_straight_segments_meet_in_a_mitre() {
-        let c = &expand(
-            &[
-                knot(0.0, 100.0, 20.0).line(),
-                knot(0.0, 0.0, 20.0).line(),
-                knot(100.0, 0.0, 20.0),
-            ],
-            false,
-        )
-        .unwrap()[0];
-        let corners: Vec<(i64, i64)> = c
-            .segs
-            .iter()
-            .map(|s| (s.end().x.round() as i64, s.end().y.round() as i64))
-            .collect();
+        let c = &expand(&[knot(0.0, 100.0, 20.0).line(), knot(0.0, 0.0, 20.0).line(), knot(100.0, 0.0, 20.0)], false)
+            .unwrap()[0];
+        let corners: Vec<(i64, i64)> =
+            c.segs.iter().map(|s| (s.end().x.round() as i64, s.end().y.round() as i64)).collect();
         assert!(corners.contains(&(-10, -10)));
         assert!(corners.contains(&(10, 10)));
         assert_eq!(c.segs.len(), 6);
@@ -610,16 +566,7 @@ mod tests {
 
     #[test]
     fn a_pen_along_the_path_is_refused() {
-        assert!(
-            expand(
-                &[
-                    knot(0.0, 0.0, 20.0).pen(90.0).line(),
-                    knot(0.0, 100.0, 20.0).pen(90.0)
-                ],
-                false
-            )
-            .is_err()
-        );
+        assert!(expand(&[knot(0.0, 0.0, 20.0).pen(90.0).line(), knot(0.0, 100.0, 20.0).pen(90.0)], false).is_err());
     }
 
     #[test]
@@ -627,12 +574,7 @@ mod tests {
         let c = expand(&ring(0.0, 0.0, 400.0, 500.0, 80.0, 60.0, 0.5523), true).unwrap();
         assert!(c[0].area() > 0.0 && c[1].area() < 0.0);
         let round = |b: (f64, f64, f64, f64)| {
-            (
-                (b.0 * 1e6).round() / 1e6,
-                (b.1 * 1e6).round() / 1e6,
-                (b.2 * 1e6).round() / 1e6,
-                (b.3 * 1e6).round() / 1e6,
-            )
+            ((b.0 * 1e6).round() / 1e6, (b.1 * 1e6).round() / 1e6, (b.2 * 1e6).round() / 1e6, (b.3 * 1e6).round() / 1e6)
         };
         assert_eq!(round(c[0].bounds().unwrap()), (0.0, 0.0, 400.0, 500.0));
         assert_eq!(round(c[1].bounds().unwrap()), (80.0, 60.0, 320.0, 440.0));
@@ -640,11 +582,7 @@ mod tests {
 
     #[test]
     fn a_circular_ring_keeps_its_breadth_all_round() {
-        let c = expand(
-            &ring(-250.0, -250.0, 250.0, 250.0, 80.0, 80.0, 0.5523),
-            true,
-        )
-        .unwrap();
+        let c = expand(&ring(-250.0, -250.0, 250.0, 250.0, 80.0, 80.0, 0.5523), true).unwrap();
         for (contour, r) in [(&c[0], 250.0), (&c[1], 170.0)] {
             for s in &contour.segs {
                 for q in flatten(s, 0.01) {
@@ -659,31 +597,18 @@ mod tests {
         let c = expand(&ring(-250.0, -250.0, 250.0, 250.0, 80.0, 80.0, 0.66), true).unwrap();
         let d = 0.5f64.sqrt();
         let reach = |contour: &Contour| {
-            contour
-                .segs
-                .iter()
-                .flat_map(|s| flatten(s, 0.01))
-                .map(|q| q.x * d + q.y * d)
-                .fold(f64::MIN, f64::max)
+            contour.segs.iter().flat_map(|s| flatten(s, 0.01)).map(|q| q.x * d + q.y * d).fold(f64::MIN, f64::max)
         };
         assert!((reach(&c[0]) - reach(&c[1]) - 80.0).abs() < 0.5);
     }
 
     #[test]
     fn a_curve_leaves_a_straight_segment_smoothly() {
-        let c = &expand(
-            &[
-                knot(0.0, 0.0, 40.0).line(),
-                knot(0.0, 100.0, 40.0),
-                knot(100.0, 200.0, 40.0).dir(0.0),
-            ],
-            false,
-        )
-        .unwrap()[0];
+        let c =
+            &expand(&[knot(0.0, 0.0, 40.0).line(), knot(0.0, 100.0, 40.0), knot(100.0, 200.0, 40.0).dir(0.0)], false)
+                .unwrap()[0];
         assert_eq!(c.signature(), "LCLCLL");
-        let Some(Seg::Cubic(p0, c1, ..)) = c.segs.iter().find(|s| !s.is_line()).copied() else {
-            unreachable!()
-        };
+        let Some(Seg::Cubic(p0, c1, ..)) = c.segs.iter().find(|s| !s.is_line()).copied() else { unreachable!() };
         assert!((c1 - p0).x.abs() < 1e-9);
     }
 
@@ -698,17 +623,11 @@ mod tests {
     #[test]
     fn a_sheared_stem_keeps_its_horizontal_thickness_and_a_bar_its_vertical_one() {
         let slope = 10f64.to_radians().tan();
-        let stem: Vec<Knot> = vstem(100.0, 0.0, 500.0, 80.0)
-            .iter()
-            .map(|k| sheared(k, slope, 0.0))
-            .collect();
+        let stem: Vec<Knot> = vstem(100.0, 0.0, 500.0, 80.0).iter().map(|k| sheared(k, slope, 0.0)).collect();
         let c = expand(&stem, false).unwrap();
         let x = crossings(&c, Some(250.0), None);
         assert!((x[1] - x[0] - 80.0).abs() < 1e-9);
-        let bar = [
-            knot(0.0, 300.0, 60.0).pen(90.0).line(),
-            knot(400.0, 300.0, 60.0).pen(90.0),
-        ];
+        let bar = [knot(0.0, 300.0, 60.0).pen(90.0).line(), knot(400.0, 300.0, 60.0).pen(90.0)];
         let bar: Vec<Knot> = bar.iter().map(|k| sheared(k, slope, 0.0)).collect();
         let c = expand(&bar, false).unwrap();
         let y = crossings(&c, None, Some(200.0));
@@ -718,10 +637,6 @@ mod tests {
     #[test]
     fn shapes_run_counter_clockwise() {
         assert!((rect(0.0, 0.0, 10.0, 20.0).area() - 200.0).abs() < 1e-9);
-        assert!(
-            (superellipse(0.0, 0.0, 100.0, 100.0, 0.5523).area() - std::f64::consts::PI * 1e4)
-                .abs()
-                < 12.0
-        );
+        assert!((superellipse(0.0, 0.0, 100.0, 100.0, 0.5523).area() - std::f64::consts::PI * 1e4).abs() < 12.0);
     }
 }

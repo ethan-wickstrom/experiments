@@ -83,12 +83,7 @@ pub fn mirrored(points: &[V], cx: f64) -> Vec<V> {
 /// The bar: a horizontal stroke centred on `y`, across the span unless told otherwise.
 pub fn bar(g: &mut Draw, y: f64, x0: Option<f64>, x1: Option<f64>, t: Option<f64>) {
     let p = g.p;
-    g.stroke(&hbar(
-        x0.unwrap_or(p.op_l),
-        x1.unwrap_or(p.op_r()),
-        y,
-        t.unwrap_or(p.op),
-    ));
+    g.stroke(&hbar(x0.unwrap_or(p.op_l), x1.unwrap_or(p.op_r()), y, t.unwrap_or(p.op)));
 }
 
 /// The stem: a vertical stroke centred on `x`.
@@ -161,9 +156,7 @@ pub fn arc(p: &Params, x_side: f64, x_open: f64, y0: f64, y1: f64, t: Option<f64
     vec![
         knot(x_open, yt, t).pen(90.0).line(),
         knot(xa, yt, t).pen(90.0).dir(back).k(p.sq),
-        knot(x_side + s * t / 2.0, (y0 + y1) / 2.0, t)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(x_side + s * t / 2.0, (y0 + y1) / 2.0, t).dir(-90.0).k(p.sq),
         knot(xa, yb, t).pen(90.0).dir(180.0 - back).line(),
         knot(x_open, yb, t).pen(90.0),
     ]
@@ -173,12 +166,7 @@ pub fn arc(p: &Params, x_side: f64, x_open: f64, y0: f64, y1: f64, t: Option<f64
 pub fn transposed(knots: &[Knot]) -> Vec<Knot> {
     knots
         .iter()
-        .map(|k| Knot {
-            z: pt(k.z.y, k.z.x),
-            dir: k.dir.map(|d| 90.0 - d),
-            pen: k.pen.map(|a| 90.0 - a),
-            ..*k
-        })
+        .map(|k| Knot { z: pt(k.z.y, k.z.x), dir: k.dir.map(|d| 90.0 - d), pen: k.pen.map(|a| 90.0 - a), ..*k })
         .collect()
 }
 
@@ -203,10 +191,7 @@ pub fn inset(points: &[V], d: f64) -> Vec<V> {
 /// The outline of a convex polygon (counter-clockwise), `t` thick, inside it, with mitred corners.
 pub fn outline(g: &mut Draw, points: &[V], t: Option<f64>) {
     let t = t.unwrap_or(g.p.op);
-    let knots: Vec<Knot> = inset(points, t / 2.0)
-        .into_iter()
-        .map(|z| Knot::at(z, t).line())
-        .collect();
+    let knots: Vec<Knot> = inset(points, t / 2.0).into_iter().map(|z| Knot::at(z, t).line()).collect();
     g.stroke_closed(&knots);
 }
 
@@ -266,22 +251,12 @@ fn equal(g: &mut Draw) {
 
 fn less(g: &mut Draw) {
     let p = g.p;
-    g.poly(&chevron(
-        p.op_l,
-        p.op_r(),
-        p.axis,
-        chevron_rise(p),
-        p.op,
-        tip(p),
-    ));
+    g.poly(&chevron(p.op_l, p.op_r(), p.axis, chevron_rise(p), p.op, tip(p)));
 }
 
 fn greater(g: &mut Draw) {
     let p = g.p;
-    g.poly(&mirrored(
-        &chevron(p.op_l, p.op_r(), p.axis, chevron_rise(p), p.op, tip(p)),
-        p.mid(),
-    ));
+    g.poly(&mirrored(&chevron(p.op_l, p.op_r(), p.axis, chevron_rise(p), p.op, tip(p)), p.mid()));
 }
 
 fn asterisk(g: &mut Draw) {
@@ -292,13 +267,7 @@ fn asterisk(g: &mut Draw) {
     let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
     let rd = 1.13 * r;
     for sign in [1.0, -1.0] {
-        g.stroke(&rake(
-            p.mid() - rd * c,
-            p.axis - sign * rd * s,
-            p.mid() + rd * c,
-            p.axis + sign * rd * s,
-            t,
-        ));
+        g.stroke(&rake(p.mid() - rd * c, p.axis - sign * rd * s, p.mid() + rd * c, p.axis + sign * rd * s, t));
     }
 }
 
@@ -314,27 +283,13 @@ pub fn slash_run(p: &Params, back: bool) -> f64 {
 fn slash_(g: &mut Draw) {
     let p = g.p;
     let d = slash_run(p, false);
-    slash(
-        g,
-        p.mid() - d,
-        p.br_bot,
-        p.mid() + d,
-        p.br_top,
-        p.stem * 0.9,
-    );
+    slash(g, p.mid() - d, p.br_bot, p.mid() + d, p.br_top, p.stem * 0.9);
 }
 
 fn backslash(g: &mut Draw) {
     let p = g.p;
     let d = slash_run(p, true);
-    slash(
-        g,
-        p.mid() + d,
-        p.br_bot,
-        p.mid() - d,
-        p.br_top,
-        p.stem * 0.9,
-    );
+    slash(g, p.mid() + d, p.br_bot, p.mid() - d, p.br_top, p.stem * 0.9);
 }
 
 fn bar_(g: &mut Draw) {
@@ -344,14 +299,7 @@ fn bar_(g: &mut Draw) {
 
 fn asciicircum(g: &mut Draw) {
     let p = g.p;
-    g.poly(&vee(
-        p.mid() - 210.0,
-        p.mid() + 210.0,
-        p.cap * 0.47,
-        p.cap,
-        p.op,
-        tip(p),
-    ));
+    g.poly(&vee(p.mid() - 210.0, p.mid() + 210.0, p.cap * 0.47, p.cap, p.op, tip(p)));
 }
 
 fn asciitilde(g: &mut Draw) {
@@ -425,14 +373,7 @@ pub fn small_ring(p: &Params) -> f64 {
 
 fn ring_operator(g: &mut Draw) {
     let p = g.p;
-    circle(
-        g,
-        p.mid(),
-        p.axis,
-        small_ring(p),
-        None,
-        Some(0.5 * (p.op + fine(p))),
-    );
+    circle(g, p.mid(), p.axis, small_ring(p), None, Some(0.5 * (p.op + fine(p))));
 }
 
 /// The radical: a tick, a short stroke down to a flat vertex, a long stroke up and a bar over what follows.
@@ -448,8 +389,8 @@ pub fn radical(g: &mut Draw) {
     let right_dir = pt(xr, yt) - pt(xv + apex / 2.0, yb);
     let wl = t * left_dir.abs() / left_dir.y.abs();
     let wr = t * right_dir.abs() / right_dir.y.abs();
-    let crotch = intersect(pt(xl + wl, ym), left_dir, pt(xr - wr, yt), right_dir)
-        .expect("the strokes of the radical meet");
+    let crotch =
+        intersect(pt(xl + wl, ym), left_dir, pt(xr - wr, yt), right_dir).expect("the strokes of the radical meet");
     g.poly(&[
         pt(xl, ym),
         pt(xv - apex / 2.0, yb),
@@ -480,9 +421,7 @@ pub fn small_three(g: &mut Draw, x0: f64, x1: f64, y0: f64, y1: f64) {
     g.stroke(&[
         cut(x0, y1 - 0.20 * h, t, 48.0),
         knot(cx - 2.0, y1 - t / 2.0, t).dir(0.0).k(p.sq),
-        knot(x1 - t / 2.0 - 4.0, (y1 + ym) / 2.0, t)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(x1 - t / 2.0 - 4.0, (y1 + ym) / 2.0, t).dir(-90.0).k(p.sq),
         knot(cx + 4.0, ym, t).pen(90.0).dir(180.0).line(),
         knot(cx - 0.16 * (x1 - x0), ym, t).pen(90.0),
     ]);
@@ -498,13 +437,7 @@ pub fn small_three(g: &mut Draw, x0: f64, x1: f64, y0: f64, y1: f64) {
 fn cube_root(g: &mut Draw) {
     let p = g.p;
     radical(g);
-    small_three(
-        g,
-        44.0,
-        44.0 + 150.0,
-        p.axis + 30.0 + 60.0,
-        big_top(p) - 8.0,
-    );
+    small_three(g, 44.0, 44.0 + 150.0, p.axis + 30.0 + 60.0, big_top(p) - 8.0);
 }
 
 /// The outer half-height of the loops of the infinity sign.
@@ -638,11 +571,7 @@ pub fn colon_equal(g: &mut Draw, right: bool) {
     let xd = p.op_l - 6.0 + r;
     let x0 = xd + r + 0.5 * rel_gap(p);
     for s in [1.0, -1.0] {
-        let (dot_x, a, b) = if right {
-            (p.width - xd, p.op_l, p.width - x0)
-        } else {
-            (xd, x0, p.op_r())
-        };
+        let (dot_x, a, b) = if right { (p.width - xd, p.op_l, p.width - x0) } else { (xd, x0, p.op_r()) };
         g.dot(dot_x, p.axis + s * d, r);
         bar(g, p.axis + s * d, Some(a), Some(b), None);
     }
@@ -689,10 +618,7 @@ fn questioned_equal(g: &mut Draw) {
         cut(x0, y1 - 0.30 * (y1 - foot), t, 52.0),
         knot(p.mid(), y1 - t / 2.0, t).dir(0.0).k(p.sq),
         knot(x1 - t / 2.0, y1 - 0.34 * (y1 - foot), t).dir(-90.0),
-        knot(p.mid() + 4.0, foot + 0.24 * (y1 - foot), t)
-            .pen(0.0)
-            .dir(-90.0)
-            .line(),
+        knot(p.mid() + 4.0, foot + 0.24 * (y1 - foot), t).pen(0.0).dir(-90.0).line(),
         knot(p.mid() + 4.0, foot, t).pen(0.0),
     ]);
     g.dot(p.mid() + 4.0, y0 + r, r);
@@ -743,10 +669,7 @@ fn greaterequal(g: &mut Draw) {
     let p = g.p;
     let rise = rel_rise(p);
     let (yb, cy) = over(p, rise, p.op);
-    g.poly(&mirrored(
-        &chevron(p.op_l, p.op_r(), cy, rise, p.op, tip(p)),
-        p.mid(),
-    ));
+    g.poly(&mirrored(&chevron(p.op_l, p.op_r(), cy, rise, p.op, tip(p)), p.mid()));
     bar(g, yb, None, None, None);
 }
 
@@ -777,27 +700,9 @@ pub fn curved_chevron(p: &Params, cy: f64, rise: f64, t: Option<f64>) -> Vec<Kno
     let b: f64 = 62.0; // the direction of the strokes at their ends
     let v = pt(p.op_l + (t / 2.0) / a.to_radians().sin(), cy);
     let run = 60.0;
-    let top = cut_pen(
-        p.op_r() - 0.5 * t / b.to_radians().sin(),
-        cy + rise,
-        t,
-        180.0 + b,
-        0.0,
-    );
-    let bot = cut_pen(
-        p.op_r() - 0.5 * t / b.to_radians().sin(),
-        cy - rise,
-        t,
-        -b,
-        0.0,
-    );
-    vec![
-        top,
-        Knot::at(v + run * V::unit(a), t).line(),
-        Knot::at(v, t).line(),
-        Knot::at(v + run * V::unit(-a), t),
-        bot,
-    ]
+    let top = cut_pen(p.op_r() - 0.5 * t / b.to_radians().sin(), cy + rise, t, 180.0 + b, 0.0);
+    let bot = cut_pen(p.op_r() - 0.5 * t / b.to_radians().sin(), cy - rise, t, -b, 0.0);
+    vec![top, Knot::at(v + run * V::unit(a), t).line(), Knot::at(v, t).line(), Knot::at(v + run * V::unit(-a), t), bot]
 }
 
 fn precedes(g: &mut Draw) {
@@ -807,10 +712,7 @@ fn precedes(g: &mut Draw) {
 
 fn succeeds(g: &mut Draw) {
     let p = g.p;
-    g.stroke(&mirror(
-        &curved_chevron(p, p.axis, chevron_rise(p) + 14.0, None),
-        p.mid(),
-    ));
+    g.stroke(&mirror(&curved_chevron(p, p.axis, chevron_rise(p) + 14.0, None), p.mid()));
 }
 
 pub fn less_similar(g: &mut Draw, right: bool) {
@@ -847,14 +749,7 @@ fn divides(g: &mut Draw) {
 fn notdivides(g: &mut Draw) {
     let p = g.p;
     g.use_char('∣', 0.0, 0.0);
-    strike(
-        g,
-        p.mid(),
-        p.axis,
-        112.0,
-        112.0,
-        Some(0.5 * (p.op + fine(p))),
-    );
+    strike(g, p.mid(), p.axis, 112.0, 112.0, Some(0.5 * (p.op + fine(p))));
 }
 
 fn parallel(g: &mut Draw) {
@@ -867,14 +762,7 @@ fn parallel(g: &mut Draw) {
 fn notparallel(g: &mut Draw) {
     let p = g.p;
     g.use_char('∥', 0.0, 0.0);
-    strike(
-        g,
-        p.mid(),
-        p.axis,
-        150.0,
-        132.0,
-        Some(0.5 * (p.op + fine(p))),
-    );
+    strike(g, p.mid(), p.axis, 150.0, 132.0, Some(0.5 * (p.op + fine(p))));
 }
 
 fn double_bar(g: &mut Draw) {
@@ -921,14 +809,7 @@ fn exists_(g: &mut Draw) {
 fn notexists(g: &mut Draw) {
     let p = g.p;
     exists(g);
-    strike(
-        g,
-        p.mid() - 14.0,
-        p.cap / 2.0,
-        150.0,
-        p.cap / 2.0 + 80.0,
-        None,
-    );
+    strike(g, p.mid() - 14.0, p.cap / 2.0, 150.0, p.cap / 2.0 + 80.0, None);
 }
 
 /// The chevron turned: feet on `y0`, the point on `y1`.
@@ -968,23 +849,11 @@ pub fn tack(g: &mut Draw, bars: usize, stems: usize, right: bool) {
     let p = g.p;
     let h = half_span(p);
     let pitch = twin_pitch(p, p.op) * 0.88;
-    let mut strokes: Vec<Vec<Knot>> = (0..stems)
-        .map(|i| {
-            vstem(
-                p.op_l + p.op / 2.0 + i as f64 * pitch,
-                p.axis - h,
-                p.axis + h,
-                p.op,
-            )
-        })
-        .collect();
+    let mut strokes: Vec<Vec<Knot>> =
+        (0..stems).map(|i| vstem(p.op_l + p.op / 2.0 + i as f64 * pitch, p.axis - h, p.axis + h, p.op)).collect();
     let x0 = p.op_l + p.op / 2.0 + (stems as f64 - 1.0) * pitch;
     let d = equal_pitch(p) / 2.0;
-    let ys = if bars == 1 {
-        vec![p.axis]
-    } else {
-        vec![p.axis + d, p.axis - d]
-    };
+    let ys = if bars == 1 { vec![p.axis] } else { vec![p.axis + d, p.axis - d] };
     for y in ys {
         strokes.push(hbar(x0, p.op_r(), y, p.op));
     }
@@ -1137,27 +1006,13 @@ fn emptyset(g: &mut Draw) {
     let rx = half_span(p) - 14.0;
     circle(g, p.mid(), p.axis, rx, Some(ry), None);
     let dy = ry + 0.9 * p.op;
-    strike(
-        g,
-        p.mid(),
-        p.axis,
-        0.56 * dy,
-        dy,
-        Some(0.5 * (p.op + fine(p))),
-    );
+    strike(g, p.mid(), p.axis, 0.56 * dy, dy, Some(0.5 * (p.op + fine(p))));
 }
 
 fn setminus(g: &mut Draw) {
     let p = g.p;
     let h = half_span(p);
-    slash(
-        g,
-        p.mid() + 0.56 * h,
-        p.axis - h,
-        p.mid() - 0.56 * h,
-        p.axis + h,
-        p.op,
-    );
+    slash(g, p.mid() + 0.56 * h, p.axis - h, p.mid() - 0.56 * h, p.axis + h, p.op);
 }
 
 pub fn square_cup(g: &mut Draw, down: bool) {
@@ -1275,13 +1130,7 @@ fn circled_asterisk(g: &mut Draw) {
     g.stroke(&vstem(p.mid(), p.axis - r, p.axis + r, t));
     let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
     for sign in [1.0, -1.0] {
-        g.stroke(&rake(
-            p.mid() - r * c,
-            p.axis - sign * r * s,
-            p.mid() + r * c,
-            p.axis + sign * r * s,
-            t,
-        ));
+        g.stroke(&rake(p.mid() - r * c, p.axis - sign * r * s, p.mid() + r * c, p.axis + sign * r * s, t));
     }
 }
 
@@ -1289,11 +1138,7 @@ fn circled_asterisk(g: &mut Draw) {
 pub fn big_box(g: &mut Draw) -> f64 {
     let p = g.p;
     let h = half_span(p);
-    outline(
-        g,
-        &box_(p.mid() - h, p.axis - h, p.mid() + h, p.axis + h),
-        None,
-    );
+    outline(g, &box_(p.mid() - h, p.axis - h, p.mid() + h, p.axis + h), None);
     h - p.op
 }
 
@@ -1335,20 +1180,12 @@ pub fn dots(g: &mut Draw, places: &[(f64, f64)], r: Option<f64>) {
 
 fn therefore(g: &mut Draw) {
     let r = g.p.dot;
-    dots(
-        g,
-        &[(0.0, 150.0), (-170.0, -150.0), (170.0, -150.0)],
-        Some(r),
-    );
+    dots(g, &[(0.0, 150.0), (-170.0, -150.0), (170.0, -150.0)], Some(r));
 }
 
 fn because(g: &mut Draw) {
     let r = g.p.dot;
-    dots(
-        g,
-        &[(0.0, -150.0), (-170.0, 150.0), (170.0, 150.0)],
-        Some(r),
-    );
+    dots(g, &[(0.0, -150.0), (-170.0, 150.0), (170.0, 150.0)], Some(r));
 }
 
 fn midline_ellipsis(g: &mut Draw) {
@@ -1377,9 +1214,8 @@ fn star_operator(g: &mut Draw) {
     let ro = 190.0 + 0.3 * p.op;
     let ri = 0.44 * ro;
     let c = pt(p.mid(), p.axis - 0.05 * ro);
-    let points: Vec<V> = (0..10)
-        .map(|i| c + (if i % 2 == 0 { ro } else { ri }) * V::unit(90.0 + 36.0 * i as f64))
-        .collect();
+    let points: Vec<V> =
+        (0..10).map(|i| c + (if i % 2 == 0 { ro } else { ri }) * V::unit(90.0 + 36.0 * i as f64)).collect();
     g.poly(&points);
 }
 
@@ -1388,12 +1224,7 @@ fn diamond_operator(g: &mut Draw) {
     let r = 190.0 + 0.45 * p.op;
     outline(
         g,
-        &[
-            pt(p.mid() + r, p.axis),
-            pt(p.mid(), p.axis + r),
-            pt(p.mid() - r, p.axis),
-            pt(p.mid(), p.axis - r),
-        ],
+        &[pt(p.mid() + r, p.axis), pt(p.mid(), p.axis + r), pt(p.mid() - r, p.axis), pt(p.mid(), p.axis - r)],
         None,
     );
 }
@@ -1431,11 +1262,7 @@ fn right_semijoin(g: &mut Draw) {
 /// The outline of a triangle that points left (or right): the chevron closed.
 pub fn triangle(g: &mut Draw, cy: f64, rise: f64, right: bool) {
     let p = g.p;
-    let mut pts = vec![
-        pt(p.op_l, cy),
-        pt(p.op_r(), cy - rise),
-        pt(p.op_r(), cy + rise),
-    ];
+    let mut pts = vec![pt(p.op_l, cy), pt(p.op_r(), cy - rise), pt(p.op_r(), cy + rise)];
     if right {
         pts = mirrored(&pts, p.mid());
         pts.reverse();

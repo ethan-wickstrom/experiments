@@ -17,7 +17,7 @@
 //! the Bold stays open.
 
 use rachis_kernel::geom::intersect;
-use rachis_kernel::pen::{centerline, polygon, superellipse};
+use rachis_kernel::pen::{polygon, skeleton, superellipse};
 use rachis_kernel::{Contour, Draw, Knot, Opt, Params, Registry, Seg, V, knot, pt};
 
 use crate::parts::{elbow, hbar, ring, vstem};
@@ -105,10 +105,7 @@ fn inset(points: &[V], d: f64) -> Vec<V> {
 /// The polygon `points` (counter-clockwise) drawn as an outline `t` thick with mitred corners. Its outer edge is
 /// the polygon itself.
 fn outline(g: &mut Draw, points: &[V], t: f64) {
-    let knots: Vec<Knot> = inset(points, t / 2.0)
-        .into_iter()
-        .map(|z| Knot::at(z, t).line())
-        .collect();
+    let knots: Vec<Knot> = inset(points, t / 2.0).into_iter().map(|z| Knot::at(z, t).line()).collect();
     g.stroke_closed(&knots);
 }
 
@@ -118,21 +115,11 @@ fn hole(g: &mut Draw, points: &[V]) {
 }
 
 fn square(cx: f64, cy: f64, hx: f64, hy: f64) -> Vec<V> {
-    vec![
-        pt(cx - hx, cy - hy),
-        pt(cx + hx, cy - hy),
-        pt(cx + hx, cy + hy),
-        pt(cx - hx, cy + hy),
-    ]
+    vec![pt(cx - hx, cy - hy), pt(cx + hx, cy - hy), pt(cx + hx, cy + hy), pt(cx - hx, cy + hy)]
 }
 
 fn diamond(cx: f64, cy: f64, hx: f64, hy: f64) -> Vec<V> {
-    vec![
-        pt(cx, cy - hy),
-        pt(cx + hx, cy),
-        pt(cx, cy + hy),
-        pt(cx - hx, cy),
-    ]
+    vec![pt(cx, cy - hy), pt(cx + hx, cy), pt(cx, cy + hy), pt(cx - hx, cy)]
 }
 
 /// An isosceles triangle pointing along `heading` (degrees), its bounding box centred on (cx, cy) before the
@@ -141,11 +128,7 @@ fn triangle(cx: f64, cy: f64, base: f64, depth: f64, heading: f64) -> Vec<V> {
     let d = V::unit(heading);
     let c = pt(cx, cy) + d * depth * TRI_SHIFT;
     let back = c - d * depth / 2.0;
-    vec![
-        back - d.left() * base / 2.0,
-        c + d * depth / 2.0,
-        back + d.left() * base / 2.0,
-    ]
+    vec![back - d.left() * base / 2.0, c + d * depth / 2.0, back + d.left() * base / 2.0]
 }
 
 fn tri(p: &Params, cls: f64, heading: f64) -> Vec<V> {
@@ -155,13 +138,7 @@ fn tri(p: &Params, cls: f64, heading: f64) -> Vec<V> {
 
 fn pointer(p: &Params, cls: f64, heading: f64) -> Vec<V> {
     let s = 2.0 * half(p, cls);
-    triangle(
-        p.mid(),
-        centre(p),
-        POINTER_BASE * s,
-        POINTER_LEN * s,
-        heading,
-    )
+    triangle(p.mid(), centre(p), POINTER_BASE * s, POINTER_LEN * s, heading)
 }
 
 fn disc(g: &mut Draw, cx: f64, cy: f64, r: f64) {
@@ -193,12 +170,7 @@ fn sector(g: &mut Draw, cx: f64, cy: f64, r: f64, first: i32, count: i32) {
     let mut segs: Vec<Seg> = Vec::new();
     for q in first..first + count {
         let (a, b) = (i_pow(q), i_pow(q + 1));
-        segs.push(Seg::Cubic(
-            c + r * a,
-            c + r * a + k * r * b,
-            c + r * b + k * r * a,
-            c + r * b,
-        ));
+        segs.push(Seg::Cubic(c + r * a, c + r * a + k * r * b, c + r * b + k * r * a, c + r * b));
     }
     let (last, start) = (segs[segs.len() - 1].end(), segs[0].start());
     if count == 2 {
@@ -214,12 +186,7 @@ fn sector(g: &mut Draw, cx: f64, cy: f64, r: f64, first: i32, count: i32) {
 fn spoke(c: V, r0: f64, r1: f64, heading: f64, t: f64) -> Vec<V> {
     let d = V::unit(heading);
     let n = d.left() * t / 2.0;
-    vec![
-        c + d * r0 - n,
-        c + d * r1 - n,
-        c + d * r1 + n,
-        c + d * r0 + n,
-    ]
+    vec![c + d * r0 - n, c + d * r1 - n, c + d * r1 + n, c + d * r0 + n]
 }
 
 /// An arrow head: two straight strokes `t` thick, mitred at `tip` (a point on the centre line) and cut
@@ -243,9 +210,7 @@ fn path(points: &[V], t: f64, ends: f64, end: f64) -> Vec<Knot> {
         t / d.cmul(V::unit(-pen)).y.abs()
     };
     let n = points.len();
-    let first = Knot::at(points[0], breadth(points[0], points[1], ends))
-        .pen(ends)
-        .line();
+    let first = Knot::at(points[0], breadth(points[0], points[1], ends)).pen(ends).line();
     let last = Knot::at(points[n - 1], breadth(points[n - 2], points[n - 1], end)).pen(end);
     let mut out = vec![first];
     out.extend(points[1..n - 1].iter().map(|&z| Knot::at(z, t).line()));
@@ -268,8 +233,8 @@ fn tick(a: V, low: V, b: V, t: f64, apex: f64) -> Vec<V> {
 /// The area enclosed by the closed path through `knots`.
 #[allow(dead_code)]
 fn fill(g: &mut Draw, knots: &[Knot]) {
-    match centerline(knots, true) {
-        Ok((segs, _, _)) => g.add(Contour::new(segs).oriented(true)),
+    match skeleton(knots, true) {
+        Ok(sk) => g.add(Contour::new(sk.segs()).oriented(true)),
         Err(e) => g.glyph.errors.push(e),
     }
 }
@@ -284,11 +249,7 @@ fn black_square(g: &mut Draw, cls: f64) {
 
 fn white_square(g: &mut Draw, cls: f64) {
     let p = g.p;
-    outline(
-        g,
-        &square(p.mid(), centre(p), half(p, cls), half(p, cls)),
-        line(p, cls),
-    );
+    outline(g, &square(p.mid(), centre(p), half(p, cls), half(p, cls)), line(p, cls));
 }
 
 fn white_square_rounded(g: &mut Draw) {
@@ -347,11 +308,7 @@ fn black_vertical_rectangle(g: &mut Draw) {
 fn white_vertical_rectangle(g: &mut Draw) {
     let p = g.p;
     let (hy, hx) = bar_box(p);
-    outline(
-        g,
-        &square(p.mid(), centre(p), 1.24 * hx, 1.12 * hy),
-        line(p, LESSER),
-    );
+    outline(g, &square(p.mid(), centre(p), 1.24 * hx, 1.12 * hy), line(p, LESSER));
 }
 
 fn parallelogram(p: &Params) -> Vec<V> {
@@ -394,11 +351,7 @@ fn corner_triangle(g: &mut Draw, sx: f64, sy: f64) {
     let h = half(p, FULL);
     let c = pt(p.mid(), centre(p));
     // the right angle is in the corner (sx, sy); the other two corners are its neighbours
-    g.poly(&[
-        c + pt(sx * h, sy * h),
-        c + pt(-sx * h, sy * h),
-        c + pt(sx * h, -sy * h),
-    ]);
+    g.poly(&[c + pt(sx * h, sy * h), c + pt(-sx * h, sy * h), c + pt(sx * h, -sy * h)]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -431,11 +384,7 @@ fn white_diamond_containing_black(g: &mut Draw) {
 fn lozenge(g: &mut Draw) {
     let p = g.p;
     let cy = p.cap / 2.0;
-    outline(
-        g,
-        &diamond(p.mid(), cy, 0.86 * half(p, FULL), cy + 3.0 * p.over),
-        p.op,
-    );
+    outline(g, &diamond(p.mid(), cy, 0.86 * half(p, FULL), cy + 3.0 * p.over), p.op);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -511,26 +460,12 @@ fn part_filled(g: &mut Draw, first: i32, count: i32) {
 
 fn left_half_black_circle(g: &mut Draw) {
     let p = g.p;
-    sector(
-        g,
-        p.mid() + 0.25 * r_(p, FULL),
-        centre(p),
-        r_(p, FULL),
-        1,
-        2,
-    );
+    sector(g, p.mid() + 0.25 * r_(p, FULL), centre(p), r_(p, FULL), 1, 2);
 }
 
 fn right_half_black_circle(g: &mut Draw) {
     let p = g.p;
-    sector(
-        g,
-        p.mid() - 0.25 * r_(p, FULL),
-        centre(p),
-        r_(p, FULL),
-        3,
-        2,
-    );
+    sector(g, p.mid() - 0.25 * r_(p, FULL), centre(p), r_(p, FULL), 3, 2);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -539,13 +474,7 @@ fn right_half_black_circle(g: &mut Draw) {
 /// A short leg from the left and a long one that rises to the cap height, meeting on the baseline.
 fn check(g: &mut Draw, t: f64) {
     let p = g.p;
-    g.poly(&tick(
-        pt(p.op_l - 14.0, 0.47 * p.cap),
-        pt(p.mid() - 64.0, -p.over),
-        pt(p.op_r() + 14.0, p.cap),
-        t,
-        0.5 * t,
-    ));
+    g.poly(&tick(pt(p.op_l - 14.0, 0.47 * p.cap), pt(p.mid() - 64.0, -p.over), pt(p.op_r() + 14.0, p.cap), t, 0.5 * t));
 }
 
 fn check_mark(g: &mut Draw) {
@@ -564,18 +493,8 @@ fn saltire(g: &mut Draw, hx: f64, hy: f64, t: f64) {
     let (cx, cy) = (p.mid(), centre(p));
     let b = t * (2.0 * hx).hypot(2.0 * hy) / (2.0 * hy);
     let x = hx - b / 2.0;
-    g.stroke(&path(
-        &[pt(cx - x, cy - hy), pt(cx + x, cy + hy)],
-        t,
-        0.0,
-        0.0,
-    ));
-    g.stroke(&path(
-        &[pt(cx - x, cy + hy), pt(cx + x, cy - hy)],
-        t,
-        0.0,
-        0.0,
-    ));
+    g.stroke(&path(&[pt(cx - x, cy - hy), pt(cx + x, cy + hy)], t, 0.0, 0.0));
+    g.stroke(&path(&[pt(cx - x, cy + hy), pt(cx + x, cy - hy)], t, 0.0, 0.0));
 }
 
 fn multiplication_x(g: &mut Draw) {
@@ -596,24 +515,8 @@ fn ballot_x_(g: &mut Draw, t: f64) {
     let p = g.p;
     let (y0, y1) = (24.0, p.cap - 70.0);
     let b = 1.28 * t; // about the breadth of a level cut
-    g.stroke(&path(
-        &[
-            pt(p.op_l - 26.0 + b / 2.0, y0),
-            pt(p.op_r() + 26.0 - b / 2.0, y1),
-        ],
-        t,
-        0.0,
-        0.0,
-    ));
-    g.stroke(&path(
-        &[
-            pt(p.op_l + 22.0 + b / 2.0, y1 - 50.0),
-            pt(p.op_r() - 64.0 - b / 2.0, y0 + 40.0),
-        ],
-        t,
-        0.0,
-        0.0,
-    ));
+    g.stroke(&path(&[pt(p.op_l - 26.0 + b / 2.0, y0), pt(p.op_r() + 26.0 - b / 2.0, y1)], t, 0.0, 0.0));
+    g.stroke(&path(&[pt(p.op_l + 22.0 + b / 2.0, y1 - 50.0), pt(p.op_r() - 64.0 - b / 2.0, y0 + 40.0)], t, 0.0, 0.0));
 }
 
 fn ballot_x(g: &mut Draw) {
@@ -697,37 +600,20 @@ fn return_symbol(g: &mut Draw) {
 fn step(p: &Params) -> (f64, f64, f64, f64, f64, f64) {
     let cy = centre(p);
     let rise = 0.86 * half(p, FULL);
-    (
-        p.op_l - 16.0,
-        p.mid() - 92.0,
-        p.mid() + 60.0,
-        p.op_r() + 16.0,
-        cy - rise,
-        cy + rise,
-    )
+    (p.op_l - 16.0, p.mid() - 92.0, p.mid() + 60.0, p.op_r() + 16.0, cy - rise, cy + rise)
 }
 
 fn alternative_key(g: &mut Draw) {
     let p = g.p;
     let (x0, xa, xb, x1, lo, hi) = step(p);
-    g.stroke(&path(
-        &[pt(x0, lo), pt(xa, lo), pt(xb, hi), pt(x1, hi)],
-        p.op,
-        90.0,
-        90.0,
-    ));
+    g.stroke(&path(&[pt(x0, lo), pt(xa, lo), pt(xb, hi), pt(x1, hi)], p.op, 90.0, 90.0));
     g.stroke(&hbar(xb + 0.2 * p.op + 4.0, x1, lo, p.op));
 }
 
 fn option_key(g: &mut Draw) {
     let p = g.p;
     let (x0, xa, xb, x1, lo, hi) = step(p);
-    g.stroke(&path(
-        &[pt(x0, hi), pt(xa, hi), pt(xb, lo), pt(x1, lo)],
-        p.op,
-        90.0,
-        90.0,
-    ));
+    g.stroke(&path(&[pt(x0, hi), pt(xa, hi), pt(xb, lo), pt(x1, lo)], p.op, 90.0, 90.0));
     g.stroke(&hbar(xb + 0.2 * p.op + 4.0, x1, hi, p.op));
 }
 
@@ -753,24 +639,8 @@ fn white_hourglass(g: &mut Draw) {
     let t = line(p, SMALL);
     // Two outlined triangles whose centre lines meet in the middle: their strokes cross there.
     let reach = (t / 2.0) * hx.hypot(hy) / hx; // how far a mitred point lies beyond its centre line's vertex
-    outline(
-        g,
-        &[
-            pt(cx - hx, cy + hy),
-            pt(cx, cy - reach),
-            pt(cx + hx, cy + hy),
-        ],
-        t,
-    );
-    outline(
-        g,
-        &[
-            pt(cx + hx, cy - hy),
-            pt(cx, cy + reach),
-            pt(cx - hx, cy - hy),
-        ],
-        t,
-    );
+    outline(g, &[pt(cx - hx, cy + hy), pt(cx, cy - reach), pt(cx + hx, cy + hy)], t);
+    outline(g, &[pt(cx + hx, cy - hy), pt(cx, cy + reach), pt(cx - hx, cy - hy)], t);
 }
 
 fn two_joined_squares(g: &mut Draw) {
@@ -786,13 +656,7 @@ fn two_joined_squares(g: &mut Draw) {
     let (y0, y1) = (cy + off - h + t / 2.0, cy + off + h - t / 2.0);
     let (front_top, front_right) = (cy - off + h, cx - off + h);
     g.stroke(&path(
-        &[
-            pt(x0, front_top + gap),
-            pt(x0, y1),
-            pt(x1, y1),
-            pt(x1, y0),
-            pt(front_right + gap, y0),
-        ],
+        &[pt(x0, front_top + gap), pt(x0, y1), pt(x1, y1), pt(x1, y0), pt(front_right + gap, y0)],
         t,
         0.0,
         90.0,
@@ -811,16 +675,7 @@ fn stopwatch(g: &mut Draw) {
     g.stroke(&hbar(cx - 1.3 * t, cx + 1.3 * t, top - t / 2.0, t));
     // the hands, at three o'clock
     let reach = r - t;
-    g.stroke(&path(
-        &[
-            pt(cx, cy + 0.70 * reach),
-            pt(cx, cy),
-            pt(cx + 0.56 * reach, cy),
-        ],
-        0.9 * t,
-        0.0,
-        90.0,
-    ));
+    g.stroke(&path(&[pt(cx, cy + 0.70 * reach), pt(cx, cy), pt(cx + 0.56 * reach, cy)], 0.9 * t, 0.0, 90.0));
 }
 
 fn warning_sign(g: &mut Draw) {
@@ -828,27 +683,13 @@ fn warning_sign(g: &mut Draw) {
     let t = fine(p);
     let hx = p.mid() - 12.0;
     let (y0, y1) = (28.0, p.cap - 60.0);
-    outline(
-        g,
-        &[pt(p.mid() - hx, y0), pt(p.mid() + hx, y0), pt(p.mid(), y1)],
-        t,
-    );
+    outline(g, &[pt(p.mid() - hx, y0), pt(p.mid() + hx, y0), pt(p.mid(), y1)], t);
     // the bang: a stem and a dot, low in the triangle where it is wide
     let w = 0.95 * t;
     let dot_y = y0 + t + 30.0 + w / 2.0;
-    g.rect(
-        p.mid() - w / 2.0,
-        dot_y - w / 2.0,
-        p.mid() + w / 2.0,
-        dot_y + w / 2.0,
-    );
+    g.rect(p.mid() - w / 2.0, dot_y - w / 2.0, p.mid() + w / 2.0, dot_y + w / 2.0);
     let stem_y = dot_y + w / 2.0 + 34.0;
-    g.rect(
-        p.mid() - w / 2.0,
-        stem_y,
-        p.mid() + w / 2.0,
-        stem_y + 0.26 * (y1 - y0),
-    );
+    g.rect(p.mid() - w / 2.0, stem_y, p.mid() + w / 2.0, stem_y + 0.26 * (y1 - y0));
 }
 
 fn lower_right_pencil(g: &mut Draw) {
@@ -877,11 +718,7 @@ fn pencil_(g: &mut Draw, heading: f64) {
     g.poly(&[at(u0, -w), at(u0 + capl, -w), at(u0 + capl, w), at(u0, w)]);
     let (b0, b1) = (u0 + capl + slit, length / 2.0 - cone - slit);
     g.poly(&[at(b0, -w), at(b1, -w), at(b1, w), at(b0, w)]);
-    g.poly(&[
-        at(length / 2.0 - cone, -w),
-        at(length / 2.0, 0.0),
-        at(length / 2.0 - cone, w),
-    ]);
+    g.poly(&[at(length / 2.0 - cone, -w), at(length / 2.0, 0.0), at(length / 2.0 - cone, w)]);
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -891,9 +728,7 @@ fn pencil_(g: &mut Draw, heading: f64) {
 fn star(c: V, points: u32, r: f64, waist: f64, heading: f64) -> Vec<V> {
     let step = 180.0 / f64::from(points);
     (0..2 * points)
-        .map(|i| {
-            c + (if i % 2 == 0 { r } else { waist * r }) * V::unit(heading + f64::from(i) * step)
-        })
+        .map(|i| c + (if i % 2 == 0 { r } else { waist * r }) * V::unit(heading + f64::from(i) * step))
         .collect()
 }
 
@@ -944,26 +779,14 @@ fn white_star(g: &mut Draw) {
 
 fn eight_pointed_black_star(g: &mut Draw) {
     let p = g.p;
-    g.poly(&star(
-        pt(p.mid(), centre(p)),
-        8,
-        1.06 * half(p, LARGE),
-        0.56,
-        90.0,
-    ));
+    g.poly(&star(pt(p.mid(), centre(p)), 8, 1.06 * half(p, LARGE), 0.56, 90.0));
 }
 
 /// `spokes` bars through the centre, the first one upright, cut square.
 fn asterisk(g: &mut Draw, spokes: u32, t: f64, r: f64) {
     let c = pt(g.p.mid(), centre(g.p));
     for i in 0..spokes {
-        g.poly(&spoke(
-            c,
-            -r,
-            r,
-            90.0 + f64::from(i) * 180.0 / f64::from(spokes),
-            t,
-        ));
+        g.poly(&spoke(c, -r, r, 90.0 + f64::from(i) * 180.0 / f64::from(spokes), t));
     }
 }
 
@@ -1034,18 +857,8 @@ fn ballot_box_with_x(g: &mut Draw) {
     let t = 1.0 * fine(g.p);
     let e = 0.74 * h;
     let b = t * 2.0_f64.sqrt();
-    g.stroke(&path(
-        &[pt(cx - e + b / 2.0, cy - e), pt(cx + e - b / 2.0, cy + e)],
-        t,
-        0.0,
-        0.0,
-    ));
-    g.stroke(&path(
-        &[pt(cx - e + b / 2.0, cy + e), pt(cx + e - b / 2.0, cy - e)],
-        t,
-        0.0,
-        0.0,
-    ));
+    g.stroke(&path(&[pt(cx - e + b / 2.0, cy - e), pt(cx + e - b / 2.0, cy + e)], t, 0.0, 0.0));
+    g.stroke(&path(&[pt(cx - e + b / 2.0, cy + e), pt(cx + e - b / 2.0, cy - e)], t, 0.0, 0.0));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1055,14 +868,7 @@ fn high_voltage(g: &mut Draw) {
     let p = g.p;
     let (hx, hy) = (0.92 * half(p, FULL), p.cap / 2.0 + 2.0 * p.over);
     let c = pt(p.mid(), p.cap / 2.0);
-    let shape = [
-        (0.34, 1.0),
-        (-0.86, -0.12),
-        (-0.06, -0.12),
-        (-0.38, -1.0),
-        (0.86, 0.16),
-        (0.08, 0.16),
-    ];
+    let shape = [(0.34, 1.0), (-0.86, -0.12), (-0.06, -0.12), (-0.38, -1.0), (0.86, 0.16), (0.08, 0.16)];
     let points: Vec<V> = shape.iter().map(|&(x, y)| c + pt(x * hx, y * hy)).collect();
     g.poly(&points);
 }
@@ -1105,37 +911,16 @@ fn black_flag(g: &mut Draw) {
 fn white_flag(g: &mut Draw) {
     let (x0, y0, x1, y1) = flag(g);
     let t = fine(g.p);
-    outline(
-        g,
-        &[
-            pt(x0 - t / 2.0, y0),
-            pt(x1, y0),
-            pt(x1, y1),
-            pt(x0 - t / 2.0, y1),
-        ],
-        t,
-    );
+    outline(g, &[pt(x0 - t / 2.0, y0), pt(x1, y0), pt(x1, y1), pt(x0 - t / 2.0, y1)], t);
 }
 
 pub fn register(reg: &mut Registry) {
     reg.module("symbols");
     let u = Opt::UPRIGHT;
-    for (c, cls) in [
-        ('■', FULL),
-        ('◼', MIDDLE),
-        ('◾', LESSER),
-        ('▪', SMALL),
-        ('⬝', TINY),
-    ] {
+    for (c, cls) in [('■', FULL), ('◼', MIDDLE), ('◾', LESSER), ('▪', SMALL), ('⬝', TINY)] {
         reg.ch_with(c, u, move |g: &mut Draw| black_square(g, cls));
     }
-    for (c, cls) in [
-        ('□', FULL),
-        ('◻', MIDDLE),
-        ('◽', LESSER),
-        ('▫', SMALL),
-        ('⬞', TINY),
-    ] {
+    for (c, cls) in [('□', FULL), ('◻', MIDDLE), ('◽', LESSER), ('▫', SMALL), ('⬞', TINY)] {
         reg.ch_with(c, u, move |g: &mut Draw| white_square(g, cls));
     }
     reg.ch_with('▢', u, white_square_rounded);
@@ -1170,24 +955,11 @@ pub fn register(reg: &mut Registry) {
     ] {
         reg.ch_with(c, u, move |g: &mut Draw| white_triangle(g, cls, h, tri));
     }
-    reg.ch_with('►', u, |g: &mut Draw| {
-        black_triangle(g, FULL, 0.0, pointer)
-    });
-    reg.ch_with('◄', u, |g: &mut Draw| {
-        black_triangle(g, FULL, 180.0, pointer)
-    });
-    reg.ch_with('▻', u, |g: &mut Draw| {
-        white_triangle(g, FULL, 0.0, pointer)
-    });
-    reg.ch_with('◅', u, |g: &mut Draw| {
-        white_triangle(g, FULL, 180.0, pointer)
-    });
-    for (c, sx, sy) in [
-        ('◢', 1.0, -1.0),
-        ('◣', -1.0, -1.0),
-        ('◤', -1.0, 1.0),
-        ('◥', 1.0, 1.0),
-    ] {
+    reg.ch_with('►', u, |g: &mut Draw| black_triangle(g, FULL, 0.0, pointer));
+    reg.ch_with('◄', u, |g: &mut Draw| black_triangle(g, FULL, 180.0, pointer));
+    reg.ch_with('▻', u, |g: &mut Draw| white_triangle(g, FULL, 0.0, pointer));
+    reg.ch_with('◅', u, |g: &mut Draw| white_triangle(g, FULL, 180.0, pointer));
+    for (c, sx, sy) in [('◢', 1.0, -1.0), ('◣', -1.0, -1.0), ('◤', -1.0, 1.0), ('◥', 1.0, 1.0)] {
         reg.ch_with(c, u, move |g: &mut Draw| corner_triangle(g, sx, sy));
     }
     reg.ch_with('◆', u, black_diamond);
@@ -1252,15 +1024,10 @@ pub fn register(reg: &mut Registry) {
     reg.ch_with('✴', u, eight_pointed_black_star);
     reg.ch_with('✱', u, heavy_asterisk);
     reg.ch_with('✳', u, eight_spoked_asterisk);
-    for (c, sign, height, depth) in [
-        ('❯', 1.0, 1.16, 0.84),
-        ('❮', -1.0, 1.16, 0.84),
-        ('❱', 1.0, 1.56, 0.62),
-        ('❰', -1.0, 1.56, 0.62),
-    ] {
-        reg.ch_with(c, u, move |g: &mut Draw| {
-            angle_ornament(g, sign, height, depth)
-        });
+    for (c, sign, height, depth) in
+        [('❯', 1.0, 1.16, 0.84), ('❮', -1.0, 1.16, 0.84), ('❱', 1.0, 1.56, 0.62), ('❰', -1.0, 1.56, 0.62)]
+    {
+        reg.ch_with(c, u, move |g: &mut Draw| angle_ornament(g, sign, height, depth));
     }
     reg.ch_with('❖', u, black_diamond_minus_white_x);
     reg.ch_with('☐', u, ballot_box);

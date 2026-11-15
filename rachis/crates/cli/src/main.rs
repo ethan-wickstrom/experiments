@@ -1,11 +1,13 @@
 //! Command line of the Rachis typeface.
 
+mod proof;
+
 use std::fmt::Write as _;
 use std::process::ExitCode;
 
 use rachis_kernel::check::check_glyphs;
 use rachis_kernel::params::{master, masters};
-use rachis_kernel::{Glyph, Registry, Seg, build};
+use rachis_kernel::{Glyph, Registry, Seg};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -13,6 +15,7 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("dump") => dump(&registry, &args[1..]),
         Some("check") => check(&registry, &args[1..]),
+        Some("proof") => proof::run(&registry, &args[1..]),
         Some("list") => {
             for s in &registry.specs {
                 let cps: Vec<String> = s.unicodes.iter().map(|c| format!("U+{c:04X}")).collect();
@@ -22,7 +25,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("usage: rachis <dump [--module NAME] | check [NAMES...] | list>");
+            eprintln!("usage: rachis <proof ... | check [NAMES...] | dump [--module NAME] | list>");
             ExitCode::FAILURE
         }
     }
@@ -31,17 +34,14 @@ fn main() -> ExitCode {
 /// Print every outline of every master in a line format that the prototype's dump shares, so the two
 /// implementations can be compared number by number.
 fn dump(registry: &Registry, args: &[String]) -> ExitCode {
-    let module = args
-        .iter()
-        .position(|a| a == "--module")
-        .and_then(|i| args.get(i + 1));
+    let module = args.iter().position(|a| a == "--module").and_then(|i| args.get(i + 1));
     let mut out = String::new();
     for p in masters() {
         for spec in &registry.specs {
             if module.is_some_and(|m| m != spec.module) {
                 continue;
             }
-            write_glyph(&mut out, p.name, &build(spec, &p));
+            write_glyph(&mut out, p.name, &registry.build(spec, &p));
         }
     }
     print!("{out}");
@@ -94,9 +94,5 @@ fn check(registry: &Registry, args: &[String]) -> ExitCode {
         names.map_or(registry.len(), <[String]>::len)
     );
     let _ = master("Regular");
-    if report.problems.is_empty() {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::FAILURE
-    }
+    if report.problems.is_empty() { ExitCode::SUCCESS } else { ExitCode::FAILURE }
 }

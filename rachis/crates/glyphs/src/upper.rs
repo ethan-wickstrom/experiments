@@ -60,10 +60,7 @@ fn cut_len(p: &Params, dx: f64, dy: f64, t: f64, c: f64) -> f64 {
 /// box between the two points from corner to corner.
 fn span(p: &Params, xa: f64, ya: f64, sa: f64, xb: f64, yb: f64, sb: f64, t: f64) -> Vec<Knot> {
     let w = cut_len(p, xb - xa, yb - ya, t, (sb - sa) / 2.0);
-    vec![
-        knot(xa - sa * w / 2.0, ya, w).pen(0.0).line(),
-        knot(xb - sb * w / 2.0, yb, w).pen(0.0),
-    ]
+    vec![knot(xa - sa * w / 2.0, ya, w).pen(0.0).line(), knot(xb - sb * w / 2.0, yb, w).pen(0.0)]
 }
 
 /// A straight stroke `t` thick, cut flat at both ends, whose first cut is centred on (xc, yc), where another
@@ -71,20 +68,14 @@ fn span(p: &Params, xa: f64, ya: f64, sa: f64, xb: f64, yb: f64, sb: f64, t: f64
 /// at `xe`.
 fn reach(p: &Params, xc: f64, yc: f64, xe: f64, se: f64, ye: f64, t: f64) -> Vec<Knot> {
     let w = cut_len(p, xe - xc, ye - yc, t, se / 2.0);
-    vec![
-        knot(xc, yc, w).pen(0.0).line(),
-        knot(xe - se * w / 2.0, ye, w).pen(0.0),
-    ]
+    vec![knot(xc, yc, w).pen(0.0).line(), knot(xe - se * w / 2.0, ye, w).pen(0.0)]
 }
 
 /// The lengths of the cuts of the left and the right stroke of `vee`. They differ only in an italic.
 fn vee_cuts(p: &Params, x0: f64, x1: f64, y_top: f64, y_bot: f64, t: f64, apex: f64) -> (f64, f64) {
     let mid = (x0 + x1) / 2.0;
     let dy = y_bot - y_top;
-    (
-        cut_len(p, mid - apex / 2.0 - x0, dy, t, 0.0),
-        cut_len(p, mid + apex / 2.0 - x1, dy, t, 0.0),
-    )
+    (cut_len(p, mid - apex / 2.0 - x0, dy, t, 0.0), cut_len(p, mid + apex / 2.0 - x1, dy, t, 0.0))
 }
 
 /// The polygon of a V, as `parts::vee`: outer corners at `x0` and `x1` on `y_top`, strokes `t` thick,
@@ -95,29 +86,16 @@ fn vee(p: &Params, x0: f64, x1: f64, y_top: f64, y_bot: f64, t: f64, apex: f64) 
     let (wl, wr) = vee_cuts(p, x0, x1, y_top, y_bot, t, apex);
     let (tl, tr) = (pt(x0, y_top), pt(x1, y_top));
     let (vl, vr) = (pt(mid - apex / 2.0, y_bot), pt(mid + apex / 2.0, y_bot));
-    let crotch = intersect(tl + pt(wl, 0.0), vl - tl, tr - pt(wr, 0.0), vr - tr)
-        .expect("the strokes of a V meet");
+    let crotch = intersect(tl + pt(wl, 0.0), vl - tl, tr - pt(wr, 0.0), vr - tr).expect("the strokes of a V meet");
     vec![tl, vl, vr, tr, tr - pt(wr, 0.0), crotch, tl + pt(wl, 0.0)]
 }
 
 /// The x of the centre lines of the two strokes of `vee` at the height `y`: where a crossbar ends.
-fn vee_x(
-    p: &Params,
-    x0: f64,
-    x1: f64,
-    y_top: f64,
-    y_bot: f64,
-    t: f64,
-    apex: f64,
-    y: f64,
-) -> (f64, f64) {
+fn vee_x(p: &Params, x0: f64, x1: f64, y_top: f64, y_bot: f64, t: f64, apex: f64, y: f64) -> (f64, f64) {
     let mid = (x0 + x1) / 2.0;
     let (wl, wr) = vee_cuts(p, x0, x1, y_top, y_bot, t, apex);
     let f = (y - y_top) / (y_bot - y_top);
-    (
-        x0 + wl / 2.0 + f * (mid - apex / 2.0 - x0),
-        x1 - wr / 2.0 + f * (mid + apex / 2.0 - x1),
-    )
+    (x0 + wl / 2.0 + f * (mid - apex / 2.0 - x0), x1 - wr / 2.0 + f * (mid + apex / 2.0 - x1))
 }
 
 /// Where the line through the two points of `a` crosses the line through the two points of `b`.
@@ -139,42 +117,22 @@ fn I(g: &mut Draw) {
     let p = g.p;
     // the serifs are as long as the foot of the figure one
     g.stroke(&vstem(p.mid(), 0.0, p.cap, p.cap_stem));
-    g.stroke(&hbar(
-        p.mid() - 196.0,
-        p.mid() + 196.0,
-        p.cap - p.cap_hair / 2.0,
-        p.cap_hair,
-    ));
-    g.stroke(&hbar(
-        p.mid() - 196.0,
-        p.mid() + 196.0,
-        p.cap_hair / 2.0,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(p.mid() - 196.0, p.mid() + 196.0, p.cap - p.cap_hair / 2.0, p.cap_hair));
+    g.stroke(&hbar(p.mid() - 196.0, p.mid() + 196.0, p.cap_hair / 2.0, p.cap_hair));
 }
 
 fn T(g: &mut Draw) {
     let p = g.p;
     let x0 = p.sb_round - 20.0;
     g.stroke(&vstem(p.mid(), 0.0, p.cap, p.cap_stem));
-    g.stroke(&hbar(
-        x0,
-        p.width - x0,
-        p.cap - p.cap_hair / 2.0,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(x0, p.width - x0, p.cap - p.cap_hair / 2.0, p.cap_hair));
 }
 
 fn L(g: &mut Draw) {
     let p = g.p;
     let x = p.cxl() + 34.0;
     g.stroke(&vstem(x, 0.0, p.cap, p.cap_stem));
-    g.stroke(&hbar(
-        x,
-        p.width - p.sb_round - 2.0,
-        p.cap_hair / 2.0,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(x, p.width - p.sb_round - 2.0, p.cap_hair / 2.0, p.cap_hair));
 }
 
 fn E(g: &mut Draw) {
@@ -202,29 +160,13 @@ fn F(g: &mut Draw) {
 fn O(g: &mut Draw) {
     let p = g.p;
     let x0 = ox(p);
-    g.stroke_closed(&ring(
-        x0,
-        -p.over,
-        p.width - x0,
-        p.cap + p.over,
-        p.cap_stem,
-        p.cap_hair,
-        sqc(p),
-    ));
+    g.stroke_closed(&ring(x0, -p.over, p.width - x0, p.cap + p.over, p.cap_stem, p.cap_hair, sqc(p)));
 }
 
 fn Q(g: &mut Draw) {
     let p = g.p;
     let x0 = ox(p);
-    g.stroke_closed(&ring(
-        x0,
-        -p.over,
-        p.width - x0,
-        p.cap + p.over,
-        p.cap_stem,
-        p.cap_hair,
-        sqc(p),
-    ));
+    g.stroke_closed(&ring(x0, -p.over, p.width - x0, p.cap + p.over, p.cap_stem, p.cap_hair, sqc(p)));
     // the tail starts a little inside the counter, so that it crosses the bowl, and ends below the baseline
     g.stroke(&reach(
         p,
@@ -241,16 +183,11 @@ fn C(g: &mut Draw) {
     let p = g.p;
     let (x0, x1) = (ox(p) + 14.0, p.width - ox(p) - 12.0);
     let cx = (x0 + x1) / 2.0 + 14.0;
-    let (top, bot) = (
-        p.cap + p.over - p.cap_hair / 2.0,
-        -p.over + p.cap_hair / 2.0,
-    );
+    let (top, bot) = (p.cap + p.over - p.cap_hair / 2.0, -p.over + p.cap_hair / 2.0);
     g.stroke(&[
         cut(x1, p.cap - 148.0, p.cap_hair * 1.04, 138.0),
         knot(cx, top, p.cap_hair).dir(180.0).k(sqc(p)),
-        knot(x0 + p.cap_stem / 2.0, p.cap / 2.0, p.cap_stem)
-            .dir(-90.0)
-            .k(sqc(p)),
+        knot(x0 + p.cap_stem / 2.0, p.cap / 2.0, p.cap_stem).dir(-90.0).k(sqc(p)),
         knot(cx, bot, p.cap_hair).dir(0.0),
         cut(x1 + 4.0, 144.0, p.cap_hair * 1.04, 40.0),
     ]);
@@ -260,23 +197,15 @@ fn G(g: &mut Draw) {
     let p = g.p;
     let (x0, x1) = (ox(p) + 6.0, p.width - ox(p) - 16.0);
     let cx = (x0 + x1) / 2.0 + 8.0;
-    let (top, bot) = (
-        p.cap + p.over - p.cap_hair / 2.0,
-        -p.over + p.cap_hair / 2.0,
-    );
+    let (top, bot) = (p.cap + p.over - p.cap_hair / 2.0, -p.over + p.cap_hair / 2.0);
     let xs = x1 - p.cap_stem / 2.0; // the spur: a short stem that rises from the bowl to the bar
     let bar = p.cap * 0.44;
     g.stroke(&[
         cut(x1 - 6.0, p.cap - 148.0, p.cap_hair * 1.04, 138.0),
         knot(cx, top, p.cap_hair).dir(180.0).k(sqc(p)),
-        knot(x0 + p.cap_stem / 2.0, p.cap / 2.0, p.cap_stem)
-            .dir(-90.0)
-            .k(sqc(p)),
+        knot(x0 + p.cap_stem / 2.0, p.cap / 2.0, p.cap_stem).dir(-90.0).k(sqc(p)),
         knot(cx, bot, p.cap_hair).dir(0.0).k(sqc(p)),
-        knot(xs, bot + 0.24 * p.cap, p.cap_stem)
-            .pen(0.0)
-            .dir(90.0)
-            .line(),
+        knot(xs, bot + 0.24 * p.cap, p.cap_stem).pen(0.0).dir(90.0).line(),
         knot(xs, bar + p.cap_hair / 2.0, p.cap_stem).pen(0.0),
     ]);
     g.stroke(&hbar(xs - 0.42 * (x1 - x0), xs, bar, p.cap_hair));
@@ -286,10 +215,7 @@ fn S(g: &mut Draw) {
     let p = g.p;
     let (x0, x1) = (ox(p) + 20.0, p.width - ox(p) - 20.0);
     let cx = (x0 + x1) / 2.0;
-    let (top, bot) = (
-        p.cap + p.over - p.cap_hair / 2.0,
-        -p.over + p.cap_hair / 2.0,
-    );
+    let (top, bot) = (p.cap + p.over - p.cap_hair / 2.0, -p.over + p.cap_hair / 2.0);
     let w = p.cap_stem;
     g.stroke(&[
         cut(x1 - 10.0, p.cap - 150.0, p.cap_hair * 1.04, 140.0),
@@ -328,12 +254,7 @@ fn J(g: &mut Draw) {
         knot(x - rx, yc, p.cap_hair).pen(90.0).dir(180.0).line(),
         knot(x_end, yc, p.cap_hair).pen(90.0),
     ]);
-    g.stroke(&hbar(
-        x - 0.60 * (x - x_end),
-        x,
-        p.cap - p.cap_hair / 2.0,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(x - 0.60 * (x - x_end), x, p.cap - p.cap_hair / 2.0, p.cap_hair));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -344,16 +265,7 @@ fn D(g: &mut Draw) {
     let x = p.cxl() + 6.0;
     let edge = p.width - ox(p);
     g.stroke(&vstem(x, 0.0, p.cap, p.cap_stem));
-    g.stroke(&dbowl(
-        x,
-        edge,
-        0.0,
-        p.cap,
-        p.cap_stem,
-        p.cap_hair,
-        sqc(p),
-        0.26 * (edge - x),
-    ));
+    g.stroke(&dbowl(x, edge, 0.0, p.cap, p.cap_stem, p.cap_hair, sqc(p), 0.26 * (edge - x)));
 }
 
 fn P(g: &mut Draw) {
@@ -362,16 +274,7 @@ fn P(g: &mut Draw) {
     let edge = p.width - ox(p) - 4.0;
     let waist = p.cap * 0.43;
     g.stroke(&vstem(x, 0.0, p.cap, p.cap_stem));
-    g.stroke(&dbowl(
-        x,
-        edge,
-        waist - p.cap_hair / 2.0,
-        p.cap,
-        p.cap_stem,
-        p.cap_hair,
-        sqc(p),
-        0.36 * (edge - x),
-    ));
+    g.stroke(&dbowl(x, edge, waist - p.cap_hair / 2.0, p.cap, p.cap_stem, p.cap_hair, sqc(p), 0.36 * (edge - x)));
 }
 
 fn R(g: &mut Draw) {
@@ -380,25 +283,8 @@ fn R(g: &mut Draw) {
     let edge = p.width - ox(p) - 22.0;
     let waist = p.cap * 0.455;
     g.stroke(&vstem(x, 0.0, p.cap, p.cap_stem));
-    g.stroke(&dbowl(
-        x,
-        edge,
-        waist - p.cap_hair / 2.0,
-        p.cap,
-        p.cap_stem,
-        p.cap_hair,
-        sqc(p),
-        0.36 * (edge - x),
-    ));
-    g.stroke(&reach(
-        p,
-        p.mid() + 4.0,
-        waist,
-        p.width - ox(p) + 2.0,
-        1.0,
-        0.0,
-        dt(p),
-    ));
+    g.stroke(&dbowl(x, edge, waist - p.cap_hair / 2.0, p.cap, p.cap_stem, p.cap_hair, sqc(p), 0.36 * (edge - x)));
+    g.stroke(&reach(p, p.mid() + 4.0, waist, p.width - ox(p) + 2.0, 1.0, 0.0, dt(p)));
 }
 
 fn B(g: &mut Draw) {
@@ -417,16 +303,7 @@ fn B(g: &mut Draw) {
         sqc(p),
         0.42 * (upper - x),
     ));
-    g.stroke(&dbowl(
-        x,
-        lower,
-        0.0,
-        waist + p.cap_hair / 2.0,
-        p.cap_stem,
-        p.cap_hair,
-        sqc(p),
-        0.42 * (lower - x),
-    ));
+    g.stroke(&dbowl(x, lower, 0.0, waist + p.cap_hair / 2.0, p.cap_stem, p.cap_hair, sqc(p), 0.42 * (lower - x)));
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -484,10 +361,7 @@ fn K(g: &mut Draw) {
     let (xs, ya) = (x + 0.12 * p.cap_stem, p.cap * 0.36);
     let w = cut_len(p, xe - xs, p.cap - ya, t, 0.5);
     let slope = (xe - w / 2.0 - xs) / (p.cap - ya);
-    g.stroke(&[
-        knot(xs, ya, w / slope).pen(90.0).line(),
-        knot(xe - w / 2.0, p.cap, w).pen(0.0),
-    ]);
+    g.stroke(&[knot(xs, ya, w / slope).pen(90.0).line(), knot(xe - w / 2.0, p.cap, w).pen(0.0)]);
     // the leg leaves the arm a third of the way up it
     let yj = ya + 0.34 * (p.cap - ya);
     g.stroke(&reach(p, xs + slope * (yj - ya), yj, xe + 8.0, 1.0, 0.0, t));
@@ -510,15 +384,7 @@ fn M(g: &mut Draw) {
     g.stroke(&vstem(x0 + s / 2.0, 0.0, p.cap, s));
     g.stroke(&vstem(x1 - s / 2.0, 0.0, p.cap, s));
     let t = p.cap_hair * 0.88; // thinned, and by more in the Bold, so that the three counters stay open
-    g.poly(&vee(
-        p,
-        x0 + 0.35 * s,
-        x1 - 0.35 * s,
-        p.cap,
-        p.cap * 0.30,
-        t,
-        0.7 * t,
-    ));
+    g.poly(&vee(p, x0 + 0.35 * s, x1 - 0.35 * s, p.cap, p.cap * 0.30, t, 0.7 * t));
 }
 
 fn W(g: &mut Draw) {

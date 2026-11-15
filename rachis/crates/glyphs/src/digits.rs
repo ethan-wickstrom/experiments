@@ -115,13 +115,7 @@ fn small(p: &Params, x0: f64, x1: f64, y0: f64, y1: f64) -> Frame {
 fn superior(p: &Params) -> Frame {
     let half = SMALL_W * (p.width / 2.0 - p.fig_sb);
     let top = p.cap + SMALL_RISE;
-    small(
-        p,
-        p.mid() - half,
-        p.mid() + half,
-        top - SMALL_H * p.cap,
-        top,
-    )
+    small(p, p.mid() - half, p.mid() + half, top - SMALL_H * p.cap, top)
 }
 
 /// How far an inferior sits below the superior it repeats.
@@ -131,24 +125,12 @@ fn inferior_shift(p: &Params) -> f64 {
 
 fn numerator(p: &Params) -> Frame {
     let top = p.cap + SMALL_RISE;
-    small(
-        p,
-        FRAC_EDGE,
-        FRAC_EDGE + FRAC_W * p.width,
-        top - FRAC_H * p.cap,
-        top,
-    )
+    small(p, FRAC_EDGE, FRAC_EDGE + FRAC_W * p.width, top - FRAC_H * p.cap, top)
 }
 
 fn denominator(p: &Params) -> Frame {
     let bottom = p.desc + SMALL_RISE;
-    small(
-        p,
-        p.width - FRAC_EDGE - FRAC_W * p.width,
-        p.width - FRAC_EDGE,
-        bottom,
-        bottom + FRAC_H * p.cap,
-    )
+    small(p, p.width - FRAC_EDGE - FRAC_W * p.width, p.width - FRAC_EDGE, bottom, bottom + FRAC_H * p.cap)
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -167,25 +149,14 @@ fn diag_from(ax: f64, ay: f64, bx: f64, by: f64, t: f64, a_side: f64, b_side: f6
         cb = bx - b_side * breadth / 2.0;
         breadth = t * (cb - ca).hypot(by - ay) / (by - ay).abs();
     }
-    vec![
-        knot(ca, ay, breadth).pen(0.0).line(),
-        knot(cb, by, breadth).pen(0.0),
-    ]
+    vec![knot(ca, ay, breadth).pen(0.0).line(), knot(cb, by, breadth).pen(0.0)]
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // the ten constructions
 
 fn draw_zero_ring(g: &mut Draw, f: Frame) {
-    g.stroke_closed(&ring(
-        f.x0,
-        f.bot(),
-        f.x1,
-        f.top(),
-        f.stem,
-        f.hair,
-        f.sq + ZERO_SQ,
-    ));
+    g.stroke_closed(&ring(f.x0, f.bot(), f.x1, f.top(), f.stem, f.hair, f.sq + ZERO_SQ));
 }
 
 /// A ring and a slash from lower left to upper right. The slash is the diagonal of the box of the ring's centre
@@ -196,14 +167,8 @@ fn draw_zero(g: &mut Draw, f: Frame) {
     let counter = f.w() - 2.0 * f.stem;
     let t = 0.50 * f.hair + 0.11 * counter;
     let m = 0.5 + 0.375 * (f.sq + ZERO_SQ); // where a superelliptic corner crosses the diagonal of its box
-    let (dx, dy) = (
-        m * (f.w() - f.stem) / 2.0,
-        m * (f.h() + 2.0 * f.over - f.hair) / 2.0,
-    );
-    g.stroke(&[
-        knot(f.cx() - dx, f.cy() - dy, t).line(),
-        knot(f.cx() + dx, f.cy() + dy, t),
-    ]);
+    let (dx, dy) = (m * (f.w() - f.stem) / 2.0, m * (f.h() + 2.0 * f.over - f.hair) / 2.0);
+    g.stroke(&[knot(f.cx() - dx, f.cy() - dy, t).line(), knot(f.cx() + dx, f.cy() + dy, t)]);
 }
 
 fn draw_zero_dot(g: &mut Draw, f: Frame) {
@@ -219,15 +184,7 @@ fn draw_one(g: &mut Draw, f: Frame) {
     let x = f.cx() + 0.04 * f.w();
     g.stroke(&vstem(x, f.y0, f.y1, s));
     g.stroke(&hbar(f.x(0.015), f.x(0.985), f.y0 + h / 2.0, h));
-    g.stroke(&diag_from(
-        x + s / 2.0,
-        f.y1,
-        f.x(0.03),
-        f.y(0.765),
-        h,
-        1.0,
-        -1.0,
-    ));
+    g.stroke(&diag_from(x + s / 2.0, f.y1, f.x(0.03), f.y(0.765), h, 1.0, -1.0));
 }
 
 /// A round top, a straight neck and a flat base.
@@ -253,9 +210,7 @@ fn draw_three(g: &mut Draw, f: Frame) {
     g.stroke(&[
         cut(f.x(0.05), f.y(0.805), h * 1.04, 42.0),
         knot(f.x(0.47), top, h).dir(0.0).k(f.sq),
-        knot(f.x(0.95) - s / 2.0, (top + yw) / 2.0, s)
-            .dir(-90.0)
-            .k(f.sq),
+        knot(f.x(0.95) - s / 2.0, (top + yw) / 2.0, s).dir(-90.0).k(f.sq),
         knot(xj, yw, h).pen(90.0).dir(180.0).line(),
         knot(xw, yw, h).pen(90.0),
     ]);
@@ -275,15 +230,7 @@ fn draw_four(g: &mut Draw, f: Frame) {
     let yb = f.y(0.225);
     g.stroke(&vstem(xs, f.y0, f.y1, s));
     g.stroke(&hbar(f.x(-0.04), f.x(1.04), yb, h));
-    g.stroke(&diag_from(
-        f.x(-0.04),
-        yb - h / 2.0,
-        xs + s / 2.0,
-        f.y1,
-        1.06 * h,
-        -1.0,
-        1.0,
-    ));
+    g.stroke(&diag_from(f.x(-0.04), yb - h / 2.0, xs + s / 2.0, f.y1, 1.06 * h, -1.0, 1.0));
 }
 
 /// A flat top, a sharp corner, a short stem, and a bowl that leaves it as an arch.
@@ -297,15 +244,9 @@ fn draw_five(g: &mut Draw, f: Frame) {
     let j = f.join * s;
     let spring = 52.0;
     g.stroke(&[
-        Knot::at(
-            pt(xs + s / 2.0 - 3.0, branch) + (V::unit(spring) * (j / 2.0)).left(),
-            j,
-        )
-        .dir(spring),
+        Knot::at(pt(xs + s / 2.0 - 3.0, branch) + (V::unit(spring) * (j / 2.0)).left(), j).dir(spring),
         knot(f.x(0.52), yt - h / 2.0, h).dir(0.0).k(f.sq),
-        knot(f.x1 - s / 2.0, (yt + f.bot()) / 2.0 - 0.01 * f.h(), s)
-            .dir(-90.0)
-            .k(f.sq),
+        knot(f.x1 - s / 2.0, (yt + f.bot()) / 2.0 - 0.01 * f.h(), s).dir(-90.0).k(f.sq),
         knot(f.x(0.47), f.bot() + h / 2.0, h).dir(180.0),
         cut(f.x(-0.01), f.y(0.185), h * 1.04, 140.0),
     ]);
@@ -324,9 +265,7 @@ fn six(f: Frame) -> Vec<Knot> {
         knot(f.x(0.53), f.top() - h / 2.0, h).dir(180.0).k(f.sq),
         knot(f.x0 + s / 2.0, f.y(0.44), s).dir(-90.0).k(f.sq),
         knot(f.x(0.51), f.bot() + h / 2.0, h).dir(0.0).k(f.sq),
-        knot(f.x1 - s / 2.0, (yb + f.bot()) / 2.0, s)
-            .dir(90.0)
-            .k(f.sq),
+        knot(f.x1 - s / 2.0, (yb + f.bot()) / 2.0, s).dir(90.0).k(f.sq),
         knot(f.x(0.54), yb - h / 2.0, h).dir(180.0),
         Knot::at(end, j).dir(arrive),
     ]
@@ -349,15 +288,7 @@ fn draw_eight(g: &mut Draw, f: Frame) {
     let yw = f.y(0.535);
     let inset = 0.05 * f.w();
     g.stroke_closed(&ring(f.x0, f.bot(), f.x1, yw + h / 2.0, s, h, f.sq));
-    g.stroke_closed(&ring(
-        f.x0 + inset,
-        yw - h / 2.0,
-        f.x1 - inset,
-        f.top(),
-        0.96 * s,
-        h,
-        f.sq,
-    ));
+    g.stroke_closed(&ring(f.x0 + inset, yw - h / 2.0, f.x1 - inset, f.top(), 0.96 * s, h, f.sq));
 }
 
 fn draw_nine(g: &mut Draw, f: Frame) {
@@ -381,10 +312,7 @@ const DRAW: [(char, Construction); 10] = [
 
 /// The construction of `digit` in [`DRAW`] (the Python dict lookup `DRAW[digit]`).
 fn draw_of(digit: char) -> Construction {
-    DRAW.iter()
-        .find(|&&(c, _)| c == digit)
-        .map(|&(_, draw)| draw)
-        .expect("a digit")
+    DRAW.iter().find(|&&(c, _)| c == digit).map(|&(_, draw)| draw).expect("a digit")
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -434,13 +362,7 @@ fn small_paren(f: Frame) -> Vec<Knot> {
     let half_cut = cut_pen(0.0, 0.0, te, -180.0 + slope, 0.0).w / 2.0;
     vec![
         cut_pen(x_tip - half_cut, y_top, te, -180.0 + slope, 0.0).k(f.sq),
-        knot(
-            f.x(0.27) + 0.46 * f.stem,
-            (y_top + y_bot) / 2.0,
-            0.92 * f.stem,
-        )
-        .dir(-90.0)
-        .k(f.sq),
+        knot(f.x(0.27) + 0.46 * f.stem, (y_top + y_bot) / 2.0, 0.92 * f.stem).dir(-90.0).k(f.sq),
         cut_pen(x_tip - half_cut, y_bot, te, -slope, 0.0),
     ]
 }
@@ -470,12 +392,7 @@ fn draw_small_n(g: &mut Draw, f: Frame) {
         xr,
         f.y0 + xh + f.over,
         f.y0,
-        Arch {
-            stem: Some(s),
-            hair: Some(f.hair),
-            branch: Some(f.y0 + 0.68 * xh),
-            ..Arch::default()
-        },
+        Arch { stem: Some(s), hair: Some(f.hair), branch: Some(f.y0 + 0.68 * xh), ..Arch::default() },
     ));
 }
 
@@ -539,24 +456,13 @@ fn fraction(reg: &mut Registry, character: char, over: char, under: char) {
         let (cx, cy) = ((n.x1 + d.x0) / 2.0, (n.y0 + d.y1) / 2.0);
         let rise = 0.30 * (n.y1 - d.y0);
         let run = rise / 52.0_f64.to_radians().tan();
-        g.stroke(&diag_from(
-            cx - run,
-            cy - rise,
-            cx + run,
-            cy + rise,
-            0.9 * n.hair,
-            0.0,
-            0.0,
-        ));
+        g.stroke(&diag_from(cx - run, cy - rise, cx + run, cy + rise, 0.9 * n.hair, 0.0, 0.0));
     });
 }
 
 pub fn register(reg: &mut Registry) {
     reg.module("digits");
-    for ((digit, sup), inf) in "0123456789"
-        .chars()
-        .zip("⁰¹²³⁴⁵⁶⁷⁸⁹".chars())
-        .zip("₀₁₂₃₄₅₆₇₈₉".chars())
+    for ((digit, sup), inf) in "0123456789".chars().zip("⁰¹²³⁴⁵⁶⁷⁸⁹".chars()).zip("₀₁₂₃₄₅₆₇₈₉".chars())
     {
         figure(reg, digit, sup, inf);
     }

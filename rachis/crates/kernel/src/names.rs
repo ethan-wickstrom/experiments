@@ -22,11 +22,7 @@ pub fn name_of_code(cp: u32) -> String {
     {
         return AGL[i].1.into();
     }
-    if cp <= 0xFFFF {
-        format!("uni{cp:04X}")
-    } else {
-        format!("u{cp:05X}")
-    }
+    if cp <= 0xFFFF { format!("uni{cp:04X}") } else { format!("u{cp:05X}") }
 }
 
 /// Adobe Glyph List names for U+0020 to U+017F, sorted by code point.

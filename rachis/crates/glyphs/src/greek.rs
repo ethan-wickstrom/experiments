@@ -9,9 +9,7 @@
 
 use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
 
-use crate::parts::{
-    Arch, Bowl, arch, bowl, cut, cut_pen, diag, elbow, hbar, mirror, ring, turn, vee, vstem,
-};
+use crate::parts::{Arch, Bowl, arch, bowl, cut, cut_pen, diag, elbow, hbar, mirror, ring, turn, vee, vstem};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Measurements this group derives from the parameters.
@@ -55,12 +53,7 @@ fn Gamma(g: &mut Draw) {
     let p = g.p;
     let x = p.cxl() + 30.0;
     g.stroke(&vstem(x, 0.0, p.cap, p.cap_stem));
-    g.stroke(&hbar(
-        x,
-        p.width - p.sb_round - 10.0,
-        p.cap - p.cap_hair / 2.0,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(x, p.width - p.sb_round - 10.0, p.cap - p.cap_hair / 2.0, p.cap_hair));
 }
 
 /// Outer feet, stroke and apex of Λ and Δ: the Latin A's.
@@ -88,12 +81,7 @@ fn Theta(g: &mut Draw) {
     let (x0, y0, x1, y1) = cap_round(p);
     g.stroke_closed(&ring(x0, y0, x1, y1, p.cap_stem, p.cap_hair, p.sq + 0.02));
     let half = 0.27 * (x1 - x0 - 2.0 * p.cap_stem); // the bar floats: a gap of 0.23 of the counter on each side
-    g.stroke(&hbar(
-        p.mid() - half,
-        p.mid() + half,
-        p.cap / 2.0,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(p.mid() - half, p.mid() + half, p.cap / 2.0, p.cap_hair));
 }
 
 fn Xi(g: &mut Draw) {
@@ -109,12 +97,7 @@ fn Pi(g: &mut Draw) {
     let p = g.p;
     g.stroke(&vstem(p.cxl(), 0.0, p.cap, p.cap_stem));
     g.stroke(&vstem(p.cxr(), 0.0, p.cap, p.cap_stem));
-    g.stroke(&hbar(
-        p.cxl() - p.cap_stem / 2.0,
-        p.cxr() + p.cap_stem / 2.0,
-        p.cap - p.cap_hair / 2.0,
-        p.cap_hair,
-    ));
+    g.stroke(&hbar(p.cxl() - p.cap_stem / 2.0, p.cxr() + p.cap_stem / 2.0, p.cap - p.cap_hair / 2.0, p.cap_hair));
 }
 
 fn Sigma(g: &mut Draw) {
@@ -128,11 +111,7 @@ fn Sigma(g: &mut Draw) {
         xa = x0 + diag(xa, p.cap, xv, p.cap / 2.0, t)[0].w / 2.0;
     }
     let w = diag(xa, p.cap, xv, p.cap / 2.0, t)[0].w;
-    g.stroke(&[
-        knot(xa, p.cap, w).pen(0.0).line(),
-        knot(xv, p.cap / 2.0, t).line(),
-        knot(xa, 0.0, w).pen(0.0),
-    ]);
+    g.stroke(&[knot(xa, p.cap, w).pen(0.0).line(), knot(xv, p.cap / 2.0, t).line(), knot(xa, 0.0, w).pen(0.0)]);
     g.stroke(&hbar(xa, x1, p.cap - h / 2.0, h));
     g.stroke(&hbar(xa, x1 + 4.0, h / 2.0, h));
 }
@@ -141,15 +120,7 @@ fn Phi(g: &mut Draw) {
     let p = g.p;
     let t = cap_three(p);
     let x0 = p.sb_round - 24.0;
-    g.stroke_closed(&ring(
-        x0,
-        p.cap * 0.14,
-        p.width - x0,
-        p.cap * 0.86,
-        t,
-        p.cap_hair * 0.94,
-        p.sq + 0.02,
-    ));
+    g.stroke_closed(&ring(x0, p.cap * 0.14, p.width - x0, p.cap * 0.86, t, p.cap_hair * 0.94, p.sq + 0.02));
     g.stroke(&vstem(p.mid(), 0.0, p.cap, t));
 }
 
@@ -206,26 +177,10 @@ fn alpha(g: &mut Draw) {
     let p = g.p;
     let xs = p.xr() - 36.0; // the stem stands left of d's, and its foot takes the room
     g.stroke(&mirror(
-        &bowl(
-            p,
-            p.width - xs,
-            p.width - p.sb_round + 6.0,
-            -p.over,
-            p.xh + p.over,
-            Bowl::default(),
-        ),
+        &bowl(p, p.width - xs, p.width - p.sb_round + 6.0, -p.over, p.xh + p.over, Bowl::default()),
         p.mid(),
     ));
-    g.stroke(&elbow(
-        xs,
-        p.xh,
-        0.0,
-        p.width - p.sb_round + 22.0,
-        p.stem,
-        p.hair,
-        p.sq,
-        84.0,
-    ));
+    g.stroke(&elbow(xs, p.xh, 0.0, p.width - p.sb_round + 22.0, p.stem, p.hair, p.sq, 84.0));
 }
 
 fn beta(g: &mut Draw) {
@@ -240,14 +195,9 @@ fn beta(g: &mut Draw) {
     let bar = inner + 0.30 * (edge_hi - s - inner); // the waist's bar stops short of the stem
     g.stroke(&[
         knot(xs, p.desc, s).pen(0.0).line(),
-        knot(xs, p.asc - 0.8 * (xa - xs), s)
-            .pen(0.0)
-            .dir(90.0)
-            .k(p.sq),
+        knot(xs, p.asc - 0.8 * (xa - xs), s).pen(0.0).dir(90.0).k(p.sq),
         knot(xa, top, h).dir(0.0).k(p.sq),
-        knot(edge_hi - s * 0.48, (waist + top) / 2.0, s * 0.96)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(edge_hi - s * 0.48, (waist + top) / 2.0, s * 0.96).dir(-90.0).k(p.sq),
         knot(xa + 16.0, waist, h).pen(90.0).dir(180.0).line(),
         knot(bar, waist, h).pen(90.0),
     ]);
@@ -256,15 +206,9 @@ fn beta(g: &mut Draw) {
     g.stroke(&[
         knot(bar, waist, h).pen(90.0).line(),
         knot(xa + 26.0, waist, h).pen(90.0).dir(0.0).k(p.sq),
-        knot(edge_lo - s / 2.0, (waist + bot) / 2.0, s)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(edge_lo - s / 2.0, (waist + bot) / 2.0, s).dir(-90.0).k(p.sq),
         knot(inner + 0.5 * (edge_lo - s - inner), bot, h).dir(180.0),
-        Knot::at(
-            pt(inner - 3.0, y_end) + ((j / 2.0) * V::unit(122.0)).left(),
-            j,
-        )
-        .dir(122.0),
+        Knot::at(pt(inner - 3.0, y_end) + ((j / 2.0) * V::unit(122.0)).left(), j).dir(122.0),
     ]);
 }
 
@@ -272,14 +216,7 @@ fn gamma(g: &mut Draw) {
     let p = g.p;
     let t = p.stem * 0.94;
     let yv = p.xh * 0.13;
-    g.poly(&vee(
-        p.sb_round + 6.0,
-        p.width - p.sb_round - 6.0,
-        p.xh,
-        yv,
-        t,
-        p.stem * 0.9,
-    ));
+    g.poly(&vee(p.sb_round + 6.0, p.width - p.sb_round - 6.0, p.xh, yv, t, p.stem * 0.9));
     g.stroke(&vstem(p.mid(), p.desc, yv + p.stem * 0.6, p.stem));
 }
 
@@ -293,9 +230,7 @@ fn delta(g: &mut Draw) {
     let (rx, ry) = ((x1 - x0 - s) / 2.0, (y1 - y0 - h) / 2.0);
     g.stroke(&[
         cut(x1 - 40.0, p.asc - 78.0, h * 1.04, 148.0),
-        knot(cx + 6.0, p.asc + p.over - h / 2.0, h)
-            .dir(180.0)
-            .k(p.sq),
+        knot(cx + 6.0, p.asc + p.over - h / 2.0, h).dir(180.0).k(p.sq),
         knot(x0 + 74.0 + s / 2.0, p.asc - 128.0, s * 0.9).dir(-82.0),
         knot(cx + 0.70 * rx, (y0 + y1) / 2.0 + 0.80 * ry, (s + h) / 2.0).dir(-42.0),
     ]);
@@ -312,18 +247,14 @@ fn epsilon(g: &mut Draw) {
     g.stroke(&[
         cut(x1 - 10.0, p.xh - 108.0, h * 1.04, 144.0),
         knot(cx + 6.0, top, h).dir(180.0).k(p.sq),
-        knot(x0 + 22.0 + s / 2.0, (top + waist) / 2.0, s * 0.96)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(x0 + 22.0 + s / 2.0, (top + waist) / 2.0, s * 0.96).dir(-90.0).k(p.sq),
         knot(cx - 30.0, waist, h).pen(90.0).dir(0.0).line(),
         knot(tongue, waist, h).pen(90.0),
     ]);
     g.stroke(&[
         knot(tongue, waist, h).pen(90.0).line(),
         knot(cx - 34.0, waist, h).pen(90.0).dir(180.0).k(p.sq),
-        knot(x0 + s / 2.0, (waist + bot) / 2.0, s)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(x0 + s / 2.0, (waist + bot) / 2.0, s).dir(-90.0).k(p.sq),
         knot(cx + 4.0, bot, h).dir(0.0),
         cut(x1, 106.0, h * 1.04, 36.0),
     ]);
@@ -348,9 +279,7 @@ fn zeta(g: &mut Draw) {
     let yb = h / 2.0;
     let mut knots = vec![
         cut_pen(x1 - 52.0, p.asc - h / 2.0, h * 1.06, -128.0, 0.0),
-        knot(x0 + 14.0 + s / 2.0, p.asc * 0.34, s)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(x0 + 14.0 + s / 2.0, p.asc * 0.34, s).dir(-90.0).k(p.sq),
         knot(p.mid() - 10.0, yb, h).dir(0.0).line(),
     ];
     knots.extend_from_slice(&tail(p, x1 - 20.0 - s / 2.0, yb));
@@ -368,9 +297,7 @@ fn xi(g: &mut Draw) {
     g.stroke(&[
         knot(x1 - 14.0, yt, h).pen(90.0).line(),
         knot(cx, yt, h).pen(90.0).dir(180.0).k(p.sq),
-        knot(x0 + 36.0 + s / 2.0, (yt + waist) / 2.0, s * 0.96)
-            .dir(-90.0)
-            .k(p.sq),
+        knot(x0 + 36.0 + s / 2.0, (yt + waist) / 2.0, s * 0.96).dir(-90.0).k(p.sq),
         knot(cx, waist, h).pen(90.0).dir(0.0).line(),
         knot(tongue, waist, h).pen(90.0),
     ]);
@@ -387,48 +314,19 @@ fn xi(g: &mut Draw) {
 fn eta(g: &mut Draw) {
     let p = g.p;
     g.stroke(&vstem(p.xl(), 0.0, p.xh, p.stem));
-    g.stroke(&arch(
-        p,
-        p.xl(),
-        p.xr(),
-        p.xh + p.over,
-        p.desc,
-        Arch::default(),
-    ));
+    g.stroke(&arch(p, p.xl(), p.xr(), p.xh + p.over, p.desc, Arch::default()));
 }
 
 fn theta(g: &mut Draw) {
     let p = g.p;
     let x0 = p.sb_round + 36.0;
-    g.stroke_closed(&ring(
-        x0,
-        -p.over,
-        p.width - x0,
-        p.asc + p.over,
-        p.stem,
-        p.hair,
-        p.sq,
-    ));
-    g.stroke(&hbar(
-        x0 + p.stem / 2.0,
-        p.width - x0 - p.stem / 2.0,
-        p.asc / 2.0,
-        p.hair * 0.94,
-    ));
+    g.stroke_closed(&ring(x0, -p.over, p.width - x0, p.asc + p.over, p.stem, p.hair, p.sq));
+    g.stroke(&hbar(x0 + p.stem / 2.0, p.width - x0 - p.stem / 2.0, p.asc / 2.0, p.hair * 0.94));
 }
 
 fn iota(g: &mut Draw) {
     let p = g.p;
-    g.stroke(&elbow(
-        p.mid() - 40.0,
-        p.xh,
-        0.0,
-        p.width - p.sb_round - 50.0,
-        p.stem,
-        p.hair,
-        p.sq,
-        112.0,
-    ));
+    g.stroke(&elbow(p.mid() - 40.0, p.xh, 0.0, p.width - p.sb_round - 50.0, p.stem, p.hair, p.sq, 112.0));
 }
 
 fn kappa(g: &mut Draw) {
@@ -437,14 +335,8 @@ fn kappa(g: &mut Draw) {
     let t = p.stem * 0.94;
     let xr = p.width - p.sb_round + 2.0;
     g.stroke(&vstem(x, 0.0, p.xh, p.stem));
-    g.stroke(&[
-        knot(x, p.xh * 0.34, t).line(),
-        diag(0.0, 0.0, xr - 54.0, p.xh, t)[1],
-    ]);
-    g.stroke(&[
-        knot(x + 112.0, p.xh * 0.52, t).line(),
-        diag(0.0, p.xh, xr - 46.0, 0.0, t)[1],
-    ]);
+    g.stroke(&[knot(x, p.xh * 0.34, t).line(), diag(0.0, 0.0, xr - 54.0, p.xh, t)[1]]);
+    g.stroke(&[knot(x + 112.0, p.xh * 0.52, t).line(), diag(0.0, p.xh, xr - 46.0, 0.0, t)[1]]);
 }
 
 fn lambda_(g: &mut Draw) {
@@ -462,11 +354,7 @@ fn mu(g: &mut Draw) {
     let p = g.p;
     g.stroke(&vstem(p.xl(), p.desc, p.xh, p.stem));
     g.stroke(&vstem(p.xr(), 0.0, p.xh, p.stem));
-    g.stroke(&turn(
-        &arch(p, p.xl(), p.xr(), p.xh + p.over, 0.0, Arch::default()),
-        p.mid(),
-        p.xh / 2.0,
-    ));
+    g.stroke(&turn(&arch(p, p.xl(), p.xr(), p.xh + p.over, 0.0, Arch::default()), p.mid(), p.xh / 2.0));
 }
 
 fn micro(g: &mut Draw) {

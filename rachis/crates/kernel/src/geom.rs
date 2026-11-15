@@ -34,10 +34,7 @@ impl V {
     }
 
     pub fn polar(length: f64, radians: f64) -> V {
-        V {
-            x: length * radians.cos(),
-            y: length * radians.sin(),
-        }
+        V { x: length * radians.cos(), y: length * radians.sin() }
     }
 
     pub fn abs(self) -> f64 {
@@ -71,35 +68,23 @@ impl V {
 
     /// The complex product.
     pub fn cmul(self, o: V) -> V {
-        V {
-            x: self.x * o.x - self.y * o.y,
-            y: self.x * o.y + self.y * o.x,
-        }
+        V { x: self.x * o.x - self.y * o.y, y: self.x * o.y + self.y * o.x }
     }
 
     /// The complex quotient.
     pub fn cdiv(self, o: V) -> V {
         let d = o.x * o.x + o.y * o.y;
-        V {
-            x: (self.x * o.x + self.y * o.y) / d,
-            y: (self.y * o.x - self.x * o.y) / d,
-        }
+        V { x: (self.x * o.x + self.y * o.y) / d, y: (self.y * o.x - self.x * o.y) / d }
     }
 
     /// Turned 90 degrees to the right (multiplied by -i).
     pub fn right(self) -> V {
-        V {
-            x: self.y,
-            y: -self.x,
-        }
+        V { x: self.y, y: -self.x }
     }
 
     /// Turned 90 degrees to the left (multiplied by i).
     pub fn left(self) -> V {
-        V {
-            x: -self.y,
-            y: self.x,
-        }
+        V { x: -self.y, y: self.x }
     }
 
     pub fn lerp(self, o: V, t: f64) -> V {
@@ -110,60 +95,42 @@ impl V {
 impl Add for V {
     type Output = V;
     fn add(self, o: V) -> V {
-        V {
-            x: self.x + o.x,
-            y: self.y + o.y,
-        }
+        V { x: self.x + o.x, y: self.y + o.y }
     }
 }
 
 impl Sub for V {
     type Output = V;
     fn sub(self, o: V) -> V {
-        V {
-            x: self.x - o.x,
-            y: self.y - o.y,
-        }
+        V { x: self.x - o.x, y: self.y - o.y }
     }
 }
 
 impl Neg for V {
     type Output = V;
     fn neg(self) -> V {
-        V {
-            x: -self.x,
-            y: -self.y,
-        }
+        V { x: -self.x, y: -self.y }
     }
 }
 
 impl Mul<f64> for V {
     type Output = V;
     fn mul(self, k: f64) -> V {
-        V {
-            x: self.x * k,
-            y: self.y * k,
-        }
+        V { x: self.x * k, y: self.y * k }
     }
 }
 
 impl Mul<V> for f64 {
     type Output = V;
     fn mul(self, v: V) -> V {
-        V {
-            x: self * v.x,
-            y: self * v.y,
-        }
+        V { x: self * v.x, y: self * v.y }
     }
 }
 
 impl Div<f64> for V {
     type Output = V;
     fn div(self, k: f64) -> V {
-        V {
-            x: self.x / k,
-            y: self.y / k,
-        }
+        V { x: self.x / k, y: self.y / k }
     }
 }
 
@@ -206,10 +173,7 @@ impl Seg {
             Seg::Line(p0, p1) => p0.lerp(p1, t),
             Seg::Cubic(p0, c1, c2, p3) => {
                 let s = 1.0 - t;
-                p0 * (s * s * s)
-                    + c1 * (3.0 * s * s * t)
-                    + c2 * (3.0 * s * t * t)
-                    + p3 * (t * t * t)
+                p0 * (s * s * s) + c1 * (3.0 * s * s * t) + c2 * (3.0 * s * t * t) + p3 * (t * t * t)
             }
         }
     }
@@ -220,17 +184,11 @@ impl Seg {
             Seg::Line(p0, p1) => p1 - p0,
             Seg::Cubic(p0, c1, c2, p3) => {
                 let s = 1.0 - t;
-                let d = (c1 - p0) * (3.0 * s * s)
-                    + (c2 - c1) * (6.0 * s * t)
-                    + (p3 - c2) * (3.0 * t * t);
+                let d = (c1 - p0) * (3.0 * s * s) + (c2 - c1) * (6.0 * s * t) + (p3 - c2) * (3.0 * t * t);
                 if d.abs() > EPS {
                     d
                 } else if t < 0.5 {
-                    if (c2 - p0).abs() > EPS {
-                        c2 - p0
-                    } else {
-                        p3 - p0
-                    }
+                    if (c2 - p0).abs() > EPS { c2 - p0 } else { p3 - p0 }
                 } else if (p3 - c1).abs() > EPS {
                     p3 - c1
                 } else {
@@ -296,11 +254,7 @@ impl Seg {
             let a = -q0 + 3.0 * q1 - 3.0 * q2 + q3;
             let b = 2.0 * (q0 - 2.0 * q1 + q2);
             let c = q1 - q0;
-            found.extend(
-                quadratic_roots(a, b, c)
-                    .into_iter()
-                    .filter(|&t| 1e-4 < t && t < 1.0 - 1e-4),
-            );
+            found.extend(quadratic_roots(a, b, c).into_iter().filter(|&t| 1e-4 < t && t < 1.0 - 1e-4));
         }
         found.sort_by(f64::total_cmp);
         found
@@ -309,22 +263,14 @@ impl Seg {
 
 fn quadratic_roots(a: f64, b: f64, c: f64) -> Vec<f64> {
     if a.abs() < 1e-12 {
-        return if b.abs() < 1e-12 {
-            Vec::new()
-        } else {
-            vec![-c / b]
-        };
+        return if b.abs() < 1e-12 { Vec::new() } else { vec![-c / b] };
     }
     let disc = b * b - 4.0 * a * c;
     if disc < 0.0 {
         return Vec::new();
     }
     let r = disc.sqrt();
-    let q = if b != 0.0 {
-        -0.5 * (b + r.copysign(b))
-    } else {
-        0.5 * r
-    };
+    let q = if b != 0.0 { -0.5 * (b + r.copysign(b)) } else { 0.5 * r };
     let mut roots = vec![q / a];
     if q.abs() > 1e-12 {
         roots.push(c / q);
@@ -407,13 +353,7 @@ pub struct Node {
 
 impl Node {
     pub fn new(z: V) -> Node {
-        Node {
-            z,
-            dir: None,
-            curl: 1.0,
-            t_in: 1.0,
-            t_out: 1.0,
-        }
+        Node { z, dir: None, curl: 1.0, t_in: 1.0, t_out: 1.0 }
     }
 
     pub fn dir(mut self, d: V) -> Node {
@@ -443,9 +383,7 @@ pub fn hobby_directions(nodes: &[Node], closed: bool) -> Result<Vec<V>, String> 
         return Ok(vec![d, d]);
     }
 
-    let delta: Vec<V> = (0..nseg)
-        .map(|k| nodes[(k + 1) % n].z - nodes[k].z)
-        .collect();
+    let delta: Vec<V> = (0..nseg).map(|k| nodes[(k + 1) % n].z - nodes[k].z).collect();
     let dist: Vec<f64> = delta.iter().map(|d| d.abs()).collect();
 
     // Unknowns: theta[k] for the departure from knot k along segment k, phi[k] for the arrival at knot k along
@@ -563,6 +501,99 @@ pub fn hobby(nodes: &[Node], closed: bool) -> Result<Vec<Seg>, String> {
         .collect())
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Superellipses
+
+/// The exponent of the superellipse |x/a|^n + |y/b|^n = 1 whose diagonal point is where a single cubic with handles
+/// at the fraction `k` of the way to the corner has its midpoint. `k` = 0.5523 gives 2, the ellipse.
+pub fn lame_exponent(k: f64) -> f64 {
+    0.5f64.ln() / ((4.0 + 3.0 * k) / 8.0).ln()
+}
+
+/// How far the superellipse of exponent `n` reaches along its diagonal, as a fraction of the way to the corner of
+/// its box: 2^(-1/n). It is 0.7071 for an ellipse and 0.7579 for Piet Hein's n = 5/2.
+pub fn lame_reach(n: f64) -> f64 {
+    0.5f64.powf(1.0 / n)
+}
+
+/// The handle lengths (alpha, beta) of the two cubics that best fit a quadrant of the superellipse of exponent `n`.
+///
+/// In the quadrant's own frame the curve runs from (1, 0) to (0, 1) through the diagonal point (s, s), s = 2^(-1/n).
+/// The first cubic is (1, 0), (1, alpha), (s + beta, s - beta), (s, s) and the second is its mirror image, so the
+/// curve keeps its tangents at the extremes and on the diagonal and has the same curvature on both sides of the
+/// diagonal. Alpha and beta minimise the squared deviation of |u|^n + |v|^n from 1 along the cubic. For n = 2 the
+/// result is the usual two-cubic approximation of a quarter circle.
+pub fn lame_handles(n: f64) -> (f64, f64) {
+    // the fit is a search, and a font asks for the same few exponents many thousands of times
+    static FITS: std::sync::Mutex<Vec<(u64, (f64, f64))>> = std::sync::Mutex::new(Vec::new());
+    let key = n.to_bits();
+    if let Some(&(_, fit)) = FITS.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(k, _)| *k == key) {
+        return fit;
+    }
+    let fit = fit_lame_handles(n);
+    let mut fits = FITS.lock().unwrap_or_else(|e| e.into_inner());
+    if fits.len() < 64 {
+        fits.push((key, fit));
+    }
+    fit
+}
+
+fn fit_lame_handles(n: f64) -> (f64, f64) {
+    let s = lame_reach(n);
+    let error = |alpha: f64, beta: f64| -> f64 {
+        let c = Seg::Cubic(pt(1.0, 0.0), pt(1.0, alpha), pt(s + beta, s - beta), pt(s, s));
+        (1..32)
+            .map(|j| {
+                let q = c.at(j as f64 / 32.0);
+                let e = (q.x.abs().powf(n) + q.y.abs().powf(n)).powf(1.0 / n) - 1.0;
+                e * e
+            })
+            .sum()
+    };
+    // a pattern search from the circle's values; the error is smooth and has one minimum in the region searched
+    let (mut alpha, mut beta) = (0.2652, 0.1875);
+    let mut best = error(alpha, beta);
+    let mut step = 0.05;
+    while step > 1e-10 {
+        let mut improved = false;
+        for (da, db) in [(step, 0.0), (-step, 0.0), (0.0, step), (0.0, -step)] {
+            let (a, b) = (alpha + da, beta + db);
+            if a <= 0.0 || b <= 0.0 || b >= s {
+                continue;
+            }
+            let e = error(a, b);
+            if e < best {
+                (alpha, beta, best) = (a, b, e);
+                improved = true;
+            }
+        }
+        if !improved {
+            step /= 2.0;
+        }
+    }
+    (alpha, beta)
+}
+
+/// A superelliptic corner as two cubics: from `z0`, leaving along `d0`, to `z1`, arriving along `d1`, inside the
+/// parallelogram those two tangents span. The superellipse of exponent `n` is drawn in that parallelogram's own
+/// frame, so the construction commutes with any affine map (a slant, a stretch). `None` if the tangents do not
+/// meet ahead of `z0` and behind `z1`.
+pub fn lame_corner(z0: V, z1: V, d0: V, d1: V, n: f64) -> Option<[Seg; 2]> {
+    let apex = intersect(z0, d0, z1, d1)?;
+    if (apex - z0).dot(d0) <= 0.0 || (z1 - apex).dot(d1) <= 0.0 {
+        return None;
+    }
+    let (e1, e2) = (apex - z1, apex - z0);
+    let centre = z0 - e1;
+    let at = |u: f64, v: f64| centre + e1 * u + e2 * v;
+    let s = lame_reach(n);
+    let (alpha, beta) = lame_handles(n);
+    Some([
+        Seg::Cubic(z0, at(1.0, alpha), at(s + beta, s - beta), at(s, s)),
+        Seg::Cubic(at(s, s), at(s - beta, s + beta), at(alpha, 1.0), z1),
+    ])
+}
+
 /// Gaussian elimination with partial pivoting. The systems here have at most a few dozen unknowns.
 fn solve(a: Vec<Vec<f64>>, b: Vec<f64>) -> Result<Vec<f64>, String> {
     let n = b.len();
@@ -585,12 +616,13 @@ fn solve(a: Vec<Vec<f64>>, b: Vec<f64>) -> Result<Vec<f64>, String> {
             return Err("the spline's equations are singular".into());
         }
         m.swap(col, pivot);
-        for r in col + 1..n {
-            let f = m[r][col] / m[col][col];
+        let (above, below) = m.split_at_mut(col + 1);
+        let pivot_row = &above[col];
+        for row in below {
+            let f = row[col] / pivot_row[col];
             if f != 0.0 {
-                for c in col..=n {
-                    let v = m[col][c];
-                    m[r][c] -= f * v;
+                for (x, &v) in row[col..].iter_mut().zip(&pivot_row[col..]) {
+                    *x -= f * v;
                 }
             }
         }
@@ -617,14 +649,8 @@ mod tests {
 
     #[test]
     fn quarter_circle_handle_is_kappa() {
-        let Seg::Cubic(p0, c1, ..) = hobby_segment(
-            pt(1.0, 0.0),
-            pt(0.0, 1.0),
-            pt(0.0, 1.0),
-            pt(-1.0, 0.0),
-            1.0,
-            1.0,
-        ) else {
+        let Seg::Cubic(p0, c1, ..) = hobby_segment(pt(1.0, 0.0), pt(0.0, 1.0), pt(0.0, 1.0), pt(-1.0, 0.0), 1.0, 1.0)
+        else {
             unreachable!()
         };
         assert!(((c1 - p0).abs() - 4.0 / 3.0 * (2f64.sqrt() - 1.0)).abs() < 1e-12);
@@ -633,9 +659,7 @@ mod tests {
     #[test]
     fn closed_path_through_a_circle_is_nearly_a_circle() {
         for (n, tolerance) in [(3usize, 0.004), (4, 0.0003), (6, 0.0003), (8, 0.0003)] {
-            let nodes: Vec<Node> = (0..n)
-                .map(|i| Node::new(V::unit(360.0 * i as f64 / n as f64)))
-                .collect();
+            let nodes: Vec<Node> = (0..n).map(|i| Node::new(V::unit(360.0 * i as f64 / n as f64))).collect();
             let segs = hobby(&nodes, true).unwrap();
             let err = segs
                 .iter()
@@ -648,26 +672,12 @@ mod tests {
     #[test]
     fn open_path_through_a_semicircle() {
         // (0,0)..(100,100)..(200,0) with curl 1 at both ends lies on the circle about (100, 0).
-        let segs = hobby(
-            &[
-                Node::new(pt(0.0, 0.0)),
-                Node::new(pt(100.0, 100.0)),
-                Node::new(pt(200.0, 0.0)),
-            ],
-            false,
-        )
-        .unwrap();
-        let want = [
-            pt(0.0, 55.228),
-            pt(44.772, 100.0),
-            pt(155.228, 100.0),
-            pt(200.0, 55.228),
-        ];
+        let segs =
+            hobby(&[Node::new(pt(0.0, 0.0)), Node::new(pt(100.0, 100.0)), Node::new(pt(200.0, 0.0))], false).unwrap();
+        let want = [pt(0.0, 55.228), pt(44.772, 100.0), pt(155.228, 100.0), pt(200.0, 55.228)];
         let mut got = Vec::new();
         for s in &segs {
-            let Seg::Cubic(_, c1, c2, _) = *s else {
-                unreachable!()
-            };
+            let Seg::Cubic(_, c1, c2, _) = *s else { unreachable!() };
             got.extend([c1, c2]);
         }
         for (g, w) in got.iter().zip(want) {
@@ -708,20 +718,13 @@ mod tests {
         let dirs = hobby_directions(&nodes, false).unwrap();
         assert!((dirs[0] - V::unit(90.0)).abs() < 1e-12);
         assert!((dirs[3] - V::unit(-90.0)).abs() < 1e-12);
-        let loose = hobby(
-            &[
-                Node::new(pt(0.0, 0.0)).dir(V::unit(60.0)),
-                Node::new(pt(100.0, 0.0)).dir(V::unit(-60.0)),
-            ],
-            false,
-        )
-        .unwrap();
+        let loose =
+            hobby(&[Node::new(pt(0.0, 0.0)).dir(V::unit(60.0)), Node::new(pt(100.0, 0.0)).dir(V::unit(-60.0))], false)
+                .unwrap();
         let tight = hobby(
             &[
                 Node::new(pt(0.0, 0.0)).dir(V::unit(60.0)).tension(1.0, 2.0),
-                Node::new(pt(100.0, 0.0))
-                    .dir(V::unit(-60.0))
-                    .tension(2.0, 1.0),
+                Node::new(pt(100.0, 0.0)).dir(V::unit(-60.0)).tension(2.0, 1.0),
             ],
             false,
         )
@@ -731,17 +734,7 @@ mod tests {
 
     #[test]
     fn coincident_knots_are_refused() {
-        assert!(
-            hobby(
-                &[
-                    Node::new(V::ZERO),
-                    Node::new(V::ZERO),
-                    Node::new(pt(1.0, 0.0))
-                ],
-                false
-            )
-            .is_err()
-        );
+        assert!(hobby(&[Node::new(V::ZERO), Node::new(V::ZERO), Node::new(pt(1.0, 0.0))], false).is_err());
     }
 
     #[test]
@@ -759,13 +752,37 @@ mod tests {
 
     #[test]
     fn lines_intersect_unless_parallel() {
-        assert_eq!(
-            intersect(V::ZERO, pt(1.0, 0.0), pt(5.0, 5.0), pt(0.0, 1.0)),
-            Some(pt(5.0, 0.0))
-        );
-        assert_eq!(
-            intersect(V::ZERO, pt(1.0, 0.0), pt(0.0, 1.0), pt(2.0, 0.0)),
-            None
-        );
+        assert_eq!(intersect(V::ZERO, pt(1.0, 0.0), pt(5.0, 5.0), pt(0.0, 1.0)), Some(pt(5.0, 0.0)));
+        assert_eq!(intersect(V::ZERO, pt(1.0, 0.0), pt(0.0, 1.0), pt(2.0, 0.0)), None);
+    }
+
+    #[test]
+    fn a_lame_quadrant_with_exponent_two_is_a_circle() {
+        let [a, b] = lame_corner(pt(1.0, 0.0), pt(0.0, 1.0), pt(0.0, 1.0), pt(-1.0, 0.0), 2.0).unwrap();
+        for s in [a, b] {
+            for j in 0..=32 {
+                assert!((s.at(j as f64 / 32.0).abs() - 1.0).abs() < 2e-5);
+            }
+        }
+    }
+
+    #[test]
+    fn a_lame_quadrant_follows_the_superellipse_and_is_flat_at_its_extremes() {
+        for n in [2.25, 2.5, 3.0, 3.5] {
+            let [a, b] = lame_corner(pt(300.0, 0.0), pt(0.0, 200.0), pt(0.0, 1.0), pt(-1.0, 0.0), n).unwrap();
+            let mut worst: f64 = 0.0;
+            for s in [a, b] {
+                for j in 0..=64 {
+                    let q = s.at(j as f64 / 64.0);
+                    let r = ((q.x / 300.0).abs().powf(n) + (q.y / 200.0).abs().powf(n)).powf(1.0 / n);
+                    worst = worst.max((r - 1.0).abs());
+                }
+            }
+            assert!(worst < 0.004, "n = {n}: {worst}");
+            // the diagonal point is exact
+            assert!((a.end() - pt(300.0, 200.0) * lame_reach(n)).abs() < 1e-9);
+        }
+        assert!((lame_exponent(0.5523) - 2.0).abs() < 0.001);
+        assert!((lame_reach(2.5) - 0.757_858).abs() < 1e-6);
     }
 }

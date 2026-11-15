@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use crate::geom::{V, pt, segment_bounds};
+use crate::geom::{V, lame_exponent, pt, segment_bounds};
 use crate::names::{name_of, name_of_code};
 use crate::params::Params;
 use crate::pen::{Contour, Knot, expand, polygon, rect, sheared, superellipse};
@@ -47,24 +47,55 @@ pub struct Draw<'a> {
     pub p: &'a Params,
     pub glyph: Glyph,
     slope: f64,
+    registry: Option<&'a Registry>,
 }
 
 impl<'a> Draw<'a> {
     pub fn new(p: &'a Params, name: &str, advance: f64, upright: bool) -> Draw<'a> {
-        let slope = if upright {
-            0.0
-        } else {
-            p.slant.to_radians().tan()
-        };
-        Draw {
-            p,
-            glyph: Glyph {
-                name: name.into(),
-                advance,
-                ..Glyph::default()
-            },
-            slope,
+        let slope = if upright { 0.0 } else { p.slant.to_radians().tan() };
+        Draw { p, glyph: Glyph { name: name.into(), advance, ..Glyph::default() }, slope, registry: None }
+    }
+
+    /// Another glyph as this master draws it, with its components resolved into contours: for measuring a base
+    /// letter before placing a mark on it. `None` if there is no such glyph, or when the program runs outside a
+    /// registry.
+    pub fn glyph_of(&self, name: &str) -> Option<Glyph> {
+        self.registry?.flat(name, self.p)
+    }
+
+    /// Make this glyph the glyph called `name` under another code point: one component, and the same advance.
+    pub fn same_as(&mut self, name: &str) {
+        match self.glyph_of(name) {
+            Some(base) => {
+                self.glyph.advance = base.advance;
+                self.glyph.anchors = base.anchors;
+            }
+            None => self.glyph.errors.push(format!("cannot be the same as {name:?}: no such glyph")),
         }
+        self.glyph.components.push((name.into(), pt(0.0, 0.0)));
+    }
+
+    /// [`Draw::same_as`] for the glyph of a character.
+    pub fn same_as_char(&mut self, c: char) {
+        self.same_as(&name_of(c));
+    }
+
+    /// [`Draw::glyph_of`] for the glyph of a character.
+    pub fn glyph_of_char(&self, c: char) -> Option<Glyph> {
+        self.glyph_of(&name_of(c))
+    }
+
+    /// Draw the glyph called `name` here as another master would draw it, moved by (dx, dy) in upright
+    /// coordinates. The other master's parameters decide its weight, size and slant: a bold letter inside a
+    /// regular font is the same program run with the bold's numbers.
+    pub fn draw_as(&mut self, name: &str, p: &Params, dx: f64, dy: f64) {
+        let Some(other) = self.registry.and_then(|r| r.flat(name, p)) else {
+            self.glyph.errors.push(format!("cannot draw {name:?} here: no such glyph"));
+            return;
+        };
+        let offset = pt(dx + self.slope * dy, dy);
+        self.glyph.errors.extend(other.errors);
+        self.glyph.contours.extend(other.contours.into_iter().map(|c| c.mapped(|z| z + offset)));
     }
 
     fn shear_point(&self, z: V) -> V {
@@ -72,10 +103,13 @@ impl<'a> Draw<'a> {
     }
 
     fn stroke_any(&mut self, knots: &[Knot], closed: bool) {
-        let ks: Vec<Knot> = knots
-            .iter()
-            .map(|k| sheared(k, self.slope, self.p.slant_origin()))
-            .collect();
+        // In a master whose rounds are superellipses, a corner of squareness k is drawn as the superellipse that
+        // reaches as far along its diagonal.
+        let rounded = |k: &Knot| match (self.p.lame, k.k, k.n) {
+            (true, Some(sq), None) => Knot { n: Some(lame_exponent(sq)), ..*k },
+            _ => *k,
+        };
+        let ks: Vec<Knot> = knots.iter().map(|k| sheared(&rounded(k), self.slope, self.p.slant_origin())).collect();
         match expand(&ks, closed) {
             Ok(contours) => self.glyph.contours.extend(contours),
             Err(e) => self.glyph.errors.push(e),
@@ -97,9 +131,7 @@ impl<'a> Draw<'a> {
     pub fn add(&mut self, contour: Contour) {
         if self.slope != 0.0 {
             let (slope, origin) = (self.slope, self.p.slant_origin());
-            self.glyph
-                .contours
-                .push(contour.mapped(|z| pt(z.x + slope * (z.y - origin), z.y)));
+            self.glyph.contours.push(contour.mapped(|z| pt(z.x + slope * (z.y - origin), z.y)));
         } else {
             self.glyph.contours.push(contour);
         }
@@ -136,9 +168,7 @@ impl<'a> Draw<'a> {
 
     /// Place the glyph called `name` as a component, moved by (dx, dy) in upright coordinates.
     pub fn use_glyph(&mut self, name: &str, dx: f64, dy: f64) {
-        self.glyph
-            .components
-            .push((name.into(), pt(dx + self.slope * dy, dy)));
+        self.glyph.components.push((name.into(), pt(dx + self.slope * dy, dy)));
     }
 
     pub fn anchor(&mut self, name: &str, x: f64, y: f64) {
@@ -159,16 +189,8 @@ pub struct Opt {
 }
 
 impl Opt {
-    pub const UPRIGHT: Opt = Opt {
-        upright: true,
-        mark: false,
-        advance: None,
-    };
-    pub const MARK: Opt = Opt {
-        upright: false,
-        mark: true,
-        advance: None,
-    };
+    pub const UPRIGHT: Opt = Opt { upright: true, mark: false, advance: None };
+    pub const MARK: Opt = Opt { upright: false, mark: true, advance: None };
 }
 
 pub struct Spec {
@@ -180,11 +202,26 @@ pub struct Spec {
 }
 
 /// The glyph programs of a typeface, in the order they were registered.
+/// How a glyph sits in a master of a face whose glyphs do not all have one width. The program draws into a cell
+/// `width` wide with the master's standard sidebearings; afterwards `left` is added to the left sidebearing and
+/// `right` to the right one, so the advance is `width + left + right`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Fit {
+    pub width: f64,
+    pub left: f64,
+    pub right: f64,
+}
+
+/// The fit of a glyph in a master. `None` leaves the master's own cell.
+pub type FitFn = Box<dyn Fn(&Spec, &Params) -> Option<Fit> + Send + Sync>;
+
 #[derive(Default)]
 pub struct Registry {
     pub specs: Vec<Spec>,
     index: HashMap<String, usize>,
     module: &'static str,
+    /// Per-glyph widths and sidebearings, for the proportional family.
+    pub fit: Option<FitFn>,
 }
 
 impl Registry {
@@ -203,12 +240,7 @@ impl Registry {
     }
 
     /// Register a program for one character, with options.
-    pub fn ch_with(
-        &mut self,
-        c: char,
-        opt: Opt,
-        program: impl Fn(&mut Draw) + Send + Sync + 'static,
-    ) {
+    pub fn ch_with(&mut self, c: char, opt: Opt, program: impl Fn(&mut Draw) + Send + Sync + 'static) {
         self.glyph(&name_of(c), &[c as u32], opt, program);
     }
 
@@ -261,15 +293,59 @@ impl Registry {
     pub fn for_char(&self, c: char) -> Option<&Spec> {
         self.specs.iter().find(|s| s.unicodes.contains(&(c as u32)))
     }
+
+    /// Run one glyph program for the master `p`. The program sees the width of its own cell as `p.width`.
+    pub fn build(&self, spec: &Spec, p: &Params) -> Glyph {
+        let fit = match spec.opt.advance {
+            Some(_) => None,
+            None => self.fit.as_ref().and_then(|f| f(spec, p)),
+        };
+        let width = spec.opt.advance.or(fit.map(|f| f.width)).unwrap_or(p.width);
+        let local = Params { width, ..p.clone() };
+        let mut g = Draw::new(&local, &spec.name, if spec.opt.mark { 0.0 } else { width }, spec.opt.upright);
+        g.registry = Some(self);
+        (spec.program)(&mut g);
+        let mut glyph = g.glyph;
+        glyph.unicodes = spec.unicodes.clone();
+        glyph.mark = spec.opt.mark;
+        if let Some(fit) = fit.filter(|f| f.left != 0.0 || f.right != 0.0) {
+            let shift = pt(fit.left, 0.0);
+            glyph.advance += fit.left + fit.right;
+            glyph.contours = glyph.contours.into_iter().map(|c| c.mapped(|z| z + shift)).collect();
+            for (_, offset) in &mut glyph.components {
+                *offset = *offset + shift;
+            }
+            for z in glyph.anchors.values_mut() {
+                *z = *z + shift;
+            }
+            for (knots, _) in &mut glyph.skeletons {
+                for k in knots {
+                    k.z = k.z + shift;
+                }
+            }
+        }
+        glyph
+    }
+
+    /// The glyph called `name` in the master `p` with its components resolved into contours.
+    pub fn flat(&self, name: &str, p: &Params) -> Option<Glyph> {
+        let mut g = self.build(self.get(name)?, p);
+        for (base, offset) in std::mem::take(&mut g.components) {
+            match self.flat(&base, p) {
+                Some(part) => {
+                    g.errors.extend(part.errors);
+                    g.contours.extend(part.contours.into_iter().map(|c| c.mapped(|z| z + offset)));
+                }
+                None => g.errors.push(format!("component {base:?} is not a glyph")),
+            }
+        }
+        Some(g)
+    }
 }
 
-/// Run one glyph program for the master `p`.
+/// Run one glyph program for the master `p`, outside any registry: the program cannot look up other glyphs.
 pub fn build(spec: &Spec, p: &Params) -> Glyph {
-    let advance = if spec.opt.mark {
-        0.0
-    } else {
-        spec.opt.advance.unwrap_or(p.width)
-    };
+    let advance = if spec.opt.mark { 0.0 } else { spec.opt.advance.unwrap_or(p.width) };
     let mut g = Draw::new(p, &spec.name, advance, spec.opt.upright);
     (spec.program)(&mut g);
     g.glyph.unicodes = spec.unicodes.clone();
@@ -279,5 +355,5 @@ pub fn build(spec: &Spec, p: &Params) -> Glyph {
 
 /// Every registered glyph drawn for the master `p`, in registration order.
 pub fn build_all(registry: &Registry, p: &Params) -> Vec<Glyph> {
-    registry.specs.iter().map(|s| build(s, p)).collect()
+    registry.specs.iter().map(|s| registry.build(s, p)).collect()
 }
