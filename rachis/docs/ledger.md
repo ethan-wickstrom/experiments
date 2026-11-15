@@ -13,12 +13,10 @@ Every open item of the typeface (a gap, an idea, a deferral, a question, a reque
 - **G5 · Characters of the coverage survey that are not drawn**: 204 of the 873 of tier 2 (`research/`; tier 1's 1405 are all drawn): Cyrillic (124); arrows `⤊ ⤋ ⟰ ⟱ ⇮ ⇯ ⇶ ↫ ↬ ↯ ➦ ⟴`; the script capitals `ℊ ℋ ℐ ℒ ℛ ℬ ℰ ℱ ℳ ℴ 𝒫`, the Fraktur `ℌ ℨ ℭ`, `ℼ ⅀ ℶ ℷ ℸ`, the Ångström sign; the three-letter control pictures (20), `₯ ☈`; `⎉ ⟅ ⟆`; U+034D; `ϐ` and the archaic Greek numerals; the Roman numerals `Ⅰ` to `Ⅵ`, `↊ ↋`; the enclosed letters.
 - **G6 · Box drawing at small sizes.** Where a line's edge falls part-way across a pixel, the overshoot of two neighbouring cells covers it twice and the join shows as a darker bead (T22); the shades alias into a plaid at 13 to 17 px. Hinting the lines to the pixel grid would cure the first.
 - **G7 · Hinting.** The static fonts are hinted by ttfautohint and have been looked at only through FreeType; nothing has been looked at on Windows. The variable fonts are unhinted.
-- **G8 · fontbakery has not been run on the final fonts.** It was run on the fixed pitch when it had 857 glyphs: the three FAILs then (no code page covered, Greek capitals without lowercase, glyphs below the win descent) should be cleared by the Latin and Greek letters and the line box of T13, which is unverified. The OpenType sanitiser accepts all 38 files.
+- **G8 · fontbakery's findings on the final fonts** (`check-universal`, version 1.1.0, on the two upright variable fonts, 2026-11-15: 181 PASS, 13 WARN, 6 FAIL, no ERROR). Four FAILs come from checking two families in one run (family names and axes differ between Rachis and Rachis Mono, as they should). The fonts' own: `usWinAscent` 1000 and `usWinDescent` 250 are less than the 1100 and 350 that box-drawing lines and bracket pieces reach, because those overshoot the line box so that neighbouring lines join (T13, T22); where a renderer clips at the win metrics it clips only the overshoot. Warnings to look at: the start points of one contour of `⇳` and of `⦾` differ between the Light and the Bold; `uni0312.case` is not reachable; `numberOfHMetrics` is 1983 in the fixed pitch because zero-advance marks are not first in the glyph order; no `avar` (the axes are linear); the carons of `ď ľ ť Ľ` want a look by eye. The italics and the static fonts have not been run.
 - **G9 · The proportional family's details.** The ellipsis keeps the cell; parentheses, brackets and braces are the fixed pitch's shapes, wide for a text face; `ď ľ ť` are loose; the Greek letters' widths are stated as cells (`Fit::letter`), not as sidebearings and ink; the three-per-em and other spaces are not kerned against.
 - **G10 · Proofing coverage.** The Small masters and the Text Light and Bold were looked at as lines of text, not glyph by glyph; many glyphs drawn on 2026-11-15 were proofed in the Regular and the Bold of the fixed pitch only (each module's author listed what was not proofed).
 - **G11 · The proof tool draws a zero-advance mark in the cell after its base**, so bare combining marks cannot be proofed in place.
-- **G12 · `rachis check` notes every empty glyph and every overhang of the proportional family** (440 notes), which hides a note that matters.
-
 - **G13 · The specimen page's table of pairs is copied by hand** from `measurements.md` (`specimen/specimen.html`, the `PAIRS` constant), as are the build's figures in its terminal block; they go stale when shapes change. `rachis specimen` should compute them.
 
 ### Ideas
@@ -37,6 +35,8 @@ Every open item of the typeface (a gap, an idea, a deferral, a question, a reque
 None.
 
 ## Closed
+
+- **G12 · `rachis check` noted every blank character and every overhang of the proportional family** (440 notes, which hid any note that mattered). Closed 2026-11-15: characters that are blank by definition and overhangs outside the fixed pitch are no longer noted; the check prints 0 notes (`crates/kernel/src/check.rs`).
 
 - **The Python prototype** is deleted (T11); it is in the history up to commit `1492c96`.
 - **The name** was checked for collisions (T24).

@@ -6,6 +6,10 @@ use crate::params::{Params, faces};
 /// Glyphs may reach this far past the cell's sides before the check remarks on it.
 const SIDE_ALLOWANCE: f64 = 4.0;
 
+/// Characters without ink that `char::is_whitespace` does not count: the zero-width space, non-joiner and
+/// joiner, the word joiner, the byte-order mark, soft hyphen aside (it is drawn), and the blank Braille pattern.
+const BLANK: [u32; 6] = [0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x2800];
+
 #[derive(Debug, Default)]
 pub struct Report {
     /// What must be fixed.
@@ -75,13 +79,17 @@ pub fn check_glyphs(registry: &Registry, names: Option<&[String]>) -> Report {
                     }
                 }
                 let Some((x0, y0, x1, y1)) = g.bounds() else {
-                    if g.components.is_empty() && name != "space" && name != "nbspace" {
+                    // a character that is blank by definition (a space, a joiner, the empty Braille cell) is not a
+                    // glyph someone forgot to draw
+                    let blank = |c: &u32| char::from_u32(*c).is_some_and(|ch| ch.is_whitespace() || BLANK.contains(c));
+                    if g.components.is_empty() && !(spec.unicodes.iter().all(blank) && !spec.unicodes.is_empty()) {
                         report.notes.push(format!("{name} [{}]: empty", p.name));
                     }
                     continue;
                 };
                 if !spec.opt.upright && !p.italic() && !spec.opt.mark {
-                    if x0 < -SIDE_ALLOWANCE || x1 > g.advance + SIDE_ALLOWANCE {
+                    // only a fixed pitch has cells to stay inside: a proportional j or f may overhang
+                    if p.mono && (x0 < -SIDE_ALLOWANCE || x1 > g.advance + SIDE_ALLOWANCE) {
                         report
                             .notes
                             .push(format!("{name} [{}]: reaches outside its cell: x from {x0:.0} to {x1:.0}", p.name));
