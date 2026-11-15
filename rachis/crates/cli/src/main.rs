@@ -2,6 +2,7 @@
 
 mod build;
 mod digest;
+mod math;
 mod measure;
 mod proof;
 mod specimen;
@@ -22,6 +23,7 @@ fn main() -> ExitCode {
         Some("build") => build::run(&registry, &args[1..]),
         Some("proof") => proof::run(&registry, &args[1..]),
         Some("measure") => measure::run(&registry, &args[1..]),
+        Some("math") => math::run(&registry, &args[1..]),
         Some("digest") => digest::run(&registry, &args[1..]),
         Some("specimen") => specimen::run(&args[1..]),
         Some("widths") => widths(&registry, &args[1..]),
@@ -36,7 +38,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | specimen -o FILE | measure ... | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] [--refs DIR] TEXT | kern [--master NAME] [--own] [PAIRS]>"
+                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | specimen -o FILE | measure ... | math [--refs DIR] | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] [--refs DIR] TEXT | kern [--master NAME] [--own] [PAIRS]>"
             );
             ExitCode::FAILURE
         }

@@ -16,6 +16,7 @@ pub mod model;
 mod glyf;
 mod instance;
 mod layout;
+mod math;
 pub mod meta;
 mod names;
 mod os2;
@@ -30,6 +31,7 @@ use sha2::Digest;
 use write_fonts::FontBuilder;
 
 pub use instance::{CHECK_MAX_PIXEL, CHECK_MAX_TOTAL, CHECK_PPEM, UnionFailure};
+pub use math::CONSTANTS as MATH_CONSTANTS;
 pub use outline::QUADRATIC_TOLERANCE;
 pub use tables::{GASP_BEHAVIOR, HEAD_FLAGS, PREP};
 pub use variation::IUP_TOLERANCE;
@@ -95,9 +97,11 @@ pub struct Instance {
 pub struct Metrics {
     /// Units per em.
     pub upm: u16,
-    /// The top of the line box (hhea, typo and win ascender).
+    /// The top of the line box (hhea, typo and win ascender; in a mathematics font the win ascent is the top of
+    /// its tallest glyph).
     pub ascender: i16,
-    /// The bottom of the line box, negative (hhea and typo descender; win descent is its absolute value).
+    /// The bottom of the line box, negative (hhea and typo descender; win descent is its absolute value, or in
+    /// a mathematics font the depth of its deepest glyph).
     pub descender: i16,
     /// `OS/2.sxHeight`.
     pub x_height: i16,
@@ -151,6 +155,64 @@ pub struct KernClasses {
     pub values: Vec<Vec<i16>>,
 }
 
+/// A feature that offers alternates of a glyph, chosen by the feature's value: `ssty` 1 and 2 are a letter's
+/// forms for the scripts and the scripts of scripts of a formula.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AlternateSub {
+    /// The feature tag.
+    pub tag: String,
+    /// (glyph, its alternates in order) by glyph name. Entries whose glyphs are missing are skipped.
+    pub alternates: Vec<(String, Vec<String>)>,
+}
+
+/// One piece of a glyph assembled to any length: a glyph, how much of it may overlap the piece before and the
+/// piece after, its length along the direction of growth, and whether it may be repeated or left out.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Part {
+    /// The piece's glyph name.
+    pub glyph: String,
+    /// The length of the connector at its start (bottom or left).
+    pub start: u16,
+    /// The length of the connector at its end (top or right).
+    pub end: u16,
+    /// Its full length.
+    pub advance: u16,
+    /// Whether it is an extender.
+    pub extender: bool,
+}
+
+/// How a glyph stretches in one direction: its larger sizes, smallest first, and the pieces of an assembly.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Construction {
+    /// The glyph that stretches, by name.
+    pub glyph: String,
+    /// (glyph name, its length along the direction of growth) for each ready-made size.
+    pub variants: Vec<(String, u16)>,
+    /// The pieces of the assembly, from bottom to top or from left to right; empty for none.
+    pub parts: Vec<Part>,
+    /// The italic correction of the assembled glyph.
+    pub italic_correction: i16,
+}
+
+/// What the `MATH` table of a mathematics font is compiled from, by glyph name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Math {
+    /// Every constant of the table, by its name in the OpenType specification ([`MATH_CONSTANTS`]).
+    pub constants: Vec<(String, i16)>,
+    /// The italic correction of single glyphs.
+    pub italic_corrections: Vec<(String, i16)>,
+    /// Where the centre of an accent goes over a glyph, from the glyph's origin.
+    pub top_accents: Vec<(String, i16)>,
+    /// Glyphs taller than the line that scripts are placed against by their own height.
+    pub extended_shapes: Vec<String>,
+    /// The glyphs that grow upwards.
+    pub vertical: Vec<Construction>,
+    /// The glyphs that grow sideways.
+    pub horizontal: Vec<Construction>,
+    /// The least overlap of two pieces of an assembly.
+    pub min_connector_overlap: u16,
+}
+
 /// Everything a font file is compiled from.
 #[derive(Clone, Debug)]
 pub struct Family {
@@ -172,6 +234,10 @@ pub struct Family {
     pub kerning: Vec<KernPair>,
     /// Kerning between classes.
     pub kern_classes: Option<KernClasses>,
+    /// Features of alternates.
+    pub alternates: Vec<AlternateSub>,
+    /// The `MATH` table, for a mathematics font.
+    pub math: Option<Math>,
 }
 
 /// What can go wrong when compiling.

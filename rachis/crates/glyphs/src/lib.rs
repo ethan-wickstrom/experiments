@@ -2,6 +2,7 @@
 
 pub mod arrows;
 pub mod boxes;
+pub mod cut;
 pub mod digits;
 pub mod greek;
 pub mod kern;
@@ -9,6 +10,7 @@ pub mod latin;
 pub mod letterlike;
 pub mod lower;
 pub mod math;
+pub mod mathfont;
 pub mod operators;
 pub mod parts;
 pub mod punct;

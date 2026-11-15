@@ -6,7 +6,7 @@ use std::process::{Command, ExitCode, Stdio};
 use std::time::Instant;
 
 use rachis_font::{Axis, AxisLabel, Family, Instance, KernClasses, Master, Metrics, SingleSub};
-use rachis_glyphs::kern;
+use rachis_glyphs::{kern, mathfont};
 use rachis_kernel::params::{Face, OPSZ_SMALL, OPSZ_TEXT, Params, faces};
 use rachis_kernel::{Glyph, Registry, name_of};
 
@@ -153,7 +153,86 @@ fn family(registry: &Registry, face: &Face, small: bool) -> Family {
         ],
         kerning: Vec::new(),
         kern_classes: kerning(registry, face),
+        alternates: Vec::new(),
+        math: None,
     }
+}
+
+/// The face the mathematics font is built on: the upright proportional one.
+fn math_face() -> Result<Face, String> {
+    faces().into_iter().find(|f| !f.italic && !f.default_master().mono).ok_or_else(|| "no proportional face".into())
+}
+
+/// The glyphs of the proportional Regular as the face has them, and what the mathematics font adds to them.
+pub(crate) fn math_glyphs(registry: &Registry) -> Result<(Vec<Glyph>, mathfont::MathFont), String> {
+    let face = math_face()?;
+    let p = face.default_master();
+    let glyphs = draw(registry, &face, p);
+    let math = mathfont::build(registry, p, &glyphs);
+    // `rachis check` does not see the glyphs that only this font has: a program that failed for one fails here
+    if let Some(g) = math.glyphs.iter().chain(&math.replaced).find(|g| !g.errors.is_empty()) {
+        return Err(format!("the mathematics font: {}: {}", g.name, g.errors.join("; ")));
+    }
+    Ok((glyphs, math))
+}
+
+/// The mathematics font: the proportional family's Regular, the glyphs a formula needs beyond it, and the
+/// `MATH` table. It has no axes: a `MATH` table cannot vary, so the font is one static style.
+pub(crate) fn math_family(registry: &Registry) -> Result<Family, String> {
+    let face = math_face()?;
+    let text = family(registry, &face, false);
+    let (mut glyphs, math) = math_glyphs(registry)?;
+    for own in &math.replaced {
+        if let Some(g) = glyphs.iter_mut().find(|g| g.name == own.name) {
+            *g = own.clone();
+        }
+    }
+    glyphs.extend(math.glyphs.iter().cloned());
+    let length = |v: f64| v.round().clamp(0.0, f64::from(u16::MAX)) as u16;
+    let constructions = |list: &[mathfont::Stretch]| -> Vec<rachis_font::Construction> {
+        list.iter()
+            .map(|s| rachis_font::Construction {
+                glyph: s.glyph.clone(),
+                variants: s.variants.iter().map(|(name, l)| (name.clone(), length(*l))).collect(),
+                parts: s
+                    .parts
+                    .iter()
+                    .map(|part| rachis_font::Part {
+                        glyph: part.glyph.clone(),
+                        start: length(part.start),
+                        end: length(part.end),
+                        advance: length(part.advance),
+                        extender: part.extender,
+                    })
+                    .collect(),
+                italic_correction: s.italic_correction.round() as i16,
+            })
+            .collect()
+    };
+    let rounded = |list: &[(String, f64)]| list.iter().map(|(name, v)| (name.clone(), v.round() as i16)).collect();
+    let mut features = text.features.clone();
+    features.push(single("dtls", None, math.dotless.clone()));
+    Ok(Family {
+        name: "Rachis Math".into(),
+        italic: false,
+        axes: Vec::new(),
+        masters: vec![Master { location: Vec::new(), glyphs }],
+        instances: vec![Instance { style_name: "Regular".into(), location: Vec::new() }],
+        metrics: text.metrics.clone(),
+        features,
+        kerning: Vec::new(),
+        kern_classes: text.kern_classes.clone(),
+        alternates: vec![rachis_font::AlternateSub { tag: "ssty".into(), alternates: math.scripts.clone() }],
+        math: Some(rachis_font::Math {
+            constants: math.constants.iter().map(|(name, v)| ((*name).to_string(), v.round() as i16)).collect(),
+            italic_corrections: rounded(&math.italic_corrections),
+            top_accents: rounded(&math.top_accents),
+            extended_shapes: math.tall.clone(),
+            vertical: constructions(&math.vertical),
+            horizontal: constructions(&math.horizontal),
+            min_connector_overlap: 20,
+        }),
+    })
 }
 
 /// Run `rachis build [--out DIR] [--no-statics] [--no-hint]`.
@@ -213,10 +292,24 @@ fn build(registry: &Registry, o: &Options) -> Result<(), String> {
             }
         }
     }
+    let mut webfonts = Vec::new();
+    if o.statics {
+        let fam = math_family(registry)?;
+        let s = rachis_font::static_ttf_report(&fam, &fam.instances[0]).map_err(|e| e.to_string())?;
+        let file = "ttf/RachisMath-Regular.ttf".to_string();
+        for (glyph, why) in &s.kept_overlaps {
+            kept.push(format!("{file}: {glyph}: {why}"));
+        }
+        // for the web as it is, before the static font is hinted
+        webfonts.push((
+            "webfonts/RachisMath-Regular.woff2".to_string(),
+            rachis_font::woff2(&s.bytes).map_err(|e| e.to_string())?,
+        ));
+        files.push((file, s.bytes));
+    }
     if hinter {
         hint_all(&mut files)?;
     }
-    let mut webfonts = Vec::new();
     for (path, bytes) in files.iter().filter(|(path, _)| path.starts_with("variable/")) {
         let name =
             Path::new(path).file_stem().and_then(|s| s.to_str()).ok_or_else(|| format!("{path}: no file name"))?;
@@ -418,6 +511,72 @@ mod tests {
         assert_eq!(small.axes.iter().map(|a| a.tag.as_str()).collect::<Vec<_>>(), ["wght"]);
         assert!(small.masters.len() == 3 && small.metrics.x_height > 540);
         assert_eq!(small.kern_classes, family(&registry, &face("Rachis"), false).kern_classes);
+    }
+
+    #[test]
+    fn the_mathematics_font_compiles_with_its_table_alphabets_and_script_forms() {
+        let registry = rachis_glyphs::registry();
+        let fam = math_family(&registry).expect("every glyph of the mathematics font is drawn");
+        assert_eq!((fam.name.as_str(), fam.axes.len(), fam.masters.len()), ("Rachis Math", 0, 1));
+        let bytes = rachis_font::static_ttf(&fam, &fam.instances[0]).expect("the font compiles");
+        let font = FontRef::new(&bytes).expect("a font");
+        // the letters of a formula: a variable is the italic's letter, a vector the bold's
+        let map = font.charmap();
+        for c in ['𝑥', '𝐱', '𝒙', '𝛼', '𝗑', '𝚡', '𝟐', 'ℎ', 'ℝ', '∫', '√', '⟨', '⎛'] {
+            assert!(map.map(c).is_some(), "{c} is not in the font");
+        }
+        let location = font.axes().location::<[(&str, f32); 0]>([]);
+        let metrics = font.glyph_metrics(Size::unscaled(), &location);
+        let advance = |c: char| metrics.advance_width(map.map(c).expect("mapped")).expect("an advance");
+        let italic = family(&registry, &face("Rachis-Italic"), false);
+        let drawn = |name: &str| {
+            italic
+                .masters
+                .iter()
+                .find(|m| m.location == [OPSZ_TEXT, 400.0])
+                .and_then(|m| m.glyphs.iter().find(|g| g.name == name).map(|g| g.advance.round() as f32))
+        };
+        assert_eq!(Some(advance('𝑥')), drawn("x"));
+        // the table, with a size for every delimiter and the constants a typesetter reads
+        let math = font.math().expect("a MATH table");
+        let constants = math.math_constants().expect("constants");
+        let p = face("Rachis").default_master().clone();
+        assert_eq!(f64::from(constants.axis_height().value().to_i16()), p.axis.round());
+        assert_eq!(f64::from(constants.fraction_rule_thickness().value().to_i16()), p.op.round());
+        assert_eq!((constants.script_percent_scale_down(), constants.script_script_percent_scale_down()), (70, 55));
+        let variants = math.math_variants().expect("variants");
+        let stretched = |c: char, coverage: Option<Result<skrifa::raw::tables::layout::CoverageTable, _>>| {
+            let gid = map.map(c).expect("mapped");
+            coverage.and_then(Result::ok).is_some_and(|cov| cov.iter().any(|g| g.to_u32() == gid.to_u32()))
+        };
+        for c in "()[]{}|‖⟨⟩⌊⌋⌈⌉√∑∫".chars() {
+            assert!(stretched(c, variants.vert_glyph_coverage()), "{c} has no taller size");
+        }
+        for c in "→⇒⏞⏟\u{302}\u{303}\u{20D7}".chars() {
+            assert!(stretched(c, variants.horiz_glyph_coverage()), "{c} has no longer size");
+        }
+        // the features a typesetter asks for: the forms for scripts and the dotless letters under accents
+        let features: Vec<String> = font
+            .gsub()
+            .and_then(|gsub| gsub.feature_list())
+            .map(|list| list.feature_records().iter().map(|r| r.feature_tag().to_string()).collect())
+            .expect("GSUB");
+        for tag in ["ssty", "dtls", "zero", "sups"] {
+            assert!(features.iter().any(|t| t == tag), "{tag} is not among {features:?}");
+        }
+        let scripts: Vec<String> = font
+            .gsub()
+            .and_then(|gsub| gsub.script_list())
+            .map(|list| list.script_records().iter().map(|r| r.script_tag().to_string()).collect())
+            .expect("GSUB scripts");
+        assert!(scripts.iter().any(|t| t == "math"), "{scripts:?}");
+        // set as text, it is the proportional Regular: same metrics, same kerning
+        assert_eq!(fam.kern_classes, family(&registry, &face("Rachis"), false).kern_classes);
+        assert_eq!(advance('n'), {
+            let text = family(&registry, &face("Rachis"), false);
+            let regular = text.masters.iter().find(|m| m.location == [OPSZ_TEXT, 400.0]).expect("the Regular");
+            regular.glyphs.iter().find(|g| g.name == "n").expect("n").advance.round() as f32
+        });
     }
 
     #[test]

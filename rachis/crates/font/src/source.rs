@@ -238,6 +238,9 @@ pub(crate) fn finish(
     if let Some(gpos) = &lay.gpos {
         tables::add(&mut builder, gpos)?;
     }
+    if let Some(desc) = &family.math {
+        tables::add(&mut builder, &crate::math::math(desc, &built.names)?)?;
+    }
     tables::add(&mut builder, &names.table())?;
     Ok(builder.build())
 }
