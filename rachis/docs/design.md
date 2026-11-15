@@ -78,7 +78,7 @@ Terminal (Rachis Mono only): box-drawing lines are 60 units, the underline's thi
 
 ## Spacing
 
-The fixed pitch has one advance. The proportional family is spaced as a text face: every letter asks for its sidebearings and the breadth of its ink (T15), and pairs that the sidebearings cannot serve are kerned by a computation over the outlines (T17): To −77, AV −80, r. −74, with r n left alone so that it is not read as m.
+The fixed pitch has one advance. The proportional family is spaced as a text face: every letter asks for its sidebearings and the breadth of its ink (T15), and pairs that the sidebearings cannot serve are kerned by a computation over the outlines (T17): To −77, AV −80, r. −74. Two lowercase letters are never moved together, so r n, c l and v v keep their distance from m, d and w.
 
 ## Coverage
 

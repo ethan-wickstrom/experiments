@@ -571,8 +571,8 @@ fn rachis_static_fonts() {
     assert_eq!(font.head().unwrap().mac_style().bits(), 3);
 }
 
-/// The union check over every glyph of every static font of the fixed pitch: all but a few in ten thousand lose
-/// their overlaps, and the rest keep their contours as drawn (the check caught a wrong union).
+/// The union check over every glyph of every static font of the fixed pitch: fewer than one glyph in five
+/// hundred keeps its overlaps (those are the ones whose union the raster check rejected).
 #[test]
 fn nearly_every_static_glyph_loses_its_overlaps() {
     let mut kept = BTreeMap::new();

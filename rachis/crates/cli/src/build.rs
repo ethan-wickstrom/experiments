@@ -388,8 +388,11 @@ mod tests {
         let registry = rachis_glyphs::registry();
         let k = kerning(&registry, &face("Rachis")).expect("the proportional face is kerned");
         assert!(value(&k, "T", "o") < -50 && value(&k, "A", "V") < -50 && value(&k, "r", "period") < -50);
-        // two stems at their sidebearings need nothing, and the arm of r stays clear of n
+        // two stems at their sidebearings need nothing, and no two lowercase letters are drawn together
         assert_eq!((value(&k, "n", "n"), value(&k, "n", "o"), value(&k, "r", "n")), (0, 0, 0));
+        assert_eq!((value(&k, "c", "l"), value(&k, "v", "v"), value(&k, "k", "e")), (0, 0, 0));
+        // a capital or punctuation beside a lowercase letter is still closed
+        assert!(value(&k, "V", "a") < -30 && value(&k, "y", "period") < -30);
         // an accent that overhangs its letter is not pulled under the bar of T
         assert!(value(&k, "T", "dotlessi") < -50);
         assert!(value(&k, "T", "icircumflex") >= 0 && value(&k, "T", "idieresis") >= 0);

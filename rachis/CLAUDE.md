@@ -17,7 +17,7 @@ The owner asked for the generator to be written in lower-level languages, so it 
 
 ## Rules
 
-- A glyph program never branches on weight or optical size, which differ between the masters of a face: those masters must have the same structure. It may branch on `p.mono` and on whether the face is italic (`p.italic()`), which are the same in every master of a face. `rachis check` compares the masters: structure, and that no contour's size passes through zero between them.
+- A glyph program never branches on weight or optical size, which differ between the masters of a face: those masters must have the same structure. It may branch on `p.mono` and on whether the face is italic (`p.italic()`), which are the same in every master of a face. `rachis check` compares the masters: structure, and that every contour still has its shape half-way between them (a counter that closes in the Bold, or a contour whose points do not correspond, has none). It also reports glyphs that are built from themselves.
 - Shapes are judged by eye on proofs, at every master, large and at 13 to 16 px, beside the characters they could be mistaken for (`docs/drawing.md`).
 - A number quoted in a document comes from a command that can be rerun.
 - After a change to shapes: `rachis digest --write`, `rachis build`, and commit `tests/snapshot/outlines.sha256` and `fonts/` with it. Regenerate `docs/measurements.md` when a shape that it measures changes.

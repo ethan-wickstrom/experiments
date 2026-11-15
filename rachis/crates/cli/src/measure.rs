@@ -595,6 +595,9 @@ pub(crate) struct Glyphs {
     pub align: Align,
     /// Every character the face has, with its advance and outline (`None` when it is blank).
     pub chars: HashMap<char, (f64, Option<Path>)>,
+    /// The kerning between the neighbours inside the watched strings of more than one character, in font
+    /// units: a string is measured as the fonts set it.
+    pub kerns: HashMap<(char, char), f64>,
 }
 
 impl Glyphs {
@@ -605,20 +608,41 @@ impl Glyphs {
                 chars.insert(c, (face.advance_of(c), face.outline(c)));
             }
         }
-        Glyphs { upm: face.upm(), align, chars }
+        let mut kerns = HashMap::new();
+        for text in PAIRS.iter().flat_map(|p| [p.a, p.b]) {
+            let cs: Vec<char> = text.chars().collect();
+            for pair in cs.windows(2) {
+                let k = face.kern(pair[0], pair[1]);
+                if k != 0.0 {
+                    kerns.insert((pair[0], pair[1]), k);
+                }
+            }
+        }
+        Glyphs { upm: face.upm(), align, chars, kerns }
+    }
+
+    /// The kerning before each character of `text`, in font units: 0 before the first.
+    fn kerning(&self, text: &str) -> Vec<f64> {
+        let cs: Vec<char> = text.chars().collect();
+        (0..cs.len())
+            .map(|i| if i == 0 { 0.0 } else { self.kerns.get(&(cs[i - 1], cs[i])).copied().unwrap_or(0.0) })
+            .collect()
     }
 
     pub fn has(&self, text: &str) -> bool {
         text.chars().all(|c| self.chars.contains_key(&c))
     }
 
-    /// `text` rendered at `view` with the glyphs' own advances and filtered, in a box as wide as its advance or
+    /// `text` rendered at `view` with the glyphs' own advances and the face's kerning, and filtered, in a box as wide as its advance or
     /// 0.6 em, whichever is wider, with 3 pixels on each side; the baseline 1.15 em from the top of a box 1.6 em
     /// tall (`Renderer.image`). `None` when the face lacks a character.
     pub fn image(&self, text: &str, view: View) -> Option<Image> {
         let size = view.size();
         let k = size / self.upm;
-        let advance: f64 = text.chars().map(|c| self.chars.get(&c).map(|g| g.0)).sum::<Option<f64>>()? * k;
+        let kerning = self.kerning(text);
+        let advance: f64 = (text.chars().map(|c| self.chars.get(&c).map(|g| g.0)).sum::<Option<f64>>()?
+            + kerning.iter().sum::<f64>())
+            * k;
         let mut cell = (advance.round().max((0.6 * size).round())) as usize;
         if self.align == Align::Centre && cell.is_multiple_of(2) {
             // every box odd, so that two boxes centre on the same sample
@@ -635,7 +659,8 @@ impl Glyphs {
         let mut paint = Paint::default();
         paint.set_color_rgba8(0, 0, 0, 255);
         paint.anti_alias = true;
-        for c in text.chars() {
+        for (c, kern) in text.chars().zip(kerning) {
+            x += kern * k;
             let (adv, path) = &self.chars[&c];
             if let Some(path) = path {
                 pix.fill_path(path, &paint, FillRule::Winding, glyph_transform(k, x, baseline), None);

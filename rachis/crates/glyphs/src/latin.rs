@@ -211,6 +211,20 @@ const BASES: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZıȷæ�
 /// an x-height letter lands on the x-height; above a capital, on the cap height; above an ascender, on its top
 /// (and takes the capital form of the mark).
 pub fn anchors(spec: &Spec, p: &Params, upright: &dyn Fn() -> Glyph) -> Vec<(&'static str, f64, f64)> {
+    let mut found = letter_anchors(spec, p, upright);
+    // the rules and the stroke that lie over a whole character (U+0305, U+0332, U+0338) sit at heights of
+    // their own: they attach to the middle of the cell of any letter or figure, on the baseline
+    if RULED.contains(&spec.module) && !spec.opt.mark && !spec.unicodes.is_empty() {
+        found.push(("rule", p.width / 2.0, 0.0));
+    }
+    found
+}
+
+/// The modules whose glyphs take a rule or a stroke over them.
+const RULED: [&str; 6] = ["lower", "upper", "digits", "greek", "latin", "letterlike"];
+
+/// The anchors of a letter that takes accents.
+fn letter_anchors(spec: &Spec, p: &Params, upright: &dyn Fn() -> Glyph) -> Vec<(&'static str, f64, f64)> {
     let Some(c) = spec.unicodes.first().and_then(|&u| char::from_u32(u)).filter(|c| BASES.contains(*c)) else {
         return Vec::new();
     };
@@ -1325,6 +1339,7 @@ pub fn register(reg: &mut Registry) {
         let t = rule_t(g);
         let y = p.cap + case_gap(p);
         g.rect(0.0, y, p.width, y + t);
+        g.anchor("_rule", p.mid(), 0.0);
     });
     reg.ch_with('\u{332}', Opt::MARK, |g: &mut Draw| {
         let p = g.p;
@@ -1333,11 +1348,13 @@ pub fn register(reg: &mut Registry) {
             None => (-30.0 - p.op, -30.0),
         };
         g.rect(0.0, y0, p.width, y1);
+        g.anchor("_rule", p.mid(), 0.0);
     });
     reg.ch_with('\u{338}', Opt::MARK, |g: &mut Draw| {
         let p = g.p;
         let (a, b) = (pt(p.mid() - 0.27 * p.width, -0.08 * p.cap), pt(p.mid() + 0.27 * p.width, 1.08 * p.cap));
         g.stroke(&[Knot::at(a, 0.9 * p.hair).line(), Knot::at(b, 0.9 * p.hair)]);
+        g.anchor("_rule", p.mid(), 0.0);
     });
     reg.ch_with('\u{330}', Opt::MARK, |g: &mut Draw| {
         let p = g.p;

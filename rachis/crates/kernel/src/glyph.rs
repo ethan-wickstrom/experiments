@@ -243,7 +243,8 @@ impl Fit {
 pub type AnchorFn = Box<dyn Fn(&Spec, &Params, &dyn Fn() -> Glyph) -> Vec<(&'static str, f64, f64)> + Send + Sync>;
 
 /// How deep glyph programs may look one another up: a letter, the letters it is built on, the marks on those.
-const MAX_DEPTH: usize = 24;
+/// The glyph set reaches a depth of 3.
+const MAX_DEPTH: usize = 12;
 
 thread_local! {
     /// How many glyph programs are running inside one another on this thread. Masters are drawn on several
@@ -344,7 +345,9 @@ impl Registry {
     /// `rachis check` reports.
     pub fn build(&self, spec: &Spec, p: &Params) -> Glyph {
         let depth = DEPTH.with(|d| d.replace(d.get() + 1));
-        let mut glyph = if depth >= MAX_DEPTH {
+        // once the limit is hit, every program still waiting above it is cut short as well: each of them runs
+        // more than once (for its fit, for its anchors), and would otherwise walk the cycle again each time
+        let mut glyph = if depth >= MAX_DEPTH || (depth > 0 && CYCLE.with(std::cell::Cell::get)) {
             CYCLE.with(|c| c.set(true));
             Glyph { name: spec.name.clone(), ..Glyph::default() }
         } else {
@@ -423,8 +426,18 @@ impl Registry {
     }
 
     /// The glyph called `name` in the master `p` with its components resolved into contours.
+    ///
+    /// A glyph that is its own component, directly or through others, would never be resolved: the traversal
+    /// counts its depth as [`Registry::build`] does, and such a glyph comes back with an error and without the
+    /// components past the limit.
     pub fn flat(&self, name: &str, p: &Params) -> Option<Glyph> {
-        let mut g = self.build(self.get(name)?, p);
+        let spec = self.get(name)?;
+        let depth = DEPTH.with(|d| d.replace(d.get() + 1));
+        let mut g = self.build(spec, p);
+        if depth >= MAX_DEPTH {
+            g.components.clear();
+            CYCLE.with(|c| c.set(true));
+        }
         for (base, offset) in std::mem::take(&mut g.components) {
             match self.flat(&base, p) {
                 Some(part) => {
@@ -433,6 +446,10 @@ impl Registry {
                 }
                 None => g.errors.push(format!("component {base:?} is not a glyph")),
             }
+        }
+        DEPTH.with(|d| d.set(depth));
+        if depth == 0 && CYCLE.with(|c| c.replace(false)) {
+            g.errors.push("glyphs are components of one another in a cycle".into());
         }
         Some(g)
     }

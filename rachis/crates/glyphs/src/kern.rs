@@ -6,7 +6,8 @@
 //! on every row of that zone, the distance from the ink of the left letter to the ink of the right one, counted
 //! no further than a fixed depth, since white far inside a letter does not read as space between letters. Two
 //! straight stems at their standard sidebearings measure the standard; a pair that measures more is closed by
-//! a fraction of the difference, and a pair whose inks come too near is opened.
+//! a fraction of the difference, and a pair whose inks come too near is opened. Two lowercase letters are never
+//! closed: inside a word the sidebearings do the spacing, and r n, c l and v v must not be drawn together.
 //!
 //! The computation can run for any master. The fonts carry the kerning of each face's default master (the
 //! Regular at the size for text) at every weight and size, and the proof tools show that same kerning
@@ -31,7 +32,7 @@ const NEAREST: f64 = 0.55;
 /// Two inks nearer than this share of the standard distance are moved apart.
 const TOUCHING: f64 = 0.16;
 /// Glyphs whose kerning against every neighbour differs by no more than this are one class.
-const ALIKE: f64 = 9.0;
+const ALIKE: f64 = 5.0;
 
 /// The glyphs that are kerned: letters, accented letters (each by its own outline: an accent that overhangs
 /// its letter must keep clear of the neighbour), and the punctuation that stands against them.
@@ -61,13 +62,15 @@ const APART: [&str; 15] = [
 struct Sides {
     name: String,
     capital: bool,
+    /// A lowercase letter.
+    lower: bool,
     left: Vec<f64>,
     right: Vec<f64>,
     /// The first and the last row with ink.
     rows: (usize, usize),
 }
 
-fn sides(glyph: &Glyph, capital: bool, y0: f64, count: usize) -> Option<Sides> {
+fn sides(glyph: &Glyph, capital: bool, lower: bool, y0: f64, count: usize) -> Option<Sides> {
     let mut left = vec![f64::INFINITY; count];
     let mut right = vec![f64::INFINITY; count];
     for contour in &glyph.contours {
@@ -99,7 +102,7 @@ fn sides(glyph: &Glyph, capital: bool, y0: f64, count: usize) -> Option<Sides> {
     }
     let first = left.iter().position(|x| x.is_finite())?;
     let last = left.iter().rposition(|x| x.is_finite())?;
-    Some(Sides { name: glyph.name.clone(), capital, left, right, rows: (first, last) })
+    Some(Sides { name: glyph.name.clone(), capital, lower, left, right, rows: (first, last) })
 }
 
 /// Brackets enclose: the white inside one is not space between letters, so nothing is moved into it.
@@ -129,7 +132,9 @@ fn kern(a: &Sides, b: &Sides, p: &Params) -> f64 {
     }
     let mean = white / shared as f64;
     let enclosed = OPENING.contains(&a.name.as_str()) || CLOSING.contains(&b.name.as_str());
-    let closer = if enclosed { 0.0 } else { (GAIN * (standard - mean)).min(0.0) };
+    // two lowercase letters keep their sidebearings: closing r n, c l or v v makes them read as m, d and w
+    let within_a_word = a.lower && b.lower;
+    let closer = if enclosed || within_a_word { 0.0 } else { (GAIN * (standard - mean)).min(0.0) };
     // close no further than the nearest inks allow; open a pair whose inks touch or cross
     let allowed = (NEAREST * standard - nearest).min(0.0);
     closer.max(allowed).max(TOUCHING * standard - nearest)
@@ -154,10 +159,12 @@ fn all_sides(registry: &Registry, p: &Params) -> Vec<Sides> {
         .iter()
         .filter(|s| (MODULES.contains(&s.module) || SIGNS.contains(&s.name.as_str())) && !s.opt.mark)
         .filter(|s| !APART.contains(&s.name.as_str()))
+        // spacing accents and modifier letters stand alone or after a letter they belong to
+        .filter(|s| !s.unicodes.iter().any(|c| matches!(*c, 0xA8 | 0xAF | 0xB4 | 0xB8 | 0x2B0..=0x2FF)))
         .filter_map(|s| {
             // a capital stands at the capitals' sidebearing; unencoded glyphs are not letters of a text
-            let capital = char::from_u32(*s.unicodes.first()?)?.is_uppercase();
-            sides(&registry.flat(&s.name, &upright)?, capital, y0, count)
+            let c = char::from_u32(*s.unicodes.first()?)?;
+            sides(&registry.flat(&s.name, &upright)?, c.is_uppercase(), c.is_lowercase(), y0, count)
         })
         .collect()
 }

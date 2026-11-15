@@ -26,7 +26,7 @@ A module ends with `pub fn register(reg: &mut Registry)`, which names its glyphs
 
 ## Rules
 
-- Never branch on weight or optical size, and never draw a different number of contours, segments or components in different masters of a face: the variable font interpolates them point by point. What varies is arithmetic on `p`, and a size must not pass through zero between the Light and the Bold (a counter that closes comes out turned round). `rachis check` compares the structure of every glyph across the masters of each face and reports a contour that turns.
+- Never branch on weight or optical size, and never draw a different number of contours, segments or components in different masters of a face: the variable font interpolates them point by point. What varies is arithmetic on `p`, and a size must not pass through zero between the Light and the Bold (a counter that closes comes out turned round). `rachis check` compares the structure of every glyph across the masters of each face and reports a contour that has no shape half-way between two of them.
 - Branching on `p.mono` and on `p.italic()` is allowed: every master of a face has the same pitch and the same slant.
 - Never write 600 or 300: write `p.width` and `p.mid()`. A program must draw correctly in any cell it is given.
 - Letters use `p.stem` and `p.hair`; capitals `p.cap_stem` and `p.cap_hair`; signs and arrows `p.op`, and `fine(p)` for a stroke inside another shape. Round shapes overshoot flat ones by `p.over`.
