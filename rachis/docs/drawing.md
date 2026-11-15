@@ -30,7 +30,7 @@ A module ends with `pub fn register(reg: &mut Registry)`, which names its glyphs
 - Branching on `p.mono` and on `p.italic()` is allowed: every master of a face has the same pitch and the same slant.
 - Never write 600 or 300: write `p.width` and `p.mid()`. A program must draw correctly in any cell it is given.
 - Letters use `p.stem` and `p.hair`; capitals `p.cap_stem` and `p.cap_hair`; signs and arrows `p.op`, and `fine(p)` for a stroke inside another shape. Round shapes overshoot flat ones by `p.over`.
-- In the proportional family a letter's width is not in its program. The module's `ask(name, p)` states the sidebearings and the ink (`around(left, ink, right)`, `beside(left, right)` for a shape of fixed size), and the build measures the program to find the cell (`crates/glyphs/src/text.rs`). Figures, signs, arrows and symbols keep the master's cell.
+- In the proportional family a letter's width is not in its program. The module's `ask(name, p)` states the sidebearings and the ink (`around(left, ink, right)`, `beside(left, right)` for a shape of fixed size), and the build measures the program to find the cell (`crates/glyphs/src/text.rs`). Figures and the signs of arithmetic keep the master's cell. Every other sign has a room in `crates/glyphs/src/signs.rs` (its span and its margins, T27): its program is not changed for it, and must draw across the cell it is given. A measure that should grow with the span multiplies by `p.grown()`; one that a whole kind shares (the height of a turnstile) grows up to that kind's span and no further (`relation_growth`, `round_growth` in `operators.rs`).
 - A number quoted in a document comes from a command that can be rerun.
 
 ## Looking

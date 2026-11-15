@@ -982,11 +982,13 @@ fn notsupersetequal(g: &mut Draw) {
     struck(g, top - p.axis, None);
 }
 
-/// The short slash through the bar alone, of the signs that say 'but not equal'.
+/// The slash through the bar alone, of the signs that say 'but not equal'. It is all that tells ⊊ from ⊆, so it
+/// is as long as it can be: up to the relation above the bar, and further down, where nothing is in its way.
 pub fn bar_struck(g: &mut Draw, yb: f64) {
     let p = g.p;
-    let d = p.op / 2.0 + 0.8 * rel_gap(p);
-    strike(g, p.mid(), yb, 0.62 * d, d, Some(0.5 * (p.op + fine(p))));
+    let (up, down) = (p.op / 2.0 + 0.9 * rel_gap(p), p.op / 2.0 + 1.7 * rel_gap(p));
+    let d = (up + down) / 2.0;
+    strike(g, p.mid(), yb + (up - down) / 2.0, 0.62 * d, d, Some(0.5 * (p.op + fine(p))));
 }
 
 fn subsetnotequal(g: &mut Draw) {
@@ -1023,10 +1025,12 @@ fn multiset_union(g: &mut Draw) {
     g.stroke(&vstem(p.mid(), cy - h, cy + h, t));
 }
 
+/// A ring with a slash that runs out of it on both sides. The ring is no taller than it is wide: in the fixed
+/// pitch's cell that makes it a circle, well short of the slashed zero it would otherwise be taken for.
 fn emptyset(g: &mut Draw) {
     let p = g.p;
-    let ry = 0.5 * (p.xh + 2.0 * p.over) + 0.1 * p.op;
     let rx = half_span(p) - 14.0;
+    let ry = (0.5 * (p.xh + 2.0 * p.over) + 0.1 * p.op).min(rx);
     circle(g, p.mid(), p.axis, rx, Some(ry), None);
     let dy = ry + 0.9 * p.op;
     strike(g, p.mid(), p.axis, 0.56 * dy, dy, Some(0.5 * (p.op + fine(p))));

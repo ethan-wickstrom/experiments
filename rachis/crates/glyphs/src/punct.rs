@@ -49,11 +49,14 @@ pub fn mark_foot(p: &Params) -> f64 {
 fn comma_shape(g: &mut Draw, cx: f64, cy: f64, scale: f64, form: &str) {
     let p = g.p;
     let r = p.punct * scale;
-    let drop = scale * (1.7 * p.punct + 108.0); // from the dot's centre down to the end of the tail
+    // The tail is what tells a comma from a period, a semicolon from a colon, a quote from a dot. It ends almost
+    // as broad as the dot and well to its left: with the thin tail this had before, the comma was nearer the
+    // period at 14 px than in any of the eight reference faces (decision T28).
+    let drop = scale * (1.7 * p.punct + 126.0); // from the dot's centre down to the end of the tail
     let w0 = 0.92 * r;
     let mut tail = vec![
         knot(cx + 0.97 * r - w0 / 2.0, cy, w0).pen(0.0).dir(-90.0),
-        cut_pen(cx - 0.40 * r, cy - drop, 0.54 * r, -128.0, 0.0),
+        cut_pen(cx - 0.70 * r, cy - drop, 0.85 * r, -128.0, 0.0),
     ];
     if form == "6" {
         tail = turn(&tail, cx, cy);
@@ -334,11 +337,15 @@ fn bracketright(g: &mut Draw) {
 fn brace_half(p: &Params) -> Vec<Knot> {
     let bs = bracket_stem(p);
     let h = p.hair;
+    // A long cusp tells the brace from a parenthesis, a round shoulder and a short arm tell it from a bracket.
+    // The two pull against each other (a rounder brace is nearer a parenthesis), so both are moderate: with a
+    // cusp 60 shorter and a shoulder of 112, } was nearer ] at 14 px than in any of the eight reference faces
+    // (decision T28).
     let xs = 282.0 + 0.12 * p.stem; // the spine's centre
-    let x_tip = 140.0 - 0.36 * p.stem; // the point of the cusp
-    let x_arm = 476.0 + 0.36 * p.stem; // the end of the arm
+    let x_tip = 80.0 - 0.36 * p.stem; // the point of the cusp
+    let x_arm = 450.0 + 0.36 * p.stem; // the end of the arm
     let yt = p.br_top - h / 2.0;
-    let r1 = 112.0; // the shoulder's radius on the centre line
+    let r1 = 140.0; // the shoulder's radius on the centre line
     let r2 = 104.0; // the radius of the turn into the cusp
     vec![
         knot(x_arm, yt, h).pen(90.0).line(),

@@ -34,9 +34,13 @@ pub fn thin(p: &Params) -> f64 {
     fine(p)
 }
 
-/// The white between them: a little more than one of them, so that it survives the Bold at 13 px.
+/// The white between them. A doubled stroke is read by its white: at 14 px a white as broad as one of the
+/// strokes blurs shut and the letter reads as a bold one, so the white is nearly twice a stroke. In the
+/// fixed-pitch family the letter has to make room for it inside the cell: there the white is as broad as the
+/// Bold's m and w can spare, at every weight. (Thinner strokes around a broader white were tried there and
+/// measured worse at the gate's blur: decision T28.)
 pub fn gap(p: &Params) -> f64 {
-    1.05 * fine(p)
+    if p.mono { 82.0 } else { 1.8 * fine(p) }
 }
 
 /// How much wider a doubled stroke is than the stroke `s` it replaces.

@@ -72,9 +72,9 @@ struct Brace {
 fn brace(p: &Params) -> Brace {
     Brace {
         xs: p.mid() - 18.0 + 0.12 * p.stem,
-        x_tip: p.mid() - 160.0 - 0.36 * p.stem,
-        x_arm: p.mid() + 176.0 + 0.36 * p.stem,
-        r1: 112.0,
+        x_tip: p.mid() - 220.0 - 0.36 * p.stem,
+        x_arm: p.mid() + 150.0 + 0.36 * p.stem,
+        r1: 140.0,
         r2: 104.0,
     }
 }
@@ -246,6 +246,9 @@ fn white_brace(g: &mut Draw, right: bool) {
     let p = g.p;
     let t = fine(p);
     let b = brace(p);
+    // the second stem takes room on the cusp's side: the cusp is as much shorter as the brace's is longer than
+    // it was before the cell had to hold both
+    let b = Brace { x_tip: b.x_tip + 60.0, ..b };
     let pitch = t + double_gap(p);
     let dx = -0.5 * pitch;
     let mut half = brace_half(p, &b, t, t, dx);

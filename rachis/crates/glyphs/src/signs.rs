@@ -139,3 +139,76 @@ pub fn fit(registry: &Registry, spec: &Spec, p: &Params) -> Option<Fit> {
     let side = room.margin * p.op_l;
     Some(Fit { width, left: side - x0, right: side - (width - x1) })
 }
+
+#[cfg(test)]
+mod tests {
+    use rachis_kernel::name_of;
+    use rachis_kernel::params::masters;
+
+    use super::*;
+
+    /// The advance of a character's glyph in the master `p`, and the box of its ink.
+    fn drawn(r: &Registry, c: char, p: &Params) -> (f64, (f64, f64, f64, f64)) {
+        let g = r.flat(&name_of(c), p).unwrap_or_else(|| panic!("no glyph for {c}"));
+        (g.advance, g.bounds().unwrap_or_else(|| panic!("{c} has no ink")))
+    }
+
+    #[test]
+    fn a_sign_has_the_cell_in_the_fixed_pitch_family_and_its_own_room_in_the_other() {
+        let r = crate::registry();
+        for p in masters().into_iter().filter(|p| !p.italic()) {
+            let span = p.width - 2.0 * p.op_l;
+            // to a hundredth of a unit: the box of a curve is found by solving for its extremes
+            let near = |a: f64, b: f64| (a - b).abs() < 0.01;
+            // the signs of arithmetic and comparison are as wide as a figure in both families
+            for c in "+−=<>×÷±≤≥≠≈≡".chars() {
+                assert!(near(drawn(&r, c, &p).0, p.width), "{c} in {}: {}", p.name, drawn(&r, c, &p).0);
+            }
+            let (arrow, (ax0, _, ax1, _)) = drawn(&r, '→', &p);
+            let (element, (ex0, ey0, ex1, ey1)) = drawn(&r, '∈', &p);
+            let (up, (ux0, uy0, ux1, uy1)) = drawn(&r, '↑', &p);
+            let (dot, (dx0, _, dx1, _)) = drawn(&r, '⋅', &p);
+            if p.mono {
+                for (c, advance) in [('→', arrow), ('∈', element), ('↑', up), ('⋅', dot)] {
+                    assert!(near(advance, p.width), "{c} in {}: {advance}", p.name);
+                }
+                continue;
+            }
+            // an arrow draws across its span and stands between the operators' margins
+            assert!(near(ax1 - ax0, ARROW * span), "→ in {}: ink {}", p.name, ax1 - ax0);
+            assert!(near(ax0, p.op_l) && near(arrow - ax1, p.op_l), "→ in {}: {ax0} {}", p.name, arrow - ax1);
+            // a relation between sets is wider than a plus and as much taller as it is wider
+            assert!(near(ex1 - ex0, RELATION * span), "∈ in {}: ink {}", p.name, ex1 - ex0);
+            assert!(near(element, RELATION * span + 2.0 * p.op_l), "∈ in {}: {element}", p.name);
+            assert!(near(ey1 - ey0, RELATION * 2.0 * (185.0 + 0.5 * p.op)), "∈ in {}: {} tall", p.name, ey1 - ey0);
+            // an arrow up is as long as an arrow along the line, and has the white of its room at its sides
+            assert!(near(uy1 - uy0, ax1 - ax0), "↑ in {}: {} long, → {}", p.name, uy1 - uy0, ax1 - ax0);
+            assert!(near(up, ux1 - ux0 + 2.0 * 1.35 * p.op_l), "↑ in {}: {up}", p.name);
+            // a dot takes the room of its ink, not a cell
+            assert!(near(dot, dx1 - dx0 + 2.0 * p.op_l) && dot < 0.6 * p.width, "⋅ in {}: {dot}", p.name);
+        }
+    }
+
+    #[test]
+    fn a_sign_under_a_second_code_point_has_the_first_ones_room() {
+        let r = crate::registry();
+        for p in masters() {
+            let (a, b) = (r.flat(&name_of('↺'), &p).unwrap(), r.flat(&name_of('⟲'), &p).unwrap());
+            assert_eq!((a.advance, a.bounds()), (b.advance, b.bounds()), "{}", p.name);
+        }
+    }
+
+    #[test]
+    fn turnstiles_are_one_height_whatever_their_width() {
+        let r = crate::registry();
+        for p in masters().into_iter().filter(|p| !p.italic()) {
+            let height = |c: char| {
+                let (_, (_, y0, _, y1)) = drawn(&r, c, &p);
+                y1 - y0
+            };
+            for c in ['⊨', '⊩', '⊫', '⟚'] {
+                assert!((height(c) - height('⊢')).abs() < 1e-6, "{c} in {}: {} and {}", p.name, height(c), height('⊢'));
+            }
+        }
+    }
+}
