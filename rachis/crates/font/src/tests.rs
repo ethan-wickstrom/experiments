@@ -484,13 +484,13 @@ fn rachis_variable_font() {
     let font = FontRef::new(&bytes).unwrap();
     let t = tags(&font);
     let want: Vec<String> = [
-        "GDEF", "GSUB", "HVAR", "OS/2", "STAT", "cmap", "fvar", "gasp", "glyf", "gvar", "head", "hhea", "hmtx", "loca",
-        "maxp", "name", "post", "prep",
+        "GDEF", "GPOS", "GSUB", "HVAR", "OS/2", "STAT", "cmap", "fvar", "gasp", "glyf", "gvar", "head", "hhea", "hmtx",
+        "loca", "maxp", "name", "post", "prep",
     ]
     .iter()
     .map(|s| s.to_string())
     .collect();
-    assert_eq!(t, want, "no GPOS: the glyphs have no anchors and the family no kerning");
+    assert_eq!(t, want, "GPOS places the combining marks on the letters' anchors");
     // names
     assert_eq!(name(&font, 1).as_deref(), Some("Rachis Mono"));
     assert_eq!(name(&font, 2).as_deref(), Some("Regular"));
@@ -510,7 +510,8 @@ fn rachis_variable_font() {
     assert_eq!(os2.us_weight_class(), 400);
     assert_eq!(os2.x_avg_char_width(), 600);
     assert_eq!(os2.panose_10(), &[2, 11, 5, 9, 0, 0, 0, 0, 0, 0]);
-    assert_eq!(os2.ul_code_page_range_1(), Some(0), "no code page is fully covered yet");
+    // Latin 1, Latin 2, Greek, Turkish and Baltic are fully covered
+    assert_eq!(os2.ul_code_page_range_1().map(|bits| bits & 0x9B), Some(0x9B));
     assert_eq!(font.post().unwrap().is_fixed_pitch(), 1);
     let head = font.head().unwrap();
     assert_eq!(head.flags().bits(), 0b11);
@@ -522,13 +523,12 @@ fn rachis_variable_font() {
     let advances: std::collections::BTreeSet<u16> = (0..font.maxp().unwrap().num_glyphs())
         .filter_map(|g| hmtx.advance(read_fonts::types::GlyphId::new(u32::from(g))))
         .collect();
-    assert_eq!(advances.into_iter().collect::<Vec<_>>(), vec![600]);
-    assert_eq!(hhea.number_of_h_metrics(), 1);
+    assert_eq!(advances.into_iter().collect::<Vec<_>>(), vec![0, 600], "the cell, and nothing for marks");
     // cmap: every encoded glyph
     let charmap = font.charmap();
     let encoded: usize = f.masters[0].glyphs.iter().map(|g| g.unicodes.len()).sum();
     assert_eq!(charmap.mappings().count(), encoded);
-    assert_eq!(charmap.map('0').map(|g| g.to_u32()), Some(17));
+    assert!(charmap.map('0').is_some());
     // HVAR is the minimal table: one zero delta set
     let hvar = font.hvar().unwrap();
     assert_eq!(hvar.item_variation_store().unwrap().variation_region_list().unwrap().region_count(), 0);

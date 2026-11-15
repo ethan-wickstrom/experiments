@@ -8,6 +8,7 @@ pub mod kern;
 pub mod latin;
 pub mod letterlike;
 pub mod lower;
+pub mod math;
 pub mod operators;
 pub mod parts;
 pub mod punct;
@@ -31,6 +32,7 @@ pub fn registry() -> Registry {
     digits::register(&mut r);
     punct::register(&mut r);
     operators::register(&mut r);
+    math::register(&mut r);
     arrows::register(&mut r);
     greek::register(&mut r);
     letterlike::register(&mut r);
