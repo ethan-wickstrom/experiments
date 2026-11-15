@@ -1744,7 +1744,9 @@ fn or_with_dot(g: &mut Draw) {
 fn squared_wedge(g: &mut Draw, down: bool) {
     let p = g.p;
     let r = big_box(g) - 0.8 * rel_gap(p);
-    let t = fine(p);
+    // the wedge's stroke is a share of its size: with the fine stroke its two arms meet in the Bold, where the
+    // box is small, and the shape closes
+    let t = 0.38 * r;
     let (y0, y1) = if down { (p.axis + r, p.axis - r) } else { (p.axis - r, p.axis + r) };
     g.poly(&vee(p.mid() - r, p.mid() + r, y0, y1, t, 0.8 * tip(p)));
 }
@@ -1939,7 +1941,8 @@ fn circled_dash(g: &mut Draw) {
 fn circled_white_bullet(g: &mut Draw) {
     let p = g.p;
     let r = big_ring(g);
-    circle(g, p.mid(), p.axis, 0.55 * r, None, Some(fine(p)));
+    // the inner ring's stroke is a share of its radius, so its counter stays open at every weight
+    circle(g, p.mid(), p.axis, 0.6 * r, None, Some(0.45 * 0.6 * r));
 }
 
 fn circled_bullet(g: &mut Draw) {

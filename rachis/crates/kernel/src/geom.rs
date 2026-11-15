@@ -524,18 +524,24 @@ pub fn lame_reach(n: f64) -> f64 {
 /// diagonal. Alpha and beta minimise the squared deviation of |u|^n + |v|^n from 1 along the cubic. For n = 2 the
 /// result is the usual two-cubic approximation of a quarter circle.
 pub fn lame_handles(n: f64) -> (f64, f64) {
-    // the fit is a search, and a font asks for the same few exponents many thousands of times
-    static FITS: std::sync::Mutex<Vec<(u64, (f64, f64))>> = std::sync::Mutex::new(Vec::new());
+    // the fit is a search, and a font asks for the same few exponents many thousands of times. The fits are kept
+    // per thread: masters are drawn on several threads at once, and one shared table behind a lock made them
+    // queue for it at every corner.
+    thread_local! {
+        static FITS: std::cell::RefCell<Vec<(u64, (f64, f64))>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
     let key = n.to_bits();
-    if let Some(&(_, fit)) = FITS.lock().unwrap_or_else(|e| e.into_inner()).iter().find(|(k, _)| *k == key) {
-        return fit;
-    }
-    let fit = fit_lame_handles(n);
-    let mut fits = FITS.lock().unwrap_or_else(|e| e.into_inner());
-    if fits.len() < 64 {
-        fits.push((key, fit));
-    }
-    fit
+    FITS.with(|fits| {
+        if let Some(&(_, fit)) = fits.borrow().iter().find(|(k, _)| *k == key) {
+            return fit;
+        }
+        let fit = fit_lame_handles(n);
+        let mut fits = fits.borrow_mut();
+        if fits.len() < 64 {
+            fits.push((key, fit));
+        }
+        fit
+    })
 }
 
 fn fit_lame_handles(n: f64) -> (f64, f64) {

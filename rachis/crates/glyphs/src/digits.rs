@@ -193,12 +193,16 @@ fn draw_zero_dot(g: &mut Draw, f: Frame) {
     g.dot_xy(f.cx(), f.cy(), rx, 1.6 * rx, k);
 }
 
-/// A stem, a diagonal flag cut flat, and a foot on both sides.
+/// A stem, a diagonal flag cut flat, and a foot on both sides. The foot and the serifs of I differ in length:
+/// measured in the fixed pitch, 1 and I are 0.284 apart with a short foot and 0.223 with one as long as the serifs.
 fn draw_one(g: &mut Draw, f: Frame) {
     let (s, h) = (f.stem, f.hair);
     let x = f.cx() + 0.04 * f.w();
     g.stroke(&vstem(x, f.y0, f.y1, s));
-    g.stroke(&hbar(f.x(0.015), f.x(0.985), f.y0 + h / 2.0, h));
+    // the foot is the opposite of the serifs of I: short in the fixed pitch, where they fill the cell, and long
+    // in the proportional family, where they are short
+    let (left, right) = if g.p.mono { (0.20, 0.80) } else { (0.015, 0.985) };
+    g.stroke(&hbar(f.x(left), f.x(right), f.y0 + h / 2.0, h));
     g.stroke(&diag_from(x + s / 2.0, f.y1, f.x(0.03), f.y(0.765), h, 1.0, -1.0));
 }
 

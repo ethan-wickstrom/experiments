@@ -26,8 +26,8 @@ A module ends with `pub fn register(reg: &mut Registry)`, which names its glyphs
 
 ## Rules
 
-- Never branch on weight, optical size or slant, and never draw a different number of contours, segments or components in different masters: the variable font interpolates the masters point by point. What varies is arithmetic on `p`. `rachis check` compares the structure of every glyph across the masters of each face.
-- Branching on `p.mono` is allowed: the two families are different fonts.
+- Never branch on weight or optical size, and never draw a different number of contours, segments or components in different masters of a face: the variable font interpolates them point by point. What varies is arithmetic on `p`, and a size must not pass through zero between the Light and the Bold (a counter that closes comes out turned round). `rachis check` compares the structure of every glyph across the masters of each face and reports a contour that turns.
+- Branching on `p.mono` and on `p.italic()` is allowed: every master of a face has the same pitch and the same slant.
 - Never write 600 or 300: write `p.width` and `p.mid()`. A program must draw correctly in any cell it is given.
 - Letters use `p.stem` and `p.hair`; capitals `p.cap_stem` and `p.cap_hair`; signs and arrows `p.op`, and `fine(p)` for a stroke inside another shape. Round shapes overshoot flat ones by `p.over`.
 - In the proportional family a letter's width is not in its program. The module's `ask(name, p)` states the sidebearings and the ink (`around(left, ink, right)`, `beside(left, right)` for a shape of fixed size), and the build measures the program to find the cell (`crates/glyphs/src/text.rs`). Figures, signs, arrows and symbols keep the master's cell.
@@ -45,7 +45,7 @@ cargo run -q -p rachis -- proof --text "line one" "line two" -o t.png --sizes 40
 cargo run -q -p rachis -- proof --text "..." -o t.png --masters
 RACHIS_REFS=<directory of reference fonts> cargo run -q -p rachis -- proof --text "..." -o c.png --compare
 cargo run -q -p rachis -- widths --master "Text Regular" "nobdpq"   # advance, sidebearings, ink
-cargo run -q -p rachis -- kern --master "Text Regular" To AV "r."   # computed kerning
+cargo run -q -p rachis -- kern --master "Text Regular" To AV "r."   # the kerning the fonts carry; --own: the master's own
 cargo run -q -p rachis -- measure --refs <directory of reference fonts> --out docs/measurements.md
 ```
 

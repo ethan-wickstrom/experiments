@@ -242,6 +242,17 @@ impl Fit {
 /// the upright's, sheared with the letter.
 pub type AnchorFn = Box<dyn Fn(&Spec, &Params, &dyn Fn() -> Glyph) -> Vec<(&'static str, f64, f64)> + Send + Sync>;
 
+/// How deep glyph programs may look one another up: a letter, the letters it is built on, the marks on those.
+const MAX_DEPTH: usize = 24;
+
+thread_local! {
+    /// How many glyph programs are running inside one another on this thread. Masters are drawn on several
+    /// threads at once, so the count belongs to the thread, not to the registry.
+    static DEPTH: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Whether the programs running on this thread went deeper than [`MAX_DEPTH`].
+    static CYCLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// The fit of a glyph in a master. `None` leaves the master's own cell.
 pub type FitFn = Box<dyn Fn(&Registry, &Spec, &Params) -> Option<Fit> + Send + Sync>;
 
@@ -327,7 +338,27 @@ impl Registry {
     }
 
     /// Run one glyph program for the master `p`. The program sees the width of its own cell as `p.width`.
+    ///
+    /// Programs look other glyphs up, and those run in turn. A glyph that reaches itself that way would never
+    /// finish, so the depth is counted: past [`MAX_DEPTH`] the glyph is left empty with an error, which
+    /// `rachis check` reports.
     pub fn build(&self, spec: &Spec, p: &Params) -> Glyph {
+        let depth = DEPTH.with(|d| d.replace(d.get() + 1));
+        let mut glyph = if depth >= MAX_DEPTH {
+            CYCLE.with(|c| c.set(true));
+            Glyph { name: spec.name.clone(), ..Glyph::default() }
+        } else {
+            self.build_inner(spec, p)
+        };
+        DEPTH.with(|d| d.set(depth));
+        // the glyph the cycle was reached from carries the error: the programs in between may have dropped it
+        if depth == 0 && CYCLE.with(|c| c.replace(false)) {
+            glyph.errors.push("glyph programs refer to one another in a cycle".into());
+        }
+        glyph
+    }
+
+    fn build_inner(&self, spec: &Spec, p: &Params) -> Glyph {
         let fit = match spec.opt.advance {
             Some(_) => None,
             None => self.fit.as_ref().and_then(|f| f(self, spec, p)),

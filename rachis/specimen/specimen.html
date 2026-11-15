@@ -206,7 +206,7 @@ th { font-weight: 600; white-space: nowrap; }
         <p class="fn">¹ Proved for the line by Heine (1872) and Borel (1895); Toward a general statement, see Rudin, <i>Principles of Mathematical Analysis</i>, §2.41. Zażółć gęślą jaźń; Erdős, Gödel, Poincaré, Łoś.</p>
       </div>
     </div>
-    <p class="note col">With the optical size on Auto the browser picks it from the font size: at 12 px and below the letters get a larger x-height, heavier strokes and more room.</p>
+    <p class="note col">With the optical size on Auto the browser picks it from the font size: below 16 px the letters move toward the small design, with a larger x-height, heavier strokes and more room, and reach it at 8 px.</p>
   </section>
 
   <section aria-labelledby="h-apart">
@@ -219,7 +219,7 @@ th { font-weight: 600; white-space: nowrap; }
       <div class="pairs" id="pairs"></div>
       <div class="legend"><span><i class="k1"></i>Rachis Mono Regular</span><span><i class="k2"></i>Commit Mono, DejaVu Sans Mono, Fira Code, IBM Plex Mono, Iosevka, JetBrains Mono, JuliaMono, Source Code Pro</span></div>
     </div>
-    <p class="note col">Further right is more distinct. Rachis is ahead of every reference on 0 and O, 6 and b, 8 and B, and behind every one on 1 and I, which is open work. The measure is a screening tool: its rank agreement with human confusion data is weak (at most 0.33), so it compares typefaces and does not predict misreadings.</p>
+    <p class="note col">Further right is more distinct. Rachis is ahead of every reference on 0 and O, 6 and b, 8 and B, and inside their range on the rest. The measure is a screening tool: its rank agreement with human confusion data is weak (at most 0.33), so it compares typefaces and does not predict misreadings.</p>
   </section>
 
   <section aria-labelledby="h-math">
@@ -343,7 +343,7 @@ $ cargo run --release -p rachis -- build
         <tr><th>Features</th><td><code>zero</code> slashed zero, <code>ss01</code> dotted zero, <code>ss02</code> plain zero, <code>sups</code> <code>subs</code> <code>sinf</code>, kerning in Rachis, mark positioning</td></tr>
         <tr><th>Coverage</th><td>Latin for European languages, monotonic Greek, mathematics, arrows, currency, symbols; in Rachis Mono also box drawing, blocks, Braille, Powerline, branch drawing and sextants</td></tr>
         <tr><th>Licence</th><td>SIL Open Font License 1.1</td></tr>
-        <tr><th>Open work</th><td><code>rachis/docs/ledger.md</code>: among it, no OpenType MATH table yet, 1 and I closer than in the references, kerning computed at one weight</td></tr>
+        <tr><th>Open work</th><td><code>rachis/docs/ledger.md</code>: among it, no OpenType MATH table yet, 89 of the research's distinctness targets not met, kerning computed at one weight</td></tr>
       </table>
     </div>
     <div class="plate">
@@ -364,7 +364,7 @@ code, pre { font-family: "Rachis Mono", monospace; }</pre>
 // Distances at 14 px and a blur of 1 px, from rachis/docs/measurements.md: [pair, Rachis Mono, lowest and highest of the eight references].
 const PAIRS = [
   ["0 O", 0.495, 0.150, 0.378], ["6 b", 0.412, 0.329, 0.391], ["l |", 0.406, 0.356, 0.565], ["l I", 0.388, 0.192, 0.405],
-  ["1 l", 0.343, 0.291, 0.403], ["g q", 0.317, 0.259, 0.501], ["2 Z", 0.268, 0.264, 0.299], ["1 I", 0.223, 0.229, 0.422],
+  ["1 l", 0.327, 0.291, 0.403], ["g q", 0.317, 0.259, 0.501], ["1 I", 0.284, 0.229, 0.422], ["2 Z", 0.268, 0.264, 0.299],
   ["8 B", 0.222, 0.123, 0.212], ["5 S", 0.200, 0.138, 0.278], ["O D", 0.168, 0.105, 0.214],
 ];
 const pairs = document.getElementById("pairs");

@@ -1,5 +1,6 @@
 //! Structural checks on glyph programs: what must hold before a font is built from them.
 
+use crate::geom::{V, pt};
 use crate::glyph::{Glyph, Registry};
 use crate::params::{Params, faces};
 
@@ -59,6 +60,30 @@ pub fn check_glyphs(registry: &Registry, names: Option<&[String]>) -> Report {
                     sigs.join(" | ")
                 ));
             }
+            // a contour whose size passes through zero between two masters (a counter that closes in the Bold)
+            // comes out turned half round: the same structure, still an area, and a glyph that is wrong in
+            // between. Its points then lie opposite, about its centre, to where the first master has them.
+            let about_centre = |g: &Glyph, i: usize| -> Vec<V> {
+                let points = g.contours[i].points();
+                let n = points.len().max(1) as f64;
+                let centre = points.iter().fold(pt(0.0, 0.0), |sum, &z| sum + z) * (1.0 / n);
+                points.iter().map(|&z| z - centre).collect()
+            };
+            if built.iter().all(|(_, g)| g.signature() == first) {
+                for i in 0..built[0].1.contours.len() {
+                    let reference = about_centre(&built[0].1, i);
+                    for (p, g) in &built[1..] {
+                        let here = about_centre(g, i);
+                        let agreement: f64 = reference.iter().zip(&here).map(|(a, b)| a.dot(*b)).sum();
+                        if agreement < 0.0 {
+                            report.problems.push(format!(
+                                "{name} [{}]: contour {i} is turned round against {}: its size passes through zero",
+                                p.name, built[0].0.name
+                            ));
+                        }
+                    }
+                }
+            }
             for (p, g) in &built {
                 for (base, _) in &g.components {
                     if registry.get(base).is_none() {
@@ -102,4 +127,54 @@ pub fn check_glyphs(registry: &Registry, names: Option<&[String]>) -> Report {
         }
     }
     report
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::glyph::Draw;
+
+    #[test]
+    fn a_contour_whose_size_passes_through_zero_is_a_problem() {
+        let mut registry = Registry::new();
+        registry.module("test");
+        // a square whose half side is 44 in the Light, 22 in the Regular and -24 in the Bold
+        registry.named("closing", |g: &mut Draw| {
+            let r = 110.0 - g.p.stem;
+            g.poly(&[
+                pt(300.0 - r, 100.0 - r),
+                pt(300.0 + r, 100.0 - r),
+                pt(300.0 + r, 100.0 + r),
+                pt(300.0 - r, 100.0 + r),
+            ]);
+        });
+        registry.named("steady", |g: &mut Draw| {
+            let r = 200.0 - g.p.stem;
+            g.poly(&[
+                pt(300.0 - r, 100.0 - r),
+                pt(300.0 + r, 100.0 - r),
+                pt(300.0 + r, 100.0 + r),
+                pt(300.0 - r, 100.0 + r),
+            ]);
+        });
+        let report = check_glyphs(&registry, None);
+        assert!(
+            report.problems.iter().any(|p| p.starts_with("closing") && p.contains("turned round")),
+            "{:?}",
+            report.problems
+        );
+        assert!(!report.problems.iter().any(|p| p.starts_with("steady")), "{:?}", report.problems);
+    }
+
+    #[test]
+    fn glyph_programs_that_reach_themselves_are_reported_and_do_not_hang() {
+        let mut registry = Registry::new();
+        registry.module("test");
+        registry.named("ouroboros", |g: &mut Draw| {
+            let _ = g.glyph_of("ouroboros");
+            g.rect(0.0, 0.0, 100.0, 100.0);
+        });
+        let report = check_glyphs(&registry, None);
+        assert!(report.problems.iter().any(|p| p.contains("cycle")), "{:?}", report.problems);
+    }
 }

@@ -79,22 +79,15 @@ fn draw(registry: &Registry, face: &Face, p: &Params) -> Vec<Glyph> {
     registry.specs.iter().filter(|s| face.has(s.module)).map(|s| registry.build(s, p)).collect()
 }
 
-/// The kerning classes of a proportional face with their values in its default master: the letters'
-/// classes, each joined by the letters built on them (an accented letter kerns as its base).
-fn kerning(registry: &Registry, face: &Face, glyphs: &[Glyph]) -> Option<KernClasses> {
+/// The kerning classes of a proportional face with their values in its default master. Every weight and size of
+/// the face, and its static family at the small size, carry these values (ledger G2).
+fn kerning(registry: &Registry, face: &Face) -> Option<KernClasses> {
     let p = face.default_master();
     if p.mono {
         return None;
     }
-    let mut classes = kern::classes(registry, p);
+    let classes = kern::classes(registry, p);
     let values = kern::values(registry, p, &classes);
-    for class in classes.first.iter_mut().chain(classes.second.iter_mut()) {
-        let members = class.clone();
-        let built_on = glyphs
-            .iter()
-            .filter(|g| g.contours.is_empty() && g.components.first().is_some_and(|(base, _)| members.contains(base)));
-        class.extend(built_on.map(|g| g.name.clone()).filter(|n| !members.contains(n)));
-    }
     Some(KernClasses {
         first: classes.first,
         second: classes.second,
@@ -127,11 +120,6 @@ fn family(registry: &Registry, face: &Face, small: bool) -> Family {
     let drawn: Vec<Master> =
         masters.iter().map(|p| Master { location: at(p.wght, p.opsz), glyphs: draw(registry, face, p) }).collect();
     let reference = masters.iter().find(|p| p.wght == 400.0).copied().unwrap_or(default);
-    let kerning = drawn
-        .iter()
-        .zip(&masters)
-        .find(|(_, p)| p.wght == 400.0)
-        .and_then(|(m, _)| if small { None } else { kerning(registry, face, &m.glyphs) });
     let zero = name_of('0');
     Family {
         name: if small { format!("{} Small", face.family) } else { face.family.into() },
@@ -164,7 +152,7 @@ fn family(registry: &Registry, face: &Face, small: bool) -> Family {
             single("sinf", None, char_pairs(registry, face, &INFERIORS)),
         ],
         kerning: Vec::new(),
-        kern_classes: kerning,
+        kern_classes: kerning(registry, face),
     }
 }
 
@@ -344,4 +332,96 @@ fn set_head_flag_bit(mut font: Vec<u8>, bit: u16) -> Result<Vec<u8>, String> {
     let adjustment = 0xB1B0_AFBAu32.wrapping_sub(checksum(&font));
     font[offset + 8..offset + 12].copy_from_slice(&adjustment.to_be_bytes());
     Ok(font)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use skrifa::instance::Size;
+    use skrifa::raw::TableProvider;
+    use skrifa::{FontRef, MetadataProvider};
+
+    use super::*;
+
+    fn face(file: &str) -> Face {
+        faces().into_iter().find(|f| f.file == file).expect("the face exists")
+    }
+
+    /// The kerning between two glyphs by name: 0 when either is in no class.
+    fn value(k: &KernClasses, left: &str, right: &str) -> i16 {
+        let class = |classes: &[Vec<String>], name: &str| classes.iter().position(|c| c.iter().any(|n| n == name));
+        match (class(&k.first, left), class(&k.second, right)) {
+            (Some(i), Some(j)) => k.values[i][j],
+            _ => 0,
+        }
+    }
+
+    #[test]
+    fn the_proportional_face_compiles_with_two_axes_and_kerning() {
+        let registry = rachis_glyphs::registry();
+        let fam = family(&registry, &face("Rachis"), false);
+        assert_eq!(fam.masters.len(), 6);
+        let bytes = rachis_font::variable_ttf(&fam).expect("the face compiles");
+        let font = FontRef::new(&bytes).expect("a font");
+        let axes: Vec<String> = font.axes().iter().map(|a| a.tag().to_string()).collect();
+        assert_eq!(axes, ["opsz", "wght"]);
+        // n is wider at the small size, and wider in the Bold
+        let n = font.charmap().map('n').expect("n");
+        let advance = |axis: &str, at: f32| {
+            let location = font.axes().location([(axis, at)]);
+            font.glyph_metrics(Size::unscaled(), &location).advance_width(n).expect("an advance")
+        };
+        assert!(advance("opsz", 8.0) > advance("opsz", 16.0));
+        assert!(advance("wght", 700.0) > advance("wght", 400.0));
+        let features: Vec<String> = font
+            .gpos()
+            .and_then(|gpos| gpos.feature_list())
+            .map(|list| list.feature_records().iter().map(|r| r.feature_tag().to_string()).collect())
+            .expect("GPOS");
+        assert!(features.iter().any(|t| t == "kern") && features.iter().any(|t| t == "mark"), "{features:?}");
+        assert_eq!(font.post().expect("post").is_fixed_pitch(), 0);
+    }
+
+    #[test]
+    fn kerning_closes_open_pairs_and_keeps_accents_clear() {
+        let registry = rachis_glyphs::registry();
+        let k = kerning(&registry, &face("Rachis")).expect("the proportional face is kerned");
+        assert!(value(&k, "T", "o") < -50 && value(&k, "A", "V") < -50 && value(&k, "r", "period") < -50);
+        // two stems at their sidebearings need nothing, and the arm of r stays clear of n
+        assert_eq!((value(&k, "n", "n"), value(&k, "n", "o"), value(&k, "r", "n")), (0, 0, 0));
+        // an accent that overhangs its letter is not pulled under the bar of T
+        assert!(value(&k, "T", "dotlessi") < -50);
+        assert!(value(&k, "T", "icircumflex") >= 0 && value(&k, "T", "idieresis") >= 0);
+        // inks that never stand side by side are left alone
+        assert_eq!((value(&k, "colon", "hyphen"), value(&k, "hyphen", "colon")), (0, 0));
+        // a digraph kerns on its right as its right letter does
+        assert_eq!(value(&k, "IJ", "period"), value(&k, "J", "period"));
+        // nothing is moved into a bracket
+        assert_eq!((value(&k, "H", "bracketright"), value(&k, "bracketleft", "H")), (0, 0));
+        for classes in [&k.first, &k.second] {
+            let mut seen = BTreeSet::new();
+            for name in classes.iter().flatten() {
+                assert!(seen.insert(name), "{name} is in two classes");
+            }
+        }
+    }
+
+    #[test]
+    fn the_small_static_family_is_the_face_at_its_small_size() {
+        let registry = rachis_glyphs::registry();
+        let small = family(&registry, &face("Rachis"), true);
+        assert_eq!(small.name, "Rachis Small");
+        assert_eq!(small.axes.iter().map(|a| a.tag.as_str()).collect::<Vec<_>>(), ["wght"]);
+        assert!(small.masters.len() == 3 && small.metrics.x_height > 540);
+        assert_eq!(small.kern_classes, family(&registry, &face("Rachis"), false).kern_classes);
+    }
+
+    #[test]
+    fn the_fixed_pitch_face_has_one_axis_and_no_kerning() {
+        let registry = rachis_glyphs::registry();
+        let fam = family(&registry, &face("RachisMono"), false);
+        assert_eq!(fam.axes.iter().map(|a| a.tag.as_str()).collect::<Vec<_>>(), ["wght"]);
+        assert!(fam.kern_classes.is_none() && fam.metrics.fixed_pitch);
+    }
 }

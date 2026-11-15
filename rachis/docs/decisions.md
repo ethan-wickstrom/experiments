@@ -95,11 +95,11 @@ Every decision the typeface rests on: what was chosen, what was rejected and why
 - Where: `small_of` in `crates/kernel/src/params.rs`; `family` in `crates/cli/src/build.rs`.
 
 ## T17 · Kerning is computed from the outlines (2026-11-15, active)
-- Decision: for every pair of letters and punctuation of the proportional family, the build measures the white between the two inks on every row where they stand side by side, counted no deeper than 1.6 times the pair's standard distance; a pair with more white than two stems at their sidebearings is closed by three quarters of the excess, never nearer than 0.55 of the standard distance, and a pair whose inks come within 0.16 of it is opened. Glyphs whose rows of the table agree within 9 units form a class; the font stores class kerning. Brackets are never closed into.
+- Decision: for every pair of letters, accented letters and punctuation of the proportional family, the build measures the white between the two inks on every row where both have ink, counted no deeper than 1.6 times the pair's standard distance; a pair with more white than two stems at their sidebearings is closed by three quarters of the excess, never nearer than 0.55 of the standard distance, and a pair whose inks come within 0.16 of it is opened. Glyphs whose rows of the table agree within 9 units form a class; the font stores class kerning. Brackets are never closed into.
 - Why: T o, A V, r followed by a full stop and P followed by one are holes in a line at any size, and the sidebearings cannot close them. The depth of 1.6 was chosen so that a round side at the round sidebearing measures what a straight side does: the kerning then agrees with the widths table about the pairs that need nothing (n n, o o, n o are 0). The floor of 0.55 keeps the arm of r off n, so that r n is not read as m.
-- Measured: To −77, AV −80, LT −79, r. −74, P. −77, (j +33, rn 0, nn 0 in the Regular.
+- Measured: To −77, AV −80, LT −79, r. −74, P. −77, (j +33, rn 0, nn 0 in the Regular. An accented letter is kerned by its own outline, so an accent that overhangs keeps clear: T before ı is −77, before i 0, before î +28. Inks that share no row are left alone (a colon and a hyphen: 0).
 - Rejected: no kerning (the holes); a hand-made table (it would have to be redone for every weight and whenever a shape changes); closing the whole excess (letters look glued; professional tables close a part).
-- Limit: the values are those of the Regular at the text size, applied at every weight and size (ledger G2).
+- Limit: the values are those of the Regular at the text size, applied at every weight and size (ledger G2). The proof tool and `rachis kern` show these values, so a proof shows what a font does; `rachis kern --own` shows what the computation gives for one master.
 - Where: `crates/glyphs/src/kern.rs`; `rachis kern`.
 
 ## T18 · What tells characters apart in the proportional family (2026-11-15, active)
@@ -109,7 +109,7 @@ Every decision the typeface rests on: what was chosen, what was rejected and why
 - Where: `lower.rs`, `upper.rs`, `digits.rs`.
 
 ## T19 · Figures, operators, arrows and symbols keep one cell in the proportional family (2026-11-15, active)
-- Decision: in Rachis every figure, sign, arrow and symbol has the advance of the cell: 580 at the text size, 600 at the small size. Only letters and punctuation have widths of their own.
+- Decision: in Rachis figures, operators, arrows and symbols have the advance of the cell: 580 at the text size, 600 at the small size. Letters and punctuation have widths of their own, and so do the signs that prose uses as punctuation (`-` 321, `/` 423, `|` 285, `*` 480 in the Regular), the superior and inferior figures and letters (which follow a letter closely), and the long arrows (a cell and a half).
 - Why: columns of figures align without a feature, and a formula's operators are as wide as its figures, as in the fixed pitch. The median figure of the nine text faces is 593 at this x-height, so a 580 cell is a text figure, not a typewriter's.
 - Rejected: proportional figures by default (tables and code in running text are the commoner case for this reader; ledger I6 keeps them as a feature to add).
 
@@ -145,4 +145,10 @@ Every decision the typeface rests on: what was chosen, what was rejected and why
 ## T25 · No MATH table in this version (2026-11-15, active)
 - Decision: the fonts cover mathematics as Unicode text (operators, relations, arrows, Greek, double-struck letters, superscripts and subscripts, delimiters, bracket pieces), not as a font for a formula typesetter. They carry no OpenType MATH table.
 - Why: a MATH table that is wrong is worse than none: a typesetter would trust its constants, italic corrections and delimiter variants. Doing it properly is a project of its own (ledger I1), and a programmed face is well placed for it: a delimiter of any height is the same program with another height.
+
+## T26 · The foot of 1 and the serifs of I differ in length, oppositely in the two families (2026-11-15, active)
+- Decision: in the fixed pitch, where the serifs of `I` fill the cell, the foot of `1` is short (0.6 of the figure's width); in the proportional family, where the serifs of `I` are short, the foot of `1` is long.
+- Why, measured at 14 px and a blur of 1 px in the fixed pitch: with a foot as long as the serifs, `1` and `I` are 0.223 apart, less than in all eight reference typefaces (0.229 to 0.422); with the short foot they are 0.284, above the references' median of 0.265. Shortening the serifs of `I` instead did nothing (196, 150 and 120 units give 0.223, 0.195 and 0.226). The short foot costs a little elsewhere: `1 l` goes from 0.343 to 0.327 and `1 |` falls to 0.333, so the least of the pairwise distances among `1 l I |` rises from 0.223 to 0.284. In the proportional family the same short foot made things worse (`1 I` 0.171 against 0.257), because there it matches the short serifs; hence the opposite choice.
+- Rejected: one foot for both families; a `1` without a foot (it is then a bar with a flag, 0.46 from `|` with even the short foot).
+- Where: `draw_one` in `crates/glyphs/src/digits.rs`.
 

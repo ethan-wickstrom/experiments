@@ -36,7 +36,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | specimen -o FILE | measure ... | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] TEXT | kern [--master NAME] [PAIRS]>"
+                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | specimen -o FILE | measure ... | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] TEXT | kern [--master NAME] [--own] [PAIRS]>"
             );
             ExitCode::FAILURE
         }
@@ -84,15 +84,18 @@ fn widths(registry: &Registry, args: &[String]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// Print the computed kerning of a master: of the pairs given as two-character arguments, or the count and the
-/// largest when none are given.
+/// Print the kerning of a master's face as the fonts carry it (or, with `--own`, the kerning computed for that
+/// master itself): of the pairs given as two-character arguments, or the classes and the largest when none are.
 fn kern(registry: &Registry, args: &[String]) -> ExitCode {
     let name = args.iter().position(|a| a == "--master").and_then(|i| args.get(i + 1));
     let Some(p) = master(name.map_or("Text Regular", String::as_str)) else {
         eprintln!("no such master");
         return ExitCode::FAILURE;
     };
-    let pairs = rachis_glyphs::kern::kerning(registry, &p);
+    // `--own` shows the master's own kerning; without it, what the fonts of its face carry
+    let own = args.iter().any(|a| a == "--own");
+    let pairs =
+        if own { rachis_glyphs::kern::kerning(registry, &p) } else { rachis_glyphs::kern::of_face(registry, &p) };
     let wanted: Vec<&String> = args.iter().filter(|a| !a.starts_with("--") && Some(*a) != name).collect();
     let glyph = |c: char| registry.for_char(c).map(|s| s.name.clone()).unwrap_or_default();
     if wanted.is_empty() {

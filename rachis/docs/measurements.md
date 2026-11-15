@@ -12,13 +12,14 @@ The distance of two characters is computed as the prototype's `measure.py` compu
 
 **Limits.** The distance is a screening tool for comparing pairs and typefaces under one viewing model. It does not predict how often a person misreads a character: against the only human confusion data we could test it on (Mueller and Weidemann's letter matrices), its rank correlation was at most 0.33 (`docs/research/legibility-science.md`, section f). A gate passed is a pair that is no closer than the threshold under this model; it is not a legibility claim. Nothing here was tested on people reading code.
 
-**Gates.** 88 fail:
+**Gates.** 89 fail:
 
 - Mono Regular: 0 8 at 0.183 < 0.250
 - Mono Regular: O D at 0.168 < 0.250
-- Mono Regular: 1 l at 0.343 < 0.400
-- Mono Regular: 1 I at 0.223 < 0.400
+- Mono Regular: 1 l at 0.327 < 0.400
+- Mono Regular: 1 I at 0.284 < 0.400
 - Mono Regular: l I at 0.388 < 0.400
+- Mono Regular: 1 \| at 0.333 < 0.400
 - Mono Regular: 8 B at 0.222 < 0.250
 - Mono Regular: 5 S at 0.200 < 0.250
 - Mono Regular: g q at 0.317 < 0.350
@@ -339,13 +340,13 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `0` `D` |  | 0.524 | 0.438 | 0.344 | 0.334 | 0.264 | 0.341 | 0.214 | 0.264 | 0.183 | 0.194 | 0.292 |  |
 | `O` `D` | 0.250 | 0.241 | **0.168** | 0.121 | 0.187 | 0.191 | 0.170 | 0.167 | 0.105 | 0.116 | 0.214 | 0.162 | research item 4 |
 | `O` `Q` |  | 0.243 | 0.219 | 0.179 | 0.253 | 0.174 | 0.291 | 0.271 | 0.258 | 0.254 | 0.306 | 0.290 |  |
-| `1` `l` | 0.400 | 0.430 | **0.343** | 0.272 | 0.353 | 0.332 | 0.339 | 0.291 | 0.395 | 0.367 | 0.403 | 0.340 | research item 3: 1 l I \| pairwise |
-| `1` `I` | 0.400 | 0.319 | **0.223** | 0.154 | 0.244 | 0.229 | 0.246 | 0.274 | 0.422 | 0.262 | 0.266 | 0.265 | research item 3 |
+| `1` `l` | 0.400 | 0.417 | **0.327** | 0.247 | 0.353 | 0.332 | 0.339 | 0.291 | 0.395 | 0.367 | 0.403 | 0.340 | research item 3: 1 l I \| pairwise |
+| `1` `I` | 0.400 | 0.383 | **0.284** | 0.229 | 0.244 | 0.229 | 0.246 | 0.274 | 0.422 | 0.262 | 0.266 | 0.265 | research item 3 |
 | `l` `I` | 0.400 | 0.461 | **0.388** | 0.328 | 0.387 | 0.402 | 0.346 | 0.238 | 0.192 | 0.405 | 0.354 | 0.370 | research item 3 |
 | `l` `\|` | 0.400 | 0.535 | 0.406 | 0.292 | 0.445 | 0.450 | 0.565 | 0.472 | 0.356 | 0.496 | 0.543 | 0.477 | research item 3 |
 | `I` `\|` | 0.400 | 0.574 | 0.431 | 0.340 | 0.517 | 0.504 | 0.588 | 0.518 | 0.386 | 0.432 | 0.479 | 0.524 | research item 3 |
-| `1` `\|` | 0.400 | 0.544 | 0.409 | 0.308 | 0.529 | 0.488 | 0.615 | 0.577 | 0.412 | 0.493 | 0.561 | 0.518 | research item 3 (not in report.py's gates) |
-| `1` `7` |  | 0.601 | 0.444 | 0.327 | 0.528 | 0.521 | 0.520 | 0.549 | 0.425 | 0.535 | 0.557 | 0.531 |  |
+| `1` `\|` | 0.400 | 0.460 | **0.333** | 0.240 | 0.529 | 0.488 | 0.615 | 0.577 | 0.412 | 0.493 | 0.561 | 0.518 | research item 3 (not in report.py's gates) |
+| `1` `7` |  | 0.560 | 0.394 | 0.256 | 0.528 | 0.521 | 0.520 | 0.549 | 0.425 | 0.535 | 0.557 | 0.531 |  |
 | `i` `l` |  | 0.512 | 0.391 | 0.270 | 0.400 | 0.389 | 0.388 | 0.345 | 0.250 | 0.430 | 0.397 | 0.473 |  |
 | `i` `j` |  | 0.638 | 0.472 | 0.355 | 0.446 | 0.440 | 0.425 | 0.495 | 0.494 | 0.470 | 0.546 | 0.524 |  |
 | `!` `\|` |  | 0.444 | 0.338 | 0.272 | 0.345 | 0.453 | 0.626 | 0.344 | 0.389 | 0.368 | 0.489 | 0.499 |  |
@@ -468,9 +469,9 @@ All 1891 pairs of the letters and figures: 3 under 0.200, median 0.598. The ten 
 | 5 | `O` `Q` | 0.219 | `⊕` `⊛` | 0.0720 | `n` `π` | 0.155 |
 | 6 | `w` `W` | 0.219 | `➡` `➔` | 0.0751 | `O` `Ω` | 0.177 |
 | 7 | `B` `8` | 0.222 | `↔` `↭` | 0.0817 | `Ό` `Ώ` | 0.179 |
-| 8 | `I` `1` | 0.223 | `⊚` `⊛` | 0.0818 | `H` `Ή` | 0.186 |
-| 9 | `H` `M` | 0.242 | `→` `↝` | 0.0819 | `A` `Ά` | 0.188 |
-| 10 | `b` `h` | 0.261 | `←` `↜` | 0.0819 | `8` `θ` | 0.191 |
+| 8 | `H` `M` | 0.242 | `⊚` `⊛` | 0.0818 | `H` `Ή` | 0.186 |
+| 9 | `b` `h` | 0.261 | `→` `↝` | 0.0819 | `A` `Ά` | 0.188 |
+| 10 | `M` `N` | 0.265 | `←` `↜` | 0.0819 | `8` `θ` | 0.191 |
 
 ## Rachis
 

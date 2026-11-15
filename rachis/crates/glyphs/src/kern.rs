@@ -8,8 +8,9 @@
 //! straight stems at their standard sidebearings measure the standard; a pair that measures more is closed by
 //! a fraction of the difference, and a pair whose inks come too near is opened.
 //!
-//! The same computation runs for every master, so kerning follows weight and optical size without a table of
-//! exceptions.
+//! The computation can run for any master. The fonts carry the kerning of each face's default master (the
+//! Regular at the size for text) at every weight and size, and the proof tools show that same kerning
+//! ([`of_face`]), so that a proof shows what a font does.
 
 use rachis_kernel::geom::flatten;
 use rachis_kernel::{Glyph, Params, Registry};
@@ -32,8 +33,9 @@ const TOUCHING: f64 = 0.16;
 /// Glyphs whose kerning against every neighbour differs by no more than this are one class.
 const ALIKE: f64 = 9.0;
 
-/// The glyphs that are kerned: letters, and the punctuation that stands against them.
-const MODULES: [&str; 3] = ["lower", "upper", "punct"];
+/// The glyphs that are kerned: letters, accented letters (each by its own outline: an accent that overhangs
+/// its letter must keep clear of the neighbour), and the punctuation that stands against them.
+const MODULES: [&str; 4] = ["lower", "upper", "punct", "latin"];
 const SIGNS: [&str; 3] = ["hyphen", "slash", "backslash"];
 /// Glyphs of those modules that stand apart from words, or in columns, and are left alone.
 const APART: [&str; 15] = [
@@ -108,17 +110,24 @@ const CLOSING: [&str; 3] = ["parenright", "bracketright", "braceright"];
 fn kern(a: &Sides, b: &Sides, p: &Params) -> f64 {
     let standard = if a.capital { p.cap_sb } else { p.sb } + if b.capital { p.cap_sb } else { p.sb };
     let (first, last) = (a.rows.0.max(b.rows.0), a.rows.1.min(b.rows.1));
-    if last < first || ((last - first) as f64) * STEP < 0.1 * p.xh {
-        return 0.0; // the two never stand side by side
+    if last < first {
+        return 0.0;
     }
+    // only rows where both have ink count: white beside one glyph alone is not space between the two
     let depth = DEPTH * standard;
-    let (mut white, mut nearest) = (0.0, f64::INFINITY);
+    let (mut white, mut nearest, mut shared) = (0.0, f64::INFINITY, 0usize);
     for row in first..=last {
         let gap = a.right[row] + b.left[row];
-        white += gap.min(depth);
-        nearest = nearest.min(gap);
+        if gap.is_finite() {
+            white += gap.min(depth);
+            nearest = nearest.min(gap);
+            shared += 1;
+        }
     }
-    let mean = white / (last - first + 1) as f64;
+    if (shared as f64) * STEP < 0.1 * p.xh {
+        return 0.0; // the two never stand side by side: a colon and a hyphen, a quote and a full stop
+    }
+    let mean = white / shared as f64;
     let enclosed = OPENING.contains(&a.name.as_str()) || CLOSING.contains(&b.name.as_str());
     let closer = if enclosed { 0.0 } else { (GAIN * (standard - mean)).min(0.0) };
     // close no further than the nearest inks allow; open a pair whose inks touch or cross
@@ -127,7 +136,7 @@ fn kern(a: &Sides, b: &Sides, p: &Params) -> f64 {
 }
 
 /// The kerning of a face: classes of glyphs that kern alike on their right side and on their left side, decided
-/// once on the face's default master so that every master has the same classes and the values interpolate.
+/// on the face's default master.
 pub struct Classes {
     /// Glyphs as the left member of a pair, grouped by how their right sides kern.
     pub first: Vec<Vec<String>>,
@@ -145,7 +154,11 @@ fn all_sides(registry: &Registry, p: &Params) -> Vec<Sides> {
         .iter()
         .filter(|s| (MODULES.contains(&s.module) || SIGNS.contains(&s.name.as_str())) && !s.opt.mark)
         .filter(|s| !APART.contains(&s.name.as_str()))
-        .filter_map(|s| sides(&registry.flat(&s.name, &upright)?, s.module == "upper", y0, count))
+        .filter_map(|s| {
+            // a capital stands at the capitals' sidebearing; unencoded glyphs are not letters of a text
+            let capital = char::from_u32(*s.unicodes.first()?)?.is_uppercase();
+            sides(&registry.flat(&s.name, &upright)?, capital, y0, count)
+        })
         .collect()
 }
 
@@ -208,7 +221,17 @@ pub fn values(registry: &Registry, p: &Params, classes: &Classes) -> Vec<Vec<f64
         .collect()
 }
 
-/// The kerning of the master `p` pair by pair, for setting proofs: (left glyph, right glyph, adjustment).
+/// The kerning the fonts of `p`'s face carry, pair by pair: that of the face's default master, whatever the
+/// weight and size of `p`. For proofs and for `rachis kern`.
+pub fn of_face(registry: &Registry, p: &Params) -> Vec<(String, String, f64)> {
+    let face = rachis_kernel::params::faces().into_iter().find(|f| f.masters.iter().any(|m| m.name == p.name));
+    match face {
+        Some(face) => kerning(registry, face.default_master()),
+        None => kerning(registry, p),
+    }
+}
+
+/// The kerning of the master `p` itself, pair by pair: (left glyph, right glyph, adjustment).
 pub fn kerning(registry: &Registry, p: &Params) -> Vec<(String, String, f64)> {
     let classes = classes(registry, p);
     let table = values(registry, p, &classes);

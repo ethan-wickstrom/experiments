@@ -656,7 +656,7 @@ pub(crate) trait Face {
 pub(crate) struct OurFace<'r> {
     built: Built<'r>,
     paths: HashMap<char, Option<Path>>,
-    /// The master's kerning by glyph names, computed when first asked for.
+    /// The kerning the fonts of the master's face carry, by glyph names, computed when first asked for.
     kerning: Option<HashMap<(String, String), f64>>,
 }
 
@@ -694,7 +694,7 @@ impl Face for OurFace<'_> {
         let registry = self.built.registry;
         let params = &self.built.params;
         let table = self.kerning.get_or_insert_with(|| {
-            rachis_glyphs::kern::kerning(registry, params).into_iter().map(|(l, r, k)| ((l, r), k)).collect()
+            rachis_glyphs::kern::of_face(registry, params).into_iter().map(|(l, r, k)| ((l, r), k)).collect()
         });
         let name = |c: char| registry.for_char(c).map(|s| s.name.clone());
         match (name(a), name(b)) {
