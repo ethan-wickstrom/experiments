@@ -208,3 +208,6 @@ __marimo__/
 
 # Harbor job output (benchmark runs); summaries go under frond/bench/results/
 jobs/
+
+# Rust
+target/

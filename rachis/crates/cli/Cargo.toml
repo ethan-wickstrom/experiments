@@ -1,0 +1,22 @@
+[package]
+name = "rachis"
+description = "Command line of the Rachis typeface: build the fonts, draw proofs, check glyph programs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "rachis"
+path = "src/main.rs"
+
+[dependencies]
+rachis-kernel = { path = "../kernel" }
+rachis-glyphs = { path = "../glyphs" }
+rachis-font = { path = "../font" }
+sha2 = "0.11"
+skrifa = "0.50"
+tiny-skia = "0.12"
+
+[lints]
+workspace = true

@@ -350,7 +350,7 @@ K15's guards:
 | I9 | GPT-5.4-mini `\n` | closed | became Q2 |
 | I10 | `plan()` ablation | closed | became E8 |
 | I11 | Self-improvement with a regression gate | closed | became E7 |
-| I12 | Load the rules at launch | closed | D18: root `CLAUDE.md` |
+| I12 | Load the rules at launch | closed | D18: root `CLAUDE.md`; since D62 the root file holds the rules of every project and `frond/CLAUDE.md` holds frond's |
 | I13 | Landlock-only environment leak | closed | became G1 |
 | PR2 | PR #2 | closed | merged as 29e00ab |
 | PR3 | PR #3 | closed | merged as 376dd3e |

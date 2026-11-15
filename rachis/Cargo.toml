@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["crates/kernel", "crates/glyphs", "crates/font", "crates/cli"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.90"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+many_single_char_names = "allow"
+too_many_arguments = "allow"
+
+# The command-line tests run the unoptimised binary over every glyph of every master.
+[profile.dev]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+
+# The tests draw every glyph of every master and unite and rasterise them; unoptimised that takes minutes.
+[profile.test]
+opt-level = 2

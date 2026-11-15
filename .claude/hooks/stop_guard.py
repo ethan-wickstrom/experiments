@@ -50,7 +50,7 @@ def main() -> int:
         reason = (
             "Before this turn ends (CLAUDE.md, Rules): "
             + "; ".join(found)
-            + ". Update frond/docs/ledger.md and frond/docs/now.md in the same change."
+            + ". Update the project's ledger and its record of what is in flight in the same change."
         )
         print(json.dumps({"decision": "block", "reason": reason}))
     return 0

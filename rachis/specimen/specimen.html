@@ -1,0 +1,416 @@
+<title>Rachis Specimen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="text-scale" content="scale">
+<style>
+/* Layout: one reading column set in the typeface itself; specimens sit on full-width plates between passages. */
+:root {
+  --bg: #fbfcfa;
+  --fg: #131915;
+  --muted: #55625a;
+  --rule: #dbe3dc;
+  --plate: #eff3ee;
+  --accent: #1c6b47;
+  --range: #b9c6bc;
+  --term-bg: #141a16;
+  --term-fg: #e2e9e3;
+  --term-dim: #8b998f;
+  --term-green: #7fc79f;
+  --text: "Rachis", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Rachis Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --measure: 42rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101411; --fg: #e4eae5; --muted: #97a59b; --rule: #27312b; --plate: #171d19; --accent: #86c9a4;
+    --range: #3b4a41; --term-bg: #0b0e0c; --term-fg: #dfe6e0; --term-dim: #7d8b81; --term-green: #86c9a4;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101411; --fg: #e4eae5; --muted: #97a59b; --rule: #27312b; --plate: #171d19; --accent: #86c9a4;
+  --range: #3b4a41; --term-bg: #0b0e0c; --term-fg: #dfe6e0; --term-dim: #7d8b81; --term-green: #86c9a4;
+  color-scheme: dark;
+}
+@font-face { font-family: "Rachis"; font-weight: 300 700; font-style: normal; font-display: swap;
+  src: url("data:font/woff2;base64,{{font:Rachis[opsz,wght].woff2}}") format("woff2"); }
+@font-face { font-family: "Rachis"; font-weight: 300 700; font-style: italic; font-display: swap;
+  src: url("data:font/woff2;base64,{{font:Rachis-Italic[opsz,wght].woff2}}") format("woff2"); }
+@font-face { font-family: "Rachis Mono"; font-weight: 300 700; font-style: normal; font-display: swap;
+  src: url("data:font/woff2;base64,{{font:RachisMono[wght].woff2}}") format("woff2"); }
+@font-face { font-family: "Rachis Mono"; font-weight: 300 700; font-style: italic; font-display: swap;
+  src: url("data:font/woff2;base64,{{font:RachisMono-Italic[wght].woff2}}") format("woff2"); }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--text); font-size: 1rem; line-height: 1.5;
+  font-size-adjust: from-font; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 3rem 4rem; max-width: 64rem; margin-inline: auto; }
+.col { max-width: var(--measure); }
+section { margin-top: 4rem; }
+h1 { font-size: clamp(4rem, 17vw, 10.5rem); line-height: 0.86; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+h2 { font-size: 1.75rem; line-height: 1.15; font-weight: 700; margin: 0 0 0.75rem; text-wrap: balance; }
+p { margin: 0 0 1rem; }
+.lede { font-size: 1.375rem; line-height: 1.4; max-width: 34rem; margin-top: 1.5rem; text-wrap: pretty; }
+.facts { font-family: var(--mono); font-size: 0.8125rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem;
+  margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.note { color: var(--muted); font-size: 0.875rem; }
+.note.col { margin-top: 0.75rem; }
+code, .mono { font-family: var(--mono); font-size: 0.9em; }
+.plate { background: var(--plate); border-radius: 6px; padding: 1.25rem; margin-top: 1.25rem; min-width: 0; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* the tester */
+.controls { display: flex; flex-wrap: wrap; gap: 1rem 1.75rem; align-items: end; font-family: var(--mono); font-size: 0.8125rem; }
+.controls fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.controls legend, .controls label.cap { display: block; color: var(--muted); padding: 0; margin-bottom: 0.35rem; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; }
+.seg label { padding: 0.3rem 0.7rem; cursor: pointer; border-right: 1px solid var(--rule); background: var(--bg); }
+.seg label:last-child { border-right: 0; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--fg); color: var(--bg); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.seg label:has(input:disabled) { opacity: 0.4; cursor: default; }
+.slider { display: grid; gap: 0.2rem; min-width: 11rem; flex: 1 1 11rem; max-width: 18rem; }
+.slider output { color: var(--fg); }
+input[type="range"] { accent-color: var(--accent); inline-size: 100%; block-size: 1.75rem; margin: 0; }
+.sample { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); outline: none; min-width: 0;
+  overflow-wrap: anywhere; font-size: 16px; line-height: 1.5; }
+.sample p { max-width: 44em; }
+.sample pre { font-family: var(--mono); font-size: 0.875em; line-height: 1.25; overflow-x: auto; margin: 0 0 1em; }
+.sample .fn { font-size: 0.75em; color: var(--muted); }
+
+/* told apart */
+.pairs { display: grid; gap: 0.15rem; margin-top: 1rem; }
+.pair { display: grid; grid-template-columns: 4.5rem 1fr 9.5rem; gap: 1rem; align-items: center; padding: 0.35rem 0;
+  border-bottom: 1px solid var(--rule); }
+.pair .g { font-family: var(--mono); font-size: 2rem; line-height: 1; white-space: nowrap; }
+.track { position: relative; height: 1.5rem; min-width: 0; }
+.track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid var(--rule); }
+.track .range { position: absolute; top: calc(50% - 0.25rem); height: 0.5rem; background: var(--range); border-radius: 0.25rem;
+  left: calc(var(--lo) / 0.6 * 100%); width: calc((var(--hi) - var(--lo)) / 0.6 * 100%); }
+.track .ours { position: absolute; top: calc(50% - 0.45rem); width: 0.9rem; height: 0.9rem; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--plate); left: calc(var(--v) / 0.6 * 100% - 0.45rem); }
+.pair .n { font-family: var(--mono); font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pair .n b { color: var(--fg); font-weight: 600; }
+.axis { display: grid; grid-template-columns: 4.5rem 1fr 9.5rem; gap: 1rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+.axis .ticks { position: relative; height: 1.1rem; }
+.axis .ticks span { position: absolute; left: calc(var(--at) / 0.6 * 100%); transform: translateX(-50%); }
+.legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); margin-top: 0.75rem; }
+.legend i { display: inline-block; vertical-align: middle; margin-right: 0.4rem; }
+.legend .k1 { width: 0.75rem; height: 0.75rem; border-radius: 50%; background: var(--accent); }
+.legend .k2 { width: 1.5rem; height: 0.5rem; border-radius: 0.25rem; background: var(--range); }
+
+/* mathematics */
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1.25rem; }
+.two > * { min-width: 0; }
+.cap { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); margin: 0 0 0.6rem; }
+.math { font-size: 1.125rem; line-height: 1.7; }
+.math.m { font-family: var(--mono); font-size: 1rem; line-height: 1.25; white-space: pre; overflow-x: auto; }
+.alike { font-size: 1.75rem; line-height: 1.5; display: flex; flex-wrap: wrap; gap: 0 2.25rem; }
+.alike span { white-space: nowrap; }
+
+/* terminal */
+.term { background: var(--term-bg); color: var(--term-fg); font-family: var(--mono); font-size: 0.875rem; line-height: 1.25;
+  border-radius: 6px; padding: 1rem 1.25rem; overflow-x: auto; margin-top: 1.25rem; }
+.term pre { margin: 0; font: inherit; }
+.term .d { color: var(--term-dim); }
+.term .a { color: var(--term-green); }
+.term .inv { background: var(--term-green); color: var(--term-bg); }
+.term .b { font-weight: 700; }
+
+/* small print and weights */
+.small p { font-size: 9px; line-height: 1.45; max-width: 46em; margin: 0; }
+.small .forced { font-variation-settings: "opsz" 16; }
+.small .sm { font-variation-settings: "opsz" 8; }
+.weights { display: grid; gap: 0.1rem; font-size: 1.5rem; line-height: 1.35; }
+.weights span { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.weights .lbl { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); display: inline-block; width: 6.5rem; }
+
+/* how a letter is made */
+.made { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.25rem; align-items: start; margin-top: 1.25rem; }
+.made .plate { margin-top: 0; }
+.made > * { min-width: 0; }
+.made pre { font-family: var(--mono); font-size: 0.8125rem; line-height: 1.35; margin: 0; overflow-x: auto; }
+.sheet { background: #ffffff; border-radius: 6px; padding: 0.75rem; }
+.sheet img { display: block; width: 100%; height: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9375rem; }
+th, td { text-align: left; padding: 0.4rem 1rem 0.4rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; white-space: nowrap; }
+.scroll { overflow-x: auto; }
+.copy { font: inherit; font-family: var(--mono); font-size: 0.75rem; color: var(--bg); background: var(--fg); border: 0; border-radius: 4px;
+  padding: 0.35rem 0.7rem; cursor: pointer; }
+@media (max-width: 34rem) {
+  .pair, .axis { grid-template-columns: 3.25rem 1fr; }
+  .pair .n, .axis .x { grid-column: 1 / -1; }
+  .pair .g { font-size: 1.5rem; }
+  .alike { font-size: 1.375rem; gap: 0 1.5rem; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Rachis</h1>
+    <p class="lede">A typeface family for reading dense technical text at small sizes: code, mathematics, and prose with notation in it. A program draws it.</p>
+    <div class="facts">
+      <span>Rachis Mono · fixed pitch</span>
+      <span>Rachis · proportional</span>
+      <span>weight 300–700</span>
+      <span>optical size 8–16</span>
+      <span>2,109 glyphs</span>
+      <span>0 ligatures</span>
+    </div>
+  </header>
+
+  <section aria-labelledby="h-read">
+    <div class="col">
+      <h2 id="h-read">Read with it</h2>
+      <p>This page is set in the family. The sample below can be edited, and the controls change how it is set. Rachis is for paragraphs, formulas, captions and footnotes; Rachis Mono is for code and terminals. Both come from the same glyph programs, so a sentence, a formula and a line of code share one x-height and one set of strokes.</p>
+    </div>
+    <div class="plate">
+      <form class="controls" id="controls">
+        <fieldset>
+          <legend>Family</legend>
+          <span class="seg">
+            <label><input type="radio" name="family" id="fam-text" value="text" checked>Rachis</label>
+            <label><input type="radio" name="family" id="fam-mono" value="mono">Rachis Mono</label>
+          </span>
+        </fieldset>
+        <div class="slider">
+          <label class="cap" for="size">Size <output id="size-out" for="size">16 px</output></label>
+          <input type="range" id="size" min="9" max="32" step="1" value="16">
+        </div>
+        <div class="slider">
+          <label class="cap" for="weight">Weight <output id="weight-out" for="weight">400</output></label>
+          <input type="range" id="weight" min="300" max="700" step="10" value="400">
+        </div>
+        <fieldset>
+          <legend>Optical size</legend>
+          <span class="seg">
+            <label><input type="radio" name="opsz" id="opsz-auto" value="auto" checked>Auto</label>
+            <label><input type="radio" name="opsz" id="opsz-8" value="8">8</label>
+            <label><input type="radio" name="opsz" id="opsz-16" value="16">16</label>
+          </span>
+        </fieldset>
+        <fieldset>
+          <legend>Zero</legend>
+          <span class="seg">
+            <label><input type="radio" name="zero" id="zero-def" value="" checked>Default</label>
+            <label><input type="radio" name="zero" id="zero-slash" value="zero">Slashed</label>
+            <label><input type="radio" name="zero" id="zero-dot" value="ss01">Dotted</label>
+          </span>
+        </fieldset>
+      </form>
+      <div class="sample" id="sample" contenteditable="true" spellcheck="false" aria-label="Editable sample text">
+        <p><b>Theorem 2.41.</b> If a set <i>E</i> in ℝ<sup>k</sup> has one of the following three properties, then it has the other two: (a) <i>E</i> is closed and bounded; (b) <i>E</i> is compact; (c) every infinite subset of <i>E</i> has a limit point in <i>E</i>.</p>
+        <p>Let ε &gt; 0 and choose δ = ε/2. Then |f(x) − f(y)| &lt; ε for all x, y ∈ ℝ with |x − y| &lt; δ, so f is uniformly continuous; hence ∑ₙ aₙxⁿ → f and ∫₀¹ f(x) dx ≤ ‖f‖∞. The eigenvalues λ₁, λ₂ of A satisfy λ₁ + λ₂ = tr A and λ₁λ₂ = det A, and x ↦ x² maps ℤ ⊂ ℚ ⊂ ℝ into ℝ≥0. In code, <code>fn main() -&gt; Result&lt;(), Error&gt;</code> returns <code>Ok(())</code> when <code>0xDEADBEEF != 0O1lI|</code>.</p>
+        <p class="fn">¹ Proved for the line by Heine (1872) and Borel (1895); Toward a general statement, see Rudin, <i>Principles of Mathematical Analysis</i>, §2.41. Zażółć gęślą jaźń; Erdős, Gödel, Poincaré, Łoś.</p>
+      </div>
+    </div>
+    <p class="note col">With the optical size on Auto the browser picks it from the font size: below 16 px the letters move toward the small design, with a larger x-height, heavier strokes and more room, and reach it at 8 px.</p>
+  </section>
+
+  <section aria-labelledby="h-apart">
+    <div class="col">
+      <h2 id="h-apart">Told apart, and measured</h2>
+      <p>Characters that technical text confuses differ in outline, because at reading size an inner mark is a weak cue. Each pair is rendered at 14 px, blurred as the eye blurs it, and the difference of the two images is measured (0: identical; 1.41: nothing in common). The bar is the range of eight code typefaces under the same measurement; the dot is Rachis Mono.</p>
+    </div>
+    <div class="plate">
+      <div class="axis" aria-hidden="true"><span></span><span class="ticks"><span style="--at:0">0</span><span style="--at:0.2">0.2</span><span style="--at:0.4">0.4</span><span style="--at:0.6">0.6</span></span><span class="x"></span></div>
+      <div class="pairs" id="pairs"></div>
+      <div class="legend"><span><i class="k1"></i>Rachis Mono Regular</span><span><i class="k2"></i>Commit Mono, DejaVu Sans Mono, Fira Code, IBM Plex Mono, Iosevka, JetBrains Mono, JuliaMono, Source Code Pro</span></div>
+    </div>
+    <p class="note col">Further right is more distinct. Rachis is ahead of every reference on 0 and O, 6 and b, 8 and B, and inside their range on the rest. The measure is a screening tool: its rank agreement with human confusion data is weak (at most 0.33), so it compares typefaces and does not predict misreadings.</p>
+  </section>
+
+  <section aria-labelledby="h-math">
+    <div class="col">
+      <h2 id="h-math">Mathematics</h2>
+      <p>336 operators and relations, 140 arrows, Greek, double-struck letters, delimiters, and superscripts and subscripts that are drawn at their own size with strokes of their own, not scaled down. Signs sit on one axis and are built from the same bar, chevron, stem and ring as the ASCII operators, so <span class="mono">-&gt;</span> and → have the same height and weight.</p>
+    </div>
+    <div class="two">
+      <div class="plate">
+        <p class="cap">Rachis</p>
+        <div class="math">
+          ∀ε &gt; 0 ∃δ &gt; 0: |x − y| &lt; δ ⇒ |f(x) − f(y)| &lt; ε<br>
+          ‖f‖₂² = ∫ |f(x)|² dx = ∑ₙ |⟨f, eₙ⟩|²<br>
+          ∂ₜu = ∆u, &nbsp; ∇·F = 0, &nbsp; A ⊕ B ≅ C ⊗ D<br>
+          φ: ℤ → ℤ/nℤ, &nbsp; x ↦ x mod n, &nbsp; ℕ ⊂ ℤ ⊂ ℚ ⊂ ℝ ⊂ ℂ<br>
+          ⋂ᵢ Uᵢ ⊆ ⋃ᵢ Vᵢ, &nbsp; a ≤ b ⇔ ¬(b &lt; a), &nbsp; ⌊x⌋ ≤ x &lt; ⌈x⌉ + ½
+        </div>
+      </div>
+      <div class="plate">
+        <p class="cap">Rachis Mono</p>
+        <div class="math m">theorem add_comm (a b : ℕ) : a + b = b + a := by
+  induction a with
+  | zero => simp
+  | succ n ih => rw [succ_add, ih]
+
+λ x → x ∘ f   ∀ x ∈ S, ∃ y, x ≤ y ∧ y ∉ T
+⎛ 1 0 ⎞   ⎧ x²   x ≥ 0
+⎝ 0 1 ⎠   ⎩ −x   x &lt; 0</div>
+      </div>
+    </div>
+    <div class="plate">
+      <p class="cap">Letters and signs that look alike in most typefaces</p>
+      <div class="alike">
+        <span>v ν ∨</span><span>u υ ∪</span><span>w ω</span><span>p ρ</span><span>x χ ×</span><span>o σ ο</span><span>a α</span><span>n η</span><span>k κ</span><span>Σ ∑</span><span>Π ∏</span><span>ε ∈ ϵ</span><span>⟨ &lt; (</span><span>| ∣ l 1 I</span><span>- − – —</span><span>R ℝ</span><span>0 O θ ∅</span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-term">
+    <div class="col">
+      <h2 id="h-term">Code and terminals</h2>
+      <p>Rachis Mono has no ligatures and nothing contextual: what is on the screen is what is in the file. Box-drawing lines keep one thickness in every weight and join across cells and lines; blocks divide the cell exactly. Powerline separators, the branch-drawing set, sextants and Braille are included.</p>
+    </div>
+    <div class="term" role="img" aria-label="A terminal session set in Rachis Mono with box drawing, a git graph and block elements">
+<pre><span class="inv b"> rachis </span><span class="a">&#xE0B0;</span> <span class="d">~/experiments/rachis</span> <span class="a">&#xE0A0; main ✔</span>
+$ cargo run --release -p rachis -- build
+   599508  fonts/variable/Rachis[opsz,wght].ttf
+   437576  fonts/variable/RachisMono[wght].ttf
+<span class="a">38 files in 14.50 s</span> <span class="d">(statics hinted)</span>
+
+┌──────────────┬────────┬────────┐   ╭─ glyphs ─────────────╮
+│ face         │ glyphs │  bytes │   │ ▁▂▃▄▅▆▇█ ░▒▓ ▖▗▘▝▚▞  │
+├──────────────┼────────┼────────┤   │ ●○◆◇■□▲△ ✓✗ ← ↑ → ↓  │
+│ Rachis Mono  │   2109 │ 437576 │   ╰──────────────────────╯
+│ Rachis       │   1529 │ 599508 │   <span class="d">fn kern(a: &amp;Sides, b: &amp;Sides) -&gt; f64 {</span>
+└──────────────┴────────┴────────┘   <span class="d">    if a.rows.1 &lt; b.rows.0 { return 0.0; }</span>
+<span class="a">*</span> 1aff9c9 <span class="d">the fonts, the documents, the measurements</span>
+<span class="a">│╲</span>
+<span class="a">│ *</span> 6e28612 <span class="d">222 mathematical operators and relations</span>
+<span class="a">│╱</span>   0O 1lI| 5S 8B 2Z 6b gq9  {}[]()  &lt;= != =&gt; -&gt; |&gt; ::  0xDEADBEEF</pre>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-small">
+    <div class="col">
+      <h2 id="h-small">Small print</h2>
+      <p>Rachis has an optical-size axis from 8 to 16. The two paragraphs below are the same text at 9 px: the first with the design for 16, the second with the design for 8, which has a larger x-height, heavier and less contrasted strokes, wider letters and more room between them.</p>
+    </div>
+    <div class="two small">
+      <div class="plate"><p class="cap">9 px, design for 16</p><p class="forced">A metric space X is compact if every open cover of X has a finite subcover. In ℝᵏ this holds exactly for the closed and bounded sets (Heine–Borel); in general a set is compact if and only if it is complete and totally bounded. Continuous images of compact sets are compact, so a continuous f: X → ℝ on a compact X attains its supremum: sup f = f(x₀) for some x₀ ∈ X, with |f(x) − f(y)| &lt; ε whenever d(x, y) &lt; δ(ε).</p></div>
+      <div class="plate"><p class="cap">9 px, design for 8</p><p class="sm">A metric space X is compact if every open cover of X has a finite subcover. In ℝᵏ this holds exactly for the closed and bounded sets (Heine–Borel); in general a set is compact if and only if it is complete and totally bounded. Continuous images of compact sets are compact, so a continuous f: X → ℝ on a compact X attains its supremum: sup f = f(x₀) for some x₀ ∈ X, with |f(x) − f(y)| &lt; ε whenever d(x, y) &lt; δ(ε).</p></div>
+    </div>
+    <div class="plate">
+      <div class="weights">
+        <span style="font-weight:300"><span class="lbl">Light 300</span>Compactness, continuity and convergence</span>
+        <span style="font-weight:400"><span class="lbl">Regular 400</span>Compactness, continuity and convergence</span>
+        <span style="font-weight:500"><span class="lbl">Medium 500</span>Compactness, continuity and convergence</span>
+        <span style="font-weight:600"><span class="lbl">SemiBold 600</span>Compactness, continuity and convergence</span>
+        <span style="font-weight:700"><span class="lbl">Bold 700</span>Compactness, continuity and convergence</span>
+        <span style="font-style:italic"><span class="lbl" style="font-style:normal">Italic</span>Compactness, continuity and convergence</span>
+        <span style="font-family:var(--mono);font-size:1.3rem"><span class="lbl">Mono 400</span>let ε = 1e-9; assert!(x != 0O);</span>
+        <span style="font-family:var(--mono);font-size:1.3rem;font-weight:700"><span class="lbl">Mono 700</span>let ε = 1e-9; assert!(x != 0O);</span>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-made">
+    <div class="col">
+      <h2 id="h-made">How a letter is made</h2>
+      <p>A glyph is a function. It places knots, each a point of the skeleton with the breadth of the pen there; the centre line through them is Hobby’s spline or a superellipse of exponent 5/2; the outline is that line offset to both sides. Weight, optical size, slant and pitch are parameters, so one function draws its letter in eighteen masters, and the masters have the same structure by construction.</p>
+    </div>
+    <div class="made">
+      <div class="plate">
+        <p class="cap">crates/glyphs/src/lower.rs</p>
+<pre>fn n(g: &amp;mut Draw) {
+    let p = g.p;
+    g.stroke(&amp;vstem(p.xl(), 0.0, p.xh, p.stem));
+    g.stroke(&amp;arch(p, p.xl(), p.xr(),
+                   p.xh + p.over, 0.0,
+                   Arch::default()));
+}
+
+// what the letter asks of the proportional
+// family: sidebearings, and ink
+"n" =&gt; around(sb, ink(p, 2.0, 1.0), 0.95 * sb),</pre>
+      </div>
+      <div class="sheet"><img alt="Proof sheet of the letters n, a and g: each stroke's outline with its centre line, knots and pen positions" src="data:image/png;base64,{{image:skeleton.png}}"></div>
+    </div>
+    <p class="note col">Kerning is computed too: the white between two letters is measured on every row where they stand side by side, and pairs with more of it than two stems have are closed by part of the excess. T and o: −77 units. A and V: −80. r and n: 0, so that the pair is not read as m.</p>
+  </section>
+
+  <section aria-labelledby="h-files">
+    <div class="col">
+      <h2 id="h-files">The files</h2>
+      <p>The fonts are in <code>rachis/fonts/</code> in the repository, built reproducibly from the source by <code>rachis build</code>; <code>SHA256SUMS</code> lists them.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <tr><th>Variable</th><td><code>RachisMono[wght].ttf</code>, <code>RachisMono-Italic[wght].ttf</code>, <code>Rachis[opsz,wght].ttf</code>, <code>Rachis-Italic[opsz,wght].ttf</code>, and the same as WOFF2</td></tr>
+        <tr><th>Static</th><td>Rachis Mono, Rachis and Rachis Small (the small optical size), each in Light, Regular, Medium, SemiBold and Bold with italics: 30 hinted TrueType fonts</td></tr>
+        <tr><th>Features</th><td><code>zero</code> slashed zero, <code>ss01</code> dotted zero, <code>ss02</code> plain zero, <code>sups</code> <code>subs</code> <code>sinf</code>, kerning in Rachis, mark positioning</td></tr>
+        <tr><th>Coverage</th><td>Latin for European languages, monotonic Greek, mathematics, arrows, currency, symbols; in Rachis Mono also box drawing, blocks, Braille, Powerline, branch drawing and sextants</td></tr>
+        <tr><th>Licence</th><td>SIL Open Font License 1.1</td></tr>
+        <tr><th>Open work</th><td><code>rachis/docs/ledger.md</code>: among it, no OpenType MATH table yet, 89 of the research's distinctness targets not met, kerning computed at one weight</td></tr>
+      </table>
+    </div>
+    <div class="plate">
+      <p class="cap">For the web <button class="copy" id="copy" type="button">Copy</button> <span id="copied" role="status" class="note"></span></p>
+<pre class="mono" id="css" style="margin:0;overflow-x:auto;font-size:0.8125rem;line-height:1.4">@font-face { font-family: "Rachis"; font-weight: 300 700;
+  src: url("Rachis[opsz,wght].woff2") format("woff2"); }
+@font-face { font-family: "Rachis"; font-weight: 300 700; font-style: italic;
+  src: url("Rachis-Italic[opsz,wght].woff2") format("woff2"); }
+@font-face { font-family: "Rachis Mono"; font-weight: 300 700;
+  src: url("RachisMono[wght].woff2") format("woff2"); }
+body { font-family: "Rachis", sans-serif; }
+code, pre { font-family: "Rachis Mono", monospace; }</pre>
+    </div>
+  </section>
+</div>
+
+<script>
+// Distances at 14 px and a blur of 1 px, from rachis/docs/measurements.md: [pair, Rachis Mono, lowest and highest of the eight references].
+const PAIRS = [
+  ["0 O", 0.495, 0.150, 0.378], ["6 b", 0.412, 0.329, 0.391], ["l |", 0.406, 0.356, 0.565], ["l I", 0.388, 0.192, 0.405],
+  ["1 l", 0.327, 0.291, 0.403], ["g q", 0.317, 0.259, 0.501], ["1 I", 0.284, 0.229, 0.422], ["2 Z", 0.268, 0.264, 0.299],
+  ["8 B", 0.222, 0.123, 0.212], ["5 S", 0.200, 0.138, 0.278], ["O D", 0.168, 0.105, 0.214],
+];
+const pairs = document.getElementById("pairs");
+for (const [glyphs, ours, lo, hi] of PAIRS) {
+  const row = document.createElement("div");
+  row.className = "pair";
+  const g = document.createElement("span"); g.className = "g"; g.textContent = glyphs;
+  const track = document.createElement("span"); track.className = "track";
+  track.style.setProperty("--lo", lo); track.style.setProperty("--hi", hi); track.style.setProperty("--v", ours);
+  track.innerHTML = '<span class="range"></span><span class="ours"></span>';
+  const n = document.createElement("span"); n.className = "n";
+  n.innerHTML = "<b>" + ours.toFixed(3) + "</b> · " + lo.toFixed(2) + "–" + hi.toFixed(2);
+  row.append(g, track, n);
+  pairs.append(row);
+}
+
+const sample = document.getElementById("sample");
+const form = document.getElementById("controls");
+function apply() {
+  const data = new FormData(form);
+  const mono = data.get("family") === "mono";
+  const size = document.getElementById("size").value;
+  const weight = document.getElementById("weight").value;
+  document.getElementById("size-out").textContent = size + " px";
+  document.getElementById("weight-out").textContent = weight;
+  sample.style.fontFamily = mono ? "var(--mono)" : "var(--text)";
+  sample.style.fontSize = size + "px";
+  sample.style.fontWeight = weight;
+  for (const id of ["opsz-auto", "opsz-8", "opsz-16"]) document.getElementById(id).disabled = mono;
+  const opsz = data.get("opsz");
+  sample.style.fontVariationSettings = !mono && opsz && opsz !== "auto" ? '"opsz" ' + opsz : "normal";
+  const zero = data.get("zero");
+  sample.style.fontFeatureSettings = zero ? '"' + zero + '"' : "normal";
+}
+form.addEventListener("input", apply);
+form.addEventListener("submit", (e) => e.preventDefault());
+apply();
+
+document.getElementById("copy").addEventListener("click", () => {
+  const text = document.getElementById("css").textContent;
+  const done = () => { document.getElementById("copied").textContent = "Copied"; };
+  const select = () => {
+    const range = document.createRange(); range.selectNodeContents(document.getElementById("css"));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    document.getElementById("copied").textContent = "Selected: press copy";
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select); else select();
+});
+</script>
