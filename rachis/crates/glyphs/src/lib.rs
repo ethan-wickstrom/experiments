@@ -14,6 +14,7 @@ pub mod parts;
 pub mod punct;
 pub mod scripts;
 pub mod shapes;
+pub mod signs;
 pub mod special;
 pub mod symbols;
 pub mod technical;

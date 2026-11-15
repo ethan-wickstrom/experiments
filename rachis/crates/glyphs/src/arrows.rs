@@ -16,7 +16,7 @@
 //! shaft. The shaft is `p.op` thick, on the axis, across the operators' span, and ends inside the head, past
 //! the notch and short of the tip. So `->` and `→`, `=>` and `⇒` have one height and one weight.
 
-use rachis_kernel::{Draw, Fit, Knot, Opt, Params, Registry, V, knot, name_of, pt};
+use rachis_kernel::{Draw, Knot, Opt, Params, Registry, V, knot, pt};
 
 use crate::operators::{
     chevron, chevron_rise, circle, equal_pitch, fine, half_span, inset, rel_gap, small_ring, strike, tip, triple_pitch,
@@ -736,7 +736,9 @@ fn white_arrow_over(g: &mut Draw, f: Frame, base: Base) {
     let l = reach(p);
     let (r, w, t) = white(p);
     let r = 0.9 * r;
-    let foot = 0.30 * l; // how long what is under the arrow is
+    // how long what is under the arrow is: the box's two strokes and a white between them that stays open in the
+    // Bold
+    let foot = 2.0 * t + 0.14 * l;
     let gap = 0.5 * rel_gap(p);
     let xo = l - r;
     match base {
@@ -893,11 +895,6 @@ fn dots_above(g: &mut Draw, n: usize) {
 // The proportional family
 
 const LONG: [char; 11] = ['⟵', '⟶', '⟷', '⟸', '⟹', '⟺', '⟻', '⟼', '⟽', '⟾', '⟿'];
-
-/// The long arrows take a cell and a half in the proportional family; every other arrow keeps the master's cell.
-pub fn fit(name: &str, p: &Params) -> Option<Fit> {
-    LONG.iter().any(|&c| name_of(c) == name).then(|| Fit::new(1.5 * p.width))
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 

@@ -5,12 +5,13 @@
 //! face: the sidebearing on each side and the breadth of the ink between them ([`Ask`]), counted in the master's
 //! sidebearings, stems and counters so that one entry holds at every weight and optical size. The cell a program
 //! must be given to draw ink that broad, and what it leaves at its sides, are measured from the program itself.
-//! A glyph without an entry keeps the master's cell, as figures, operators, arrows and symbols do: columns of
-//! figures align, and a formula's operators are as wide as its figures.
+//! A glyph without an entry keeps the master's cell, as figures and the signs of arithmetic do: columns of
+//! figures align, and a formula's plus and equals are as wide as its figures. The other signs have the room that
+//! `signs.rs` gives them.
 
 use rachis_kernel::{Fit, Params, Registry, Spec};
 
-use crate::{arrows, greek, latin, lower, punct, typography, upper};
+use crate::{greek, latin, lower, punct, signs, typography, upper};
 
 /// What a letter asks of the proportional family: its sidebearings, and the breadth of its ink.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -47,8 +48,8 @@ pub fn word_space(p: &Params) -> f64 {
     0.5 * p.stem + 0.85 * p.counter
 }
 
-/// What the signs that prose uses as punctuation ask: they live with the operators, which otherwise keep the
-/// figures' cell.
+/// What the signs that prose uses as punctuation ask: they live with the operators, whose room is otherwise in
+/// `signs.rs`.
 fn sign(name: &str, p: &Params) -> Option<Ask> {
     let sb = p.sb;
     match name {
@@ -101,10 +102,13 @@ pub fn fit(registry: &Registry, spec: &Spec, p: &Params) -> Option<Fit> {
         "operators" => sign(&spec.name, p),
         "digits" => script_figure(spec, p),
         "greek" => return greek::fit(&spec.name, p),
-        "arrows" => return arrows::fit(&spec.name, p),
-        "typography" => return typography::fit(registry, &spec.name, p),
+        "typography" => return typography::fit(registry, &spec.name, p).or_else(|| signs::fit(registry, spec, p)),
         "latin" => latin::ask(&spec.name, p),
         _ => None,
     };
-    resolve(registry, spec, p, want?)
+    let Some(want) = want else {
+        // no letter's width: a sign's room, or the master's cell
+        return signs::fit(registry, spec, p);
+    };
+    resolve(registry, spec, p, want)
 }

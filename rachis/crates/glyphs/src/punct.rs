@@ -86,11 +86,20 @@ fn semicolon(g: &mut Draw) {
     g.dot(p.mid(), p.xh + p.over - p.punct, p.punct);
 }
 
+/// Three dots in the cell in the fixed-pitch family, smaller than periods so that they fit. In the proportional
+/// family they are three periods, as far apart as three typed periods stand.
 fn ellipsis(g: &mut Draw) {
     let p = g.p;
-    let r = 0.5 * p.punct + 16.0;
-    for cx in [p.mid() - 200.0, p.mid(), p.mid() + 200.0] {
-        g.dot(cx, r - p.over, r);
+    if p.mono {
+        let r = 0.5 * p.punct + 16.0;
+        for cx in [p.mid() - 200.0, p.mid(), p.mid() + 200.0] {
+            g.dot(cx, r - p.over, r);
+        }
+    } else {
+        let pitch = 2.0 * p.punct + 2.0 * 0.86 * p.sb;
+        for cx in [p.mid() - pitch, p.mid(), p.mid() + pitch] {
+            g.dot(cx, dot_y(p), p.punct);
+        }
     }
 }
 
@@ -482,21 +491,33 @@ fn percent(g: &mut Draw) {
     g.stroke(&diag(112.0, 0.0, p.width - 112.0, p.cap, hw * 1.08));
 }
 
+/// In the fixed-pitch family: a small percent sign and a third ring, squeezed into the cell. In the proportional
+/// family: the percent sign with its rings and its slope, and a second ring beside the lower one.
 fn perthousand(g: &mut Draw) {
     let p = g.p;
     let (_, hw) = small_strokes(p);
-    let (w, h) = (190.0, 270.0);
-    g.stroke_closed(&percent_ring(p, 8.0, 8.0 + w, p.cap + p.over - h, p.cap + p.over, 0.84));
-    g.stroke_closed(&percent_ring(
-        p,
-        p.width - 4.0 - 2.0 * w + 6.0,
-        p.width - 4.0 - w + 6.0,
-        -p.over,
-        -p.over + h,
-        0.84,
-    ));
-    g.stroke_closed(&percent_ring(p, p.width - 4.0 - w, p.width - 4.0, -p.over, -p.over + h, 0.84));
-    g.stroke(&diag(84.0, 0.0, 330.0, p.cap, hw * 0.96));
+    if p.mono {
+        let (w, h) = (190.0, 270.0);
+        g.stroke_closed(&percent_ring(p, 8.0, 8.0 + w, p.cap + p.over - h, p.cap + p.over, 0.84));
+        g.stroke_closed(&percent_ring(
+            p,
+            p.width - 4.0 - 2.0 * w + 6.0,
+            p.width - 4.0 - w + 6.0,
+            -p.over,
+            -p.over + h,
+            0.84,
+        ));
+        g.stroke_closed(&percent_ring(p, p.width - 4.0 - w, p.width - 4.0, -p.over, -p.over + h, 0.84));
+        g.stroke(&diag(84.0, 0.0, 330.0, p.cap, hw * 0.96));
+    } else {
+        let (w, h) = (246.0, 308.0);
+        let pitch = w + 0.36 * p.sb; // from one lower ring to the next
+        let x1 = p.width - 22.0 - pitch; // the right side of the first lower ring: where a percent sign ends
+        g.stroke_closed(&percent_ring(p, 22.0, 22.0 + w, p.cap + p.over - h, p.cap + p.over, 1.0));
+        g.stroke_closed(&percent_ring(p, x1 - w, x1, -p.over, -p.over + h, 1.0));
+        g.stroke_closed(&percent_ring(p, x1 + pitch - w, x1 + pitch, -p.over, -p.over + h, 1.0));
+        g.stroke(&diag(112.0, 0.0, x1 + 22.0 - 112.0, p.cap, hw * 1.08));
+    }
 }
 
 fn numbersign(g: &mut Draw) {
@@ -976,7 +997,7 @@ pub fn register(reg: &mut Registry) {
 pub fn ask(name: &str, p: &Params) -> Option<Ask> {
     let sb = p.sb;
     match name {
-        "period" | "comma" | "colon" | "semicolon" | "periodcentered" => beside(0.86 * sb, 0.86 * sb),
+        "period" | "comma" | "colon" | "semicolon" | "periodcentered" | "uni2026" => beside(0.86 * sb, 0.86 * sb),
         "uni2022" | "uni2023" => beside(0.7 * sb, 0.7 * sb),
         "exclam" | "exclamdown" | "brokenbar" => beside(sb, sb),
         "question" | "questiondown" => around(0.45 * sb, 2.0 * p.stem + 0.74 * p.counter, 0.50 * sb),

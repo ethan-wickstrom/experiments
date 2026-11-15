@@ -18,9 +18,12 @@ pub struct Params {
     pub mono: bool,
 
     pub upm: f64,
-    /// The advance of the cell: of every glyph in the fixed-pitch family, and of figures, operators and symbols in
-    /// the proportional one. A glyph program reads its own advance here.
+    /// The cell the glyph is drawn in. A master has the width of its own cell here: the advance of every glyph in
+    /// the fixed-pitch family, and of a figure in the proportional one. A glyph program reads the cell it was
+    /// given, which in the proportional family is as wide as the glyph asks.
     pub width: f64,
+    /// The master's own cell, whatever cell the glyph is drawn in.
+    pub cell: f64,
 
     // heights
     pub cap: f64,
@@ -112,12 +115,21 @@ impl Params {
         self.width - self.op_l
     }
 
+    /// How many times wider the glyph's span between the operators' margins is than the span of the master's own
+    /// cell: 1 for every glyph of the fixed-pitch family and for a sign that keeps the cell. A sign that is
+    /// given a wider cell in the proportional family grows by this much across, and its program decides what
+    /// else grows with it.
+    pub fn grown(&self) -> f64 {
+        (self.width - 2.0 * self.op_l) / (self.cell - 2.0 * self.op_l)
+    }
+
     /// The same master drawn `f` times as large: every length multiplied, every ratio and angle kept. The name
     /// and the place in the design space stay. For glyphs that contain small letters and figures: the caller
     /// then sets the strokes and the spacing the small size needs, as an optical size does.
     pub fn scaled(&self, f: f64) -> Params {
         Params {
             width: self.width * f,
+            cell: self.cell * f,
             cap: self.cap * f,
             xh: self.xh * f,
             asc: self.asc * f,
@@ -163,6 +175,7 @@ pub fn regular() -> Params {
         mono: true,
         upm: 1000.0,
         width: 600.0,
+        cell: 600.0,
         cap: 714.0,
         xh: 540.0,
         asc: 756.0,
@@ -246,7 +259,19 @@ fn text_of(p: Params) -> Params {
         _ => ("Text Regular", 82.0, 56.0, 90.0, 64.0, 252.0),
     };
     // figures and signs stand in a cell a little narrower than the fixed pitch's, close to the letters' rhythm
-    Params { name, mono: false, width: 580.0, sb, sb_round, cap_sb, fig_sb, counter, punct: 0.92 * p.punct, ..p }
+    Params {
+        name,
+        mono: false,
+        width: 580.0,
+        cell: 580.0,
+        sb,
+        sb_round,
+        cap_sb,
+        fig_sb,
+        counter,
+        punct: 0.92 * p.punct,
+        ..p
+    }
 }
 
 /// The proportional family's master for small sizes, from its master for text: a larger x-height, heavier
@@ -275,6 +300,7 @@ fn small_of(p: Params) -> Params {
         fig_sb: p.fig_sb + 6.0,
         counter: p.counter + 12.0,
         width: p.width + 20.0,
+        cell: p.cell + 20.0,
         ..p
     }
 }

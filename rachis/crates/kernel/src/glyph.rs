@@ -406,16 +406,21 @@ impl Registry {
         glyph
     }
 
-    /// The left and right ends of the ink of the glyph `spec` when its program draws upright into a cell `width`
-    /// wide, with nothing fitted afterwards. For deciding a fit: what a program leaves at its sides depends on
-    /// how it is written, and this measures it. `None` for a glyph without ink.
-    pub fn measure(&self, spec: &Spec, p: &Params, width: f64) -> Option<(f64, f64)> {
+    /// What the program of the glyph `spec` draws upright into a cell `width` wide, with nothing fitted afterwards
+    /// and its components left as components. For deciding a fit.
+    pub fn trial(&self, spec: &Spec, p: &Params, width: f64) -> Glyph {
         let local = Params { width, slant: 0.0, ..p.clone() };
         let mut g = Draw::new(&local, &spec.name, width, spec.opt.upright);
         g.registry = Some(self);
         (spec.program)(&mut g);
-        let mut ends: Option<(f64, f64)> = g.glyph.bounds().map(|(x0, _, x1, _)| (x0, x1));
-        for (base, offset) in &g.glyph.components {
+        g.glyph
+    }
+
+    /// The left and right ends of the ink of a glyph drawn by [`Registry::trial`], its components included as the
+    /// master `p` draws them. `None` for a glyph without ink.
+    pub fn ends(&self, trial: &Glyph, p: &Params) -> Option<(f64, f64)> {
+        let mut ends: Option<(f64, f64)> = trial.bounds().map(|(x0, _, x1, _)| (x0, x1));
+        for (base, offset) in &trial.components {
             let upright = Params { slant: 0.0, ..p.clone() };
             if let Some((x0, _, x1, _)) = self.flat(base, &upright).and_then(|part| part.bounds()) {
                 let (x0, x1) = (x0 + offset.x, x1 + offset.x);
@@ -423,6 +428,13 @@ impl Registry {
             }
         }
         ends
+    }
+
+    /// The left and right ends of the ink of the glyph `spec` when its program draws upright into a cell `width`
+    /// wide, with nothing fitted afterwards. For deciding a fit: what a program leaves at its sides depends on
+    /// how it is written, and this measures it. `None` for a glyph without ink.
+    pub fn measure(&self, spec: &Spec, p: &Params, width: f64) -> Option<(f64, f64)> {
+        self.ends(&self.trial(spec, p, width), p)
     }
 
     /// The glyph called `name` in the master `p` with its components resolved into contours.

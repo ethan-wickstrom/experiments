@@ -15,8 +15,8 @@ use rachis_kernel::{Draw, Knot, Opt, Params, Registry, V, knot, pt};
 use crate::operators::{
     arc, bar, big_box, big_ring, box_, chevron, chevron_rise, circle, cross, curved_chevron, dot_gap, equal_pitch,
     fine, half_span, mirrored, outline, over, radical, rake, rel_gap, rel_rise, set_rise, slash, slash_run, small_ring,
-    small_stroke, square_image, stand_top, stem, strike, struck, subset, tack, tip, transposed, triple_pitch,
-    twin_pitch, twin_wave, wave, wave_rise, wedge,
+    small_stroke, square_image, stand_top, stem, strike, struck, subset, tack, tack_rise, tip, transposed,
+    triple_pitch, twin_pitch, twin_wave, wave, wave_rise, wedge,
 };
 use crate::parts::{Arch, arch, cut, cut_pen, diag, flip, hbar, mirror, moved, vee, vstem};
 
@@ -1307,7 +1307,7 @@ fn less_slanted_equal_dot(g: &mut Draw) {
 /// A turnstile of `stems` uprights `t` thick and `bars` bars, the uprights `pitch` apart.
 fn turnstile(g: &mut Draw, bars: usize, stems: usize, t: f64, pitch: f64, right: bool) {
     let p = g.p;
-    let h = half_span(p);
+    let h = tack_rise(p);
     let mut strokes: Vec<Vec<Knot>> =
         (0..stems).map(|i| vstem(p.op_l + t / 2.0 + i as f64 * pitch, p.axis - h, p.axis + h, t)).collect();
     let x0 = p.op_l + t / 2.0 + (stems as f64 - 1.0) * pitch;
@@ -1395,7 +1395,7 @@ fn large_down_tack(g: &mut Draw) {
 /// ⟚ and (`bars` 1) ⟛: two uprights in the middle, and bars from each out to the span's ends.
 fn two_way_turnstile(g: &mut Draw, bars: usize) {
     let p = g.p;
-    let h = half_span(p);
+    let h = tack_rise(p);
     let d = 0.5 * twin_pitch(p, p.op) * 0.88;
     stem(g, p.mid() - d, p.axis - h, p.axis + h, None);
     stem(g, p.mid() + d, p.axis - h, p.axis + h, None);
@@ -1418,7 +1418,7 @@ fn left_right_tack(g: &mut Draw) {
 /// ⟝ and (`left`) ⟞: the turnstile drawn out to the cell's ends.
 fn long_tack(g: &mut Draw, left: bool) {
     let p = g.p;
-    let h = 0.86 * half_span(p);
+    let h = 0.86 * tack_rise(p);
     let x0 = 26.0 + p.op / 2.0;
     let k = [vstem(x0, p.axis - h, p.axis + h, p.op), hbar(x0, p.width - 26.0, p.axis, p.op)];
     for s in k {
