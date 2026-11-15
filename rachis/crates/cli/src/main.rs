@@ -1,5 +1,8 @@
 //! Command line of the Rachis typeface.
 
+mod build;
+mod digest;
+mod measure;
 mod proof;
 
 use std::fmt::Write as _;
@@ -15,8 +18,12 @@ fn main() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("dump") => dump(&registry, &args[1..]),
         Some("check") => check(&registry, &args[1..]),
+        Some("build") => build::run(&registry, &args[1..]),
         Some("proof") => proof::run(&registry, &args[1..]),
+        Some("measure") => measure::run(&registry, &args[1..]),
+        Some("digest") => digest::run(&registry, &args[1..]),
         Some("widths") => widths(&registry, &args[1..]),
+        Some("kern") => kern(&registry, &args[1..]),
         Some("list") => {
             for s in &registry.specs {
                 let cps: Vec<String> = s.unicodes.iter().map(|c| format!("U+{c:04X}")).collect();
@@ -27,7 +34,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: rachis <proof ... | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] TEXT>"
+                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | measure ... | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] TEXT | kern [--master NAME] [PAIRS]>"
             );
             ExitCode::FAILURE
         }
@@ -72,6 +79,46 @@ fn widths(registry: &Registry, args: &[String]) -> ExitCode {
             None => println!("{c:>4} {:>8.0}", g.advance),
         }
     }
+    ExitCode::SUCCESS
+}
+
+/// Print the computed kerning of a master: of the pairs given as two-character arguments, or the count and the
+/// largest when none are given.
+fn kern(registry: &Registry, args: &[String]) -> ExitCode {
+    let name = args.iter().position(|a| a == "--master").and_then(|i| args.get(i + 1));
+    let Some(p) = master(name.map_or("Text Regular", String::as_str)) else {
+        eprintln!("no such master");
+        return ExitCode::FAILURE;
+    };
+    let pairs = rachis_glyphs::kern::kerning(registry, &p);
+    let wanted: Vec<&String> = args.iter().filter(|a| !a.starts_with("--") && Some(*a) != name).collect();
+    let glyph = |c: char| registry.for_char(c).map(|s| s.name.clone()).unwrap_or_default();
+    if wanted.is_empty() {
+        let classes = rachis_glyphs::kern::classes(registry, &p);
+        println!(
+            "{} pairs in {}: {} first classes, {} second",
+            pairs.len(),
+            p.name,
+            classes.first.len(),
+            classes.second.len()
+        );
+        for class in classes.first.iter().chain(&classes.second) {
+            println!("  {}", class.join(" "));
+        }
+        let mut sorted = pairs.clone();
+        sorted.sort_by(|a, b| a.2.total_cmp(&b.2));
+        for (l, r, k) in sorted.iter().take(40).chain(sorted.iter().rev().take(15)) {
+            println!("{l:>14} {r:<14} {k:>6.0}");
+        }
+    }
+    for pair in wanted {
+        let mut chars = pair.chars();
+        let (Some(a), Some(b)) = (chars.next(), chars.next()) else { continue };
+        let (l, r) = (glyph(a), glyph(b));
+        let k = pairs.iter().find(|(x, y, _)| *x == l && *y == r).map_or(0.0, |t| t.2);
+        print!("{a}{b} {k:.0}   ");
+    }
+    println!();
     ExitCode::SUCCESS
 }
 

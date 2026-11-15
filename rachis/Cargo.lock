@@ -465,6 +465,7 @@ dependencies = [
  "rachis-font",
  "rachis-glyphs",
  "rachis-kernel",
+ "sha2",
  "skrifa",
  "tiny-skia",
 ]
@@ -475,8 +476,12 @@ version = "1.0.0"
 dependencies = [
  "kurbo",
  "linesweeper",
+ "rachis-glyphs",
  "rachis-kernel",
+ "read-fonts",
  "sha2",
+ "skrifa",
+ "tiny-skia",
  "ttf2woff2",
  "write-fonts",
 ]

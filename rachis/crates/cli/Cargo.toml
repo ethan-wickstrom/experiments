@@ -14,6 +14,7 @@ path = "src/main.rs"
 rachis-kernel = { path = "../kernel" }
 rachis-glyphs = { path = "../glyphs" }
 rachis-font = { path = "../font" }
+sha2 = "0.11"
 skrifa = "0.50"
 tiny-skia = "0.12"
 

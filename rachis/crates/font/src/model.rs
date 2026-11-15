@@ -11,6 +11,7 @@
 /// A tent on one axis: where a master starts to act, where it acts fully, where it stops.
 pub type Tent = (f64, f64, f64);
 
+/// A variation model: the masters' regions, and how each master's difference is computed from the others.
 #[derive(Clone, Debug)]
 pub struct Model {
     axes: usize,
@@ -148,6 +149,7 @@ impl Model {
         Ok(Model { axes, order, supports, weights })
     }
 
+    /// How many axes the locations have.
     pub fn axis_count(&self) -> usize {
         self.axes
     }
@@ -157,6 +159,7 @@ impl Model {
         self.order.len()
     }
 
+    /// Whether the model has no masters (never true of a model `new` made).
     pub fn is_empty(&self) -> bool {
         self.order.is_empty()
     }

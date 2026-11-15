@@ -288,7 +288,7 @@ fn note_missing(missing: &BTreeSet<char>, place: &str) {
 }
 
 /// A path in font units (y up) through `contours`.
-fn contours_path<'a>(contours: impl IntoIterator<Item = &'a Vec<Seg>>) -> Option<Path> {
+pub(crate) fn contours_path<'a>(contours: impl IntoIterator<Item = &'a Vec<Seg>>) -> Option<Path> {
     let mut pb = PathBuilder::new();
     for segs in contours {
         push_contour(&mut pb, segs, &|z| z);
@@ -444,7 +444,7 @@ impl<'r> Labeller<'r> {
 }
 
 /// Font units (y up) to pixels: scaled by `k`, origin at (x, baseline).
-fn glyph_transform(k: f64, x: f64, baseline: f64) -> Transform {
+pub(crate) fn glyph_transform(k: f64, x: f64, baseline: f64) -> Transform {
     Transform::from_row(k as f32, 0.0, 0.0, -k as f32, x as f32, baseline as f32)
 }
 
@@ -634,7 +634,7 @@ fn chords(knots: &[Knot], closed: bool) -> Vec<V> {
 // Text mode
 
 /// A typeface a text sheet can set: one of our masters, or a reference font.
-trait Face {
+pub(crate) trait Face {
     fn name(&self) -> &str;
     fn upm(&self) -> f64;
     /// The advance of the cell, in font units: of every character when the face has a fixed pitch.
@@ -649,13 +649,13 @@ trait Face {
 }
 
 /// One master of Rachis as a face.
-struct OurFace<'r> {
+pub(crate) struct OurFace<'r> {
     built: Built<'r>,
     paths: HashMap<char, Option<Path>>,
 }
 
 impl<'r> OurFace<'r> {
-    fn new(registry: &'r Registry, params: Params) -> OurFace<'r> {
+    pub(crate) fn new(registry: &'r Registry, params: Params) -> OurFace<'r> {
         OurFace { built: Built::new(registry, params), paths: HashMap::new() }
     }
 }
@@ -704,8 +704,8 @@ impl Face for OurFace<'_> {
 }
 
 /// A reference font from `$RACHIS_REFS`, at weight 400 when it is variable.
-struct RefFace {
-    family: String,
+pub(crate) struct RefFace {
+    pub(crate) family: String,
     data: Vec<u8>,
     location: Location,
     upm: f64,
@@ -714,7 +714,7 @@ struct RefFace {
 }
 
 impl RefFace {
-    fn load(path: &std::path::Path, family: String) -> Result<RefFace, String> {
+    pub(crate) fn load(path: &std::path::Path, family: String) -> Result<RefFace, String> {
         let data = std::fs::read(path).map_err(|e| e.to_string())?;
         let font = FontRef::new(&data).map_err(|e| e.to_string())?;
         let location = font.axes().location([("wght", 400.0)]);

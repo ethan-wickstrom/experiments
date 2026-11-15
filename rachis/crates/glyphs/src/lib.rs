@@ -4,13 +4,17 @@ pub mod arrows;
 pub mod boxes;
 pub mod digits;
 pub mod greek;
+pub mod kern;
 pub mod latin;
+pub mod letterlike;
 pub mod lower;
 pub mod operators;
 pub mod parts;
 pub mod punct;
+pub mod scripts;
 pub mod special;
 pub mod symbols;
+pub mod technical;
 pub mod text;
 pub mod upper;
 
@@ -27,8 +31,11 @@ pub fn registry() -> Registry {
     operators::register(&mut r);
     arrows::register(&mut r);
     greek::register(&mut r);
+    letterlike::register(&mut r);
     latin::register(&mut r);
     symbols::register(&mut r);
+    technical::register(&mut r);
+    scripts::register(&mut r);
     boxes::register(&mut r);
     r.fit = Some(Box::new(text::fit));
     r

@@ -65,7 +65,7 @@ impl Frame {
 
 // Proportions of the small forms. A superior is SMALL_H of the cap height tall and SMALL_W of a full-size figure
 // wide, which is 0.62 of the advance in the Regular. A fraction's digits are narrower, to leave room for its bar.
-const SMALL_H: f64 = 0.56;
+pub const SMALL_H: f64 = 0.56;
 const SMALL_W: f64 = 0.92;
 const SMALL_RISE: f64 = 40.0; // a superior's top above the cap height, and an inferior's bottom above the descender
 const FRAC_H: f64 = 0.52;
@@ -76,11 +76,11 @@ const ZERO_SQ: f64 = 0.01; // and the zero a little more: a tall narrow ring loo
 
 /// The vertical stroke of the small forms: about 0.72 of the full-size stroke in the Regular. It gains weight
 /// more slowly than the text does, so that the Light survives at 13 px and small counters stay open in the Bold.
-fn small_stem(p: &Params) -> f64 {
+pub fn small_stem(p: &Params) -> f64 {
     0.435 * p.stem + 30.0
 }
 
-fn small_hair(p: &Params) -> f64 {
+pub fn small_hair(p: &Params) -> f64 {
     0.47 * p.hair + 25.0
 }
 
@@ -118,8 +118,13 @@ fn superior(p: &Params) -> Frame {
     small(p, p.mid() - half, p.mid() + half, top - SMALL_H * p.cap, top)
 }
 
+/// The baseline of the superiors: the height a superior letter stands on, as the superior figures do.
+pub fn superior_base(p: &Params) -> f64 {
+    superior(p).y0
+}
+
 /// How far an inferior sits below the superior it repeats.
-fn inferior_shift(p: &Params) -> f64 {
+pub fn inferior_shift(p: &Params) -> f64 {
     (p.desc + SMALL_RISE) - (p.cap + SMALL_RISE - SMALL_H * p.cap)
 }
 
@@ -159,15 +164,21 @@ fn draw_zero_ring(g: &mut Draw, f: Frame) {
     g.stroke_closed(&ring(f.x0, f.bot(), f.x1, f.top(), f.stem, f.hair, f.sq + ZERO_SQ));
 }
 
+/// The zero of the family: slashed where every glyph has one width, plain among letters of their own widths.
+fn draw_zero(g: &mut Draw, f: Frame) {
+    if g.p.mono {
+        draw_zero_slash(g, f);
+    } else {
+        // beside letters of their own widths a zero is told from O by its narrowness; a formula's zero is plain
+        draw_zero_ring(g, f);
+    }
+}
+
 /// A ring and a slash from lower left to upper right. The slash is the diagonal of the box of the ring's centre
 /// line, as far as the middle of the ring's corners: it joins the ring from inside and never reaches its outer
 /// edge. Its breadth follows the counter as well as the pen, so that a bold counter stays open beside it.
-fn draw_zero(g: &mut Draw, f: Frame) {
+fn draw_zero_slash(g: &mut Draw, f: Frame) {
     draw_zero_ring(g, f);
-    if !g.p.mono {
-        // beside letters of their own widths a zero is told from O by its narrowness; a formula's zero is plain
-        return;
-    }
     let counter = f.w() - 2.0 * f.stem;
     let t = 0.50 * f.hair + 0.11 * counter;
     let m = 0.5 + 0.375 * (f.sq + ZERO_SQ); // where a superelliptic corner crosses the diagonal of its box
@@ -444,9 +455,29 @@ fn zero_dot(g: &mut Draw) {
     draw_zero_dot(g, full(p));
 }
 
+fn zero_slash(g: &mut Draw) {
+    let p = g.p;
+    draw_zero_slash(g, full(p));
+}
+
 fn zero_plain(g: &mut Draw) {
     let p = g.p;
     draw_zero_ring(g, full(p));
+}
+
+/// The bar of a fraction: it passes midway between the numerator's lower right corner and the denominator's
+/// upper left one.
+fn fraction_bar(g: &mut Draw, n: Frame, d: Frame) {
+    fraction_bar_at(g, n, d, (n.x1 + d.x0) / 2.0, 0.30);
+}
+
+/// A fraction's bar centred at `cx`, between the numerator `n` and the denominator `d`, its half height `rise`
+/// of their span.
+fn fraction_bar_at(g: &mut Draw, n: Frame, d: Frame, cx: f64, rise: f64) {
+    let cy = (n.y0 + d.y1) / 2.0;
+    let rise = rise * (n.y1 - d.y0);
+    let run = rise / 52.0_f64.to_radians().tan();
+    g.stroke(&diag_from(cx - run, cy - rise, cx + run, cy + rise, 0.9 * n.hair, 0.0, 0.0));
 }
 
 /// A small numerator at the top left, a small denominator at the bottom right, and a bar between them.
@@ -456,12 +487,36 @@ fn fraction(reg: &mut Registry, character: char, over: char, under: char) {
         let (n, d) = (numerator(p), denominator(p));
         draw_of(over)(g, n);
         draw_of(under)(g, d);
-        // the bar passes midway between the numerator's lower right corner and the denominator's upper left one
-        let (cx, cy) = ((n.x1 + d.x0) / 2.0, (n.y0 + d.y1) / 2.0);
-        let rise = 0.30 * (n.y1 - d.y0);
-        let run = rise / 52.0_f64.to_radians().tan();
-        g.stroke(&diag_from(cx - run, cy - rise, cx + run, cy + rise, 0.9 * n.hair, 0.0, 0.0));
+        fraction_bar(g, n, d);
     });
+}
+
+/// ⅟: the numerator 1 and the bar, where the bar of any fraction is; the denominator follows as figures.
+fn fraction_numerator_one(g: &mut Draw) {
+    let p = g.p;
+    let (n, d) = (numerator(p), denominator(p));
+    draw_one(g, n);
+    fraction_bar(g, n, d);
+}
+
+/// ⅒: a denominator of two figures in the room of one and a half. Its two frames are narrower than a single
+/// denominator's and the pair reaches further left, under the bar's lower end. The bar stands where a
+/// single numerator's corner puts it and is a little shorter, the numerator is narrower, so that it stays in the cell and clear of both 1s. The
+/// zero is the plain ring: a slash would fill so narrow a counter.
+fn fraction_tenth(g: &mut Draw) {
+    let p = g.p;
+    let (n, d) = (numerator(p), denominator(p));
+    let reach = 0.32 * d.w(); // how much further left the pair begins
+    let bar_x = n.x1;
+    let n = Frame { x1: n.x1 - 0.5 * reach, ..n }; // a narrower foot, clear of the bar
+    let span = d.x1 - (d.x0 - reach);
+    let x0 = d.x0 - reach;
+    let one = Frame { x0, x1: x0 + 0.30 * span, ..d };
+    let zero = Frame { x0: x0 + 0.34 * span, ..d };
+    draw_one(g, n);
+    draw_one(g, one);
+    draw_zero_ring(g, zero);
+    fraction_bar_at(g, n, one, bar_x, 0.27);
 }
 
 pub fn register(reg: &mut Registry) {
@@ -479,7 +534,28 @@ pub fn register(reg: &mut Registry) {
     small_pair(reg, draw_small_i, 'ⁱ', None);
     reg.named("zero.dot", zero_dot);
     reg.named("zero.plain", zero_plain);
+    reg.named("zero.slash", zero_slash);
     fraction(reg, '½', '1', '2');
     fraction(reg, '¼', '1', '4');
     fraction(reg, '¾', '3', '4');
+    for (character, over, under) in [
+        ('⅐', '1', '7'),
+        ('⅑', '1', '9'),
+        ('⅓', '1', '3'),
+        ('⅔', '2', '3'),
+        ('⅕', '1', '5'),
+        ('⅖', '2', '5'),
+        ('⅗', '3', '5'),
+        ('⅘', '4', '5'),
+        ('⅙', '1', '6'),
+        ('⅚', '5', '6'),
+        ('⅛', '1', '8'),
+        ('⅜', '3', '8'),
+        ('⅝', '5', '8'),
+        ('⅞', '7', '8'),
+    ] {
+        fraction(reg, character, over, under);
+    }
+    reg.ch('⅒', fraction_tenth);
+    reg.ch('⅟', fraction_numerator_one);
 }

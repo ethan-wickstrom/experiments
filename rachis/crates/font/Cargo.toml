@@ -11,8 +11,16 @@ kurbo = "0.13"
 linesweeper = "0.5"
 rachis-kernel = { path = "../kernel" }
 sha2 = "0.11"
+# Rasterises each glyph before and after overlap removal, so that a union that changed the shape is caught at
+# build time and the glyph keeps its overlapping contours instead (see `instance.rs`).
+tiny-skia = { version = "0.12", default-features = false, features = ["std"] }
 ttf2woff2 = "0.14"
-write-fonts = "0.56"
+write-fonts = { version = "0.56", features = ["read"] }
+
+[dev-dependencies]
+rachis-glyphs = { path = "../glyphs" }
+read-fonts = "0.47"
+skrifa = "0.50"
 
 [lints]
 workspace = true
