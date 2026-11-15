@@ -237,6 +237,11 @@ impl Fit {
     }
 }
 
+/// The anchors of a glyph in a master, as (name, x, y) in upright coordinates: where marks attach to a base
+/// letter. The third argument draws the glyph upright in the same cell, for measuring it; an italic's anchors are
+/// the upright's, sheared with the letter.
+pub type AnchorFn = Box<dyn Fn(&Spec, &Params, &dyn Fn() -> Glyph) -> Vec<(&'static str, f64, f64)> + Send + Sync>;
+
 /// The fit of a glyph in a master. `None` leaves the master's own cell.
 pub type FitFn = Box<dyn Fn(&Spec, &Params) -> Option<Fit> + Send + Sync>;
 
@@ -247,6 +252,8 @@ pub struct Registry {
     module: &'static str,
     /// Per-glyph widths and sidebearings, for the proportional family.
     pub fit: Option<FitFn>,
+    /// Anchors computed from the drawn glyph, for glyphs whose programs do not set them.
+    pub anchors: Option<AnchorFn>,
 }
 
 impl Registry {
@@ -327,9 +334,22 @@ impl Registry {
         };
         let width = spec.opt.advance.or(fit.map(|f| f.width)).unwrap_or(p.width);
         let local = Params { width, ..p.clone() };
-        let mut g = Draw::new(&local, &spec.name, if spec.opt.mark { 0.0 } else { width }, spec.opt.upright);
-        g.registry = Some(self);
-        (spec.program)(&mut g);
+        fn run<'a>(registry: &'a Registry, spec: &Spec, params: &'a Params) -> Draw<'a> {
+            let advance = if spec.opt.mark { 0.0 } else { params.width };
+            let mut g = Draw::new(params, &spec.name, advance, spec.opt.upright);
+            g.registry = Some(registry);
+            (spec.program)(&mut g);
+            g
+        }
+        let mut g = run(self, spec, &local);
+        if let Some(anchors) = &self.anchors {
+            let upright = Params { slant: 0.0, ..local.clone() };
+            for (name, x, y) in anchors(spec, &local, &|| run(self, spec, &upright).glyph) {
+                if !g.glyph.anchors.contains_key(name) {
+                    g.anchor(name, x, y);
+                }
+            }
+        }
         let mut glyph = g.glyph;
         glyph.unicodes = spec.unicodes.clone();
         glyph.mark = spec.opt.mark;

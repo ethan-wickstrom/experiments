@@ -11,7 +11,7 @@ pub mod params;
 pub mod pen;
 
 pub use geom::{Seg, V, pt};
-pub use glyph::{Draw, Fit, Glyph, Opt, Registry, Spec, build, build_all};
+pub use glyph::{AnchorFn, Draw, Fit, FitFn, Glyph, Opt, Registry, Spec, build, build_all};
 pub use names::{name_of, name_of_code};
 pub use params::{Face, Params};
 pub use pen::{Contour, Knot, knot};
