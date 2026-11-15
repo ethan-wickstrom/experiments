@@ -48,6 +48,7 @@ Rust 1.90 or later; ttfautohint on the path if the static fonts are to be hinted
 ```sh
 cargo run --release -p rachis -- build          # fonts/: 38 files in about fifteen seconds
 cargo run --release -p rachis -- check          # the masters of every glyph have one structure
+cargo run --release -p rachis -- measure --check   # no confusable pair is nearer than recorded
 cargo run --release -p rachis -- specimen -o specimen.html   # the specimen page, fonts inside
 cargo test
 ```
@@ -57,7 +58,7 @@ cargo test
 ## Layout
 
 - `crates/kernel`: plane geometry, Hobby's spline, superellipse corners, pens and stroke expansion, the canvas and the registry of glyph programs, the masters' parameters.
-- `crates/glyphs`: the glyph programs, one module per group (`lower`, `upper`, `digits`, `punct`, `operators`, `math`, `arrows`, `greek`, `latin`, `letterlike`, `scripts`, `symbols`, `shapes`, `technical`, `typography`, `boxes`), the proportional family's widths (`text`) and the computed kerning (`kern`).
+- `crates/glyphs`: the glyph programs, one module per group (`lower`, `upper`, `digits`, `punct`, `operators`, `math`, `arrows`, `greek`, `latin`, `letterlike`, `scripts`, `symbols`, `shapes`, `technical`, `typography`, `boxes`), the proportional family's widths (`text` for letters, `signs` for signs) and the computed kerning (`kern`).
 - `crates/font`: the compiler from masters to OpenType: variation model, quadratic conversion, `glyf` and `gvar`, layout tables, static instances with overlaps removed, WOFF2.
 - `crates/cli`: the `rachis` command: `build`, `check`, `proof`, `measure`, `digest`, `specimen`, `widths`, `kern`, `list`.
 - `specimen/`: the source of the specimen page, a single HTML file that `rachis specimen` fills with the web fonts.

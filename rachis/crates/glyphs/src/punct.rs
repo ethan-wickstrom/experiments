@@ -49,11 +49,14 @@ pub fn mark_foot(p: &Params) -> f64 {
 fn comma_shape(g: &mut Draw, cx: f64, cy: f64, scale: f64, form: &str) {
     let p = g.p;
     let r = p.punct * scale;
-    let drop = scale * (1.7 * p.punct + 108.0); // from the dot's centre down to the end of the tail
+    // The tail is what tells a comma from a period, a semicolon from a colon, a quote from a dot. It ends almost
+    // as broad as the dot and well to its left: with the thin tail this had before, the comma was nearer the
+    // period at 14 px than in any of the eight reference faces (decision T28).
+    let drop = scale * (1.7 * p.punct + 126.0); // from the dot's centre down to the end of the tail
     let w0 = 0.92 * r;
     let mut tail = vec![
         knot(cx + 0.97 * r - w0 / 2.0, cy, w0).pen(0.0).dir(-90.0),
-        cut_pen(cx - 0.40 * r, cy - drop, 0.54 * r, -128.0, 0.0),
+        cut_pen(cx - 0.70 * r, cy - drop, 0.85 * r, -128.0, 0.0),
     ];
     if form == "6" {
         tail = turn(&tail, cx, cy);
@@ -86,11 +89,20 @@ fn semicolon(g: &mut Draw) {
     g.dot(p.mid(), p.xh + p.over - p.punct, p.punct);
 }
 
+/// Three dots in the cell in the fixed-pitch family, smaller than periods so that they fit. In the proportional
+/// family they are three periods, as far apart as three typed periods stand.
 fn ellipsis(g: &mut Draw) {
     let p = g.p;
-    let r = 0.5 * p.punct + 16.0;
-    for cx in [p.mid() - 200.0, p.mid(), p.mid() + 200.0] {
-        g.dot(cx, r - p.over, r);
+    if p.mono {
+        let r = 0.5 * p.punct + 16.0;
+        for cx in [p.mid() - 200.0, p.mid(), p.mid() + 200.0] {
+            g.dot(cx, r - p.over, r);
+        }
+    } else {
+        let pitch = 2.0 * p.punct + 2.0 * 0.86 * p.sb;
+        for cx in [p.mid() - pitch, p.mid(), p.mid() + pitch] {
+            g.dot(cx, dot_y(p), p.punct);
+        }
     }
 }
 
@@ -325,11 +337,15 @@ fn bracketright(g: &mut Draw) {
 fn brace_half(p: &Params) -> Vec<Knot> {
     let bs = bracket_stem(p);
     let h = p.hair;
+    // A long cusp tells the brace from a parenthesis, a round shoulder and a short arm tell it from a bracket.
+    // The two pull against each other (a rounder brace is nearer a parenthesis), so both are moderate: with a
+    // cusp 60 shorter and a shoulder of 112, } was nearer ] at 14 px than in any of the eight reference faces
+    // (decision T28).
     let xs = 282.0 + 0.12 * p.stem; // the spine's centre
-    let x_tip = 140.0 - 0.36 * p.stem; // the point of the cusp
-    let x_arm = 476.0 + 0.36 * p.stem; // the end of the arm
+    let x_tip = 80.0 - 0.36 * p.stem; // the point of the cusp
+    let x_arm = 450.0 + 0.36 * p.stem; // the end of the arm
     let yt = p.br_top - h / 2.0;
-    let r1 = 112.0; // the shoulder's radius on the centre line
+    let r1 = 140.0; // the shoulder's radius on the centre line
     let r2 = 104.0; // the radius of the turn into the cusp
     vec![
         knot(x_arm, yt, h).pen(90.0).line(),
@@ -482,21 +498,33 @@ fn percent(g: &mut Draw) {
     g.stroke(&diag(112.0, 0.0, p.width - 112.0, p.cap, hw * 1.08));
 }
 
+/// In the fixed-pitch family: a small percent sign and a third ring, squeezed into the cell. In the proportional
+/// family: the percent sign with its rings and its slope, and a second ring beside the lower one.
 fn perthousand(g: &mut Draw) {
     let p = g.p;
     let (_, hw) = small_strokes(p);
-    let (w, h) = (190.0, 270.0);
-    g.stroke_closed(&percent_ring(p, 8.0, 8.0 + w, p.cap + p.over - h, p.cap + p.over, 0.84));
-    g.stroke_closed(&percent_ring(
-        p,
-        p.width - 4.0 - 2.0 * w + 6.0,
-        p.width - 4.0 - w + 6.0,
-        -p.over,
-        -p.over + h,
-        0.84,
-    ));
-    g.stroke_closed(&percent_ring(p, p.width - 4.0 - w, p.width - 4.0, -p.over, -p.over + h, 0.84));
-    g.stroke(&diag(84.0, 0.0, 330.0, p.cap, hw * 0.96));
+    if p.mono {
+        let (w, h) = (190.0, 270.0);
+        g.stroke_closed(&percent_ring(p, 8.0, 8.0 + w, p.cap + p.over - h, p.cap + p.over, 0.84));
+        g.stroke_closed(&percent_ring(
+            p,
+            p.width - 4.0 - 2.0 * w + 6.0,
+            p.width - 4.0 - w + 6.0,
+            -p.over,
+            -p.over + h,
+            0.84,
+        ));
+        g.stroke_closed(&percent_ring(p, p.width - 4.0 - w, p.width - 4.0, -p.over, -p.over + h, 0.84));
+        g.stroke(&diag(84.0, 0.0, 330.0, p.cap, hw * 0.96));
+    } else {
+        let (w, h) = (246.0, 308.0);
+        let pitch = w + 0.36 * p.sb; // from one lower ring to the next
+        let x1 = p.width - 22.0 - pitch; // the right side of the first lower ring: where a percent sign ends
+        g.stroke_closed(&percent_ring(p, 22.0, 22.0 + w, p.cap + p.over - h, p.cap + p.over, 1.0));
+        g.stroke_closed(&percent_ring(p, x1 - w, x1, -p.over, -p.over + h, 1.0));
+        g.stroke_closed(&percent_ring(p, x1 + pitch - w, x1 + pitch, -p.over, -p.over + h, 1.0));
+        g.stroke(&diag(112.0, 0.0, x1 + 22.0 - 112.0, p.cap, hw * 1.08));
+    }
 }
 
 fn numbersign(g: &mut Draw) {
@@ -976,7 +1004,7 @@ pub fn register(reg: &mut Registry) {
 pub fn ask(name: &str, p: &Params) -> Option<Ask> {
     let sb = p.sb;
     match name {
-        "period" | "comma" | "colon" | "semicolon" | "periodcentered" => beside(0.86 * sb, 0.86 * sb),
+        "period" | "comma" | "colon" | "semicolon" | "periodcentered" | "uni2026" => beside(0.86 * sb, 0.86 * sb),
         "uni2022" | "uni2023" => beside(0.7 * sb, 0.7 * sb),
         "exclam" | "exclamdown" | "brokenbar" => beside(sb, sb),
         "question" | "questiondown" => around(0.45 * sb, 2.0 * p.stem + 0.74 * p.counter, 0.50 * sb),

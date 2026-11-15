@@ -18,9 +18,15 @@ pub struct Params {
     pub mono: bool,
 
     pub upm: f64,
-    /// The advance of the cell: of every glyph in the fixed-pitch family, and of figures, operators and symbols in
-    /// the proportional one. A glyph program reads its own advance here.
+    /// The cell the glyph is drawn in. A master has the width of its own cell here: the advance of every glyph in
+    /// the fixed-pitch family, and of a figure in the proportional one. A glyph program reads the cell it was
+    /// given, which in the proportional family is as wide as the glyph asks.
     pub width: f64,
+    /// How many times as far across as in the master's own cell a sign is drawn, measured between the operators'
+    /// margins: 1 in every master, and in the cell of every glyph but a sign that has a room of its own in the
+    /// proportional family. Only the registry sets it, from the glyph's fit: a program that draws a letter in a
+    /// cell of another width changes `width` and leaves this alone.
+    pub grown: f64,
 
     // heights
     pub cap: f64,
@@ -112,6 +118,12 @@ impl Params {
         self.width - self.op_l
     }
 
+    /// The master's own cell, whatever cell the glyph is drawn in: the span the glyph has, less its growth, and
+    /// the operators' two margins.
+    pub fn own_cell(&self) -> f64 {
+        (self.width - 2.0 * self.op_l) / self.grown + 2.0 * self.op_l
+    }
+
     /// The same master drawn `f` times as large: every length multiplied, every ratio and angle kept. The name
     /// and the place in the design space stay. For glyphs that contain small letters and figures: the caller
     /// then sets the strokes and the spacing the small size needs, as an optical size does.
@@ -163,6 +175,7 @@ pub fn regular() -> Params {
         mono: true,
         upm: 1000.0,
         width: 600.0,
+        grown: 1.0,
         cap: 714.0,
         xh: 540.0,
         asc: 756.0,

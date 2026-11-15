@@ -128,14 +128,16 @@ pub fn inferior_shift(p: &Params) -> f64 {
     (p.desc + SMALL_RISE) - (p.cap + SMALL_RISE - SMALL_H * p.cap)
 }
 
+/// The numerator's frame: at the left of the cell. Its width is counted in the master's own cell, so that in
+/// the wider cell the proportional family gives a fraction, the figures keep their shape and stand further apart.
 fn numerator(p: &Params) -> Frame {
     let top = p.cap + SMALL_RISE;
-    small(p, FRAC_EDGE, FRAC_EDGE + FRAC_W * p.width, top - FRAC_H * p.cap, top)
+    small(p, FRAC_EDGE, FRAC_EDGE + FRAC_W * p.own_cell(), top - FRAC_H * p.cap, top)
 }
 
 fn denominator(p: &Params) -> Frame {
     let bottom = p.desc + SMALL_RISE;
-    small(p, p.width - FRAC_EDGE - FRAC_W * p.width, p.width - FRAC_EDGE, bottom, bottom + FRAC_H * p.cap)
+    small(p, p.width - FRAC_EDGE - FRAC_W * p.own_cell(), p.width - FRAC_EDGE, bottom, bottom + FRAC_H * p.cap)
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -305,7 +307,10 @@ fn draw_seven(g: &mut Draw, f: Frame) {
 fn draw_eight(g: &mut Draw, f: Frame) {
     let (s, h) = (f.stem, f.hair);
     let yw = f.y(0.535);
-    let inset = 0.05 * f.w();
+    // The upper ring is a fifth narrower than the lower. With rings this square a small difference leaves the
+    // sides nearly straight, and the figure was nearer the slashed zero at 14 px than in any of the eight
+    // reference faces; it now also stands further from B (decision T28).
+    let inset = 0.10 * f.w();
     g.stroke_closed(&ring(f.x0, f.bot(), f.x1, yw + h / 2.0, s, h, f.sq));
     g.stroke_closed(&ring(f.x0 + inset, yw - h / 2.0, f.x1 - inset, f.top(), 0.96 * s, h, f.sq));
 }

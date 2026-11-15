@@ -44,7 +44,12 @@ impl Glyph {
 
 /// The canvas of one glyph in one master.
 pub struct Draw<'a> {
+    /// The parameters the program draws with: the master's, with the cell this glyph was given.
     pub p: &'a Params,
+    /// The master's own parameters, with its own cell: what another glyph is looked up with. A glyph's cell is
+    /// its own affair (its fit decides it from the master's cell), so a glyph that is looked up through this
+    /// one must not see this one's cell.
+    master: &'a Params,
     pub glyph: Glyph,
     slope: f64,
     registry: Option<&'a Registry>,
@@ -53,14 +58,20 @@ pub struct Draw<'a> {
 impl<'a> Draw<'a> {
     pub fn new(p: &'a Params, name: &str, advance: f64, upright: bool) -> Draw<'a> {
         let slope = if upright { 0.0 } else { p.slant.to_radians().tan() };
-        Draw { p, glyph: Glyph { name: name.into(), advance, ..Glyph::default() }, slope, registry: None }
+        Draw { p, master: p, glyph: Glyph { name: name.into(), advance, ..Glyph::default() }, slope, registry: None }
+    }
+
+    /// The master's own parameters, whatever cell this glyph is drawn in: for looking up another glyph as the
+    /// master draws it, or (with a change, such as no slant) nearly so.
+    pub fn master(&self) -> &'a Params {
+        self.master
     }
 
     /// Another glyph as this master draws it, with its components resolved into contours: for measuring a base
     /// letter before placing a mark on it. `None` if there is no such glyph, or when the program runs outside a
     /// registry.
     pub fn glyph_of(&self, name: &str) -> Option<Glyph> {
-        self.registry?.flat(name, self.p)
+        self.registry?.flat(name, self.master)
     }
 
     /// Make this glyph the glyph called `name` under another code point: one component, and the same advance.
@@ -210,18 +221,20 @@ pub struct Spec {
 /// The glyph programs of a typeface, in the order they were registered.
 /// How a glyph sits in a master of a face whose glyphs do not all have one width. The program draws into a cell
 /// `width` wide with the master's standard sidebearings; afterwards `left` is added to the left sidebearing and
-/// `right` to the right one, so the advance is `width + left + right`.
+/// `right` to the right one, so the advance is `width + left + right`. `grown` is what the program reads as
+/// [`Params::grown`]: 1 but for a sign whose room is wider than the master's cell.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Fit {
     pub width: f64,
     pub left: f64,
     pub right: f64,
+    pub grown: f64,
 }
 
 impl Fit {
     /// A cell `width` wide with the master's standard sidebearings.
     pub fn new(width: f64) -> Fit {
-        Fit { width, left: 0.0, right: 0.0 }
+        Fit { width, left: 0.0, right: 0.0, grown: 1.0 }
     }
 
     /// The cell of a letter between two straight sides: two of the master's sidebearings, `stems` of its stems
@@ -367,18 +380,20 @@ impl Registry {
             None => self.fit.as_ref().and_then(|f| f(self, spec, p)),
         };
         let width = spec.opt.advance.or(fit.map(|f| f.width)).unwrap_or(p.width);
-        let local = Params { width, ..p.clone() };
-        fn run<'a>(registry: &'a Registry, spec: &Spec, params: &'a Params) -> Draw<'a> {
+        let local = Params { width, grown: fit.map_or(1.0, |f| f.grown), ..p.clone() };
+        fn run<'a>(registry: &'a Registry, spec: &Spec, params: &'a Params, master: &'a Params) -> Draw<'a> {
             let advance = if spec.opt.mark { 0.0 } else { params.width };
             let mut g = Draw::new(params, &spec.name, advance, spec.opt.upright);
+            g.master = master;
             g.registry = Some(registry);
             (spec.program)(&mut g);
             g
         }
-        let mut g = run(self, spec, &local);
+        let mut g = run(self, spec, &local, p);
         if let Some(anchors) = &self.anchors {
             let upright = Params { slant: 0.0, ..local.clone() };
-            for (name, x, y) in anchors(spec, &local, &|| run(self, spec, &upright).glyph) {
+            let upright_master = Params { slant: 0.0, ..p.clone() };
+            for (name, x, y) in anchors(spec, &local, &|| run(self, spec, &upright, &upright_master).glyph) {
                 if !g.glyph.anchors.contains_key(name) {
                     g.anchor(name, x, y);
                 }
@@ -406,16 +421,24 @@ impl Registry {
         glyph
     }
 
-    /// The left and right ends of the ink of the glyph `spec` when its program draws upright into a cell `width`
-    /// wide, with nothing fitted afterwards. For deciding a fit: what a program leaves at its sides depends on
-    /// how it is written, and this measures it. `None` for a glyph without ink.
-    pub fn measure(&self, spec: &Spec, p: &Params, width: f64) -> Option<(f64, f64)> {
-        let local = Params { width, slant: 0.0, ..p.clone() };
+    /// What the program of the glyph `spec` draws upright into a cell `width` wide, as a sign grown `grown` times
+    /// (1 for anything but a sign with a room), with nothing fitted afterwards and its components left as
+    /// components. For deciding a fit.
+    pub fn trial(&self, spec: &Spec, p: &Params, width: f64, grown: f64) -> Glyph {
+        let local = Params { width, grown, slant: 0.0, ..p.clone() };
+        let upright = Params { slant: 0.0, ..p.clone() };
         let mut g = Draw::new(&local, &spec.name, width, spec.opt.upright);
+        g.master = &upright;
         g.registry = Some(self);
         (spec.program)(&mut g);
-        let mut ends: Option<(f64, f64)> = g.glyph.bounds().map(|(x0, _, x1, _)| (x0, x1));
-        for (base, offset) in &g.glyph.components {
+        g.glyph
+    }
+
+    /// The left and right ends of the ink of a glyph drawn by [`Registry::trial`], its components included as the
+    /// master `p` draws them. `None` for a glyph without ink.
+    pub fn ends(&self, trial: &Glyph, p: &Params) -> Option<(f64, f64)> {
+        let mut ends: Option<(f64, f64)> = trial.bounds().map(|(x0, _, x1, _)| (x0, x1));
+        for (base, offset) in &trial.components {
             let upright = Params { slant: 0.0, ..p.clone() };
             if let Some((x0, _, x1, _)) = self.flat(base, &upright).and_then(|part| part.bounds()) {
                 let (x0, x1) = (x0 + offset.x, x1 + offset.x);
@@ -423,6 +446,13 @@ impl Registry {
             }
         }
         ends
+    }
+
+    /// The left and right ends of the ink of the glyph `spec` when its program draws upright into a cell `width`
+    /// wide, with nothing fitted afterwards. For deciding a fit: what a program leaves at its sides depends on
+    /// how it is written, and this measures it. `None` for a glyph without ink.
+    pub fn measure(&self, spec: &Spec, p: &Params, width: f64) -> Option<(f64, f64)> {
+        self.ends(&self.trial(spec, p, width, 1.0), p)
     }
 
     /// The glyph called `name` in the master `p` with its components resolved into contours.

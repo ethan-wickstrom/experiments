@@ -817,6 +817,23 @@ impl OutlinePen for SkiaPen {
     }
 }
 
+/// Every .ttf and .otf in `dir` as a reference face named after its file, in the order of the file names.
+pub(crate) fn reference_faces_in(dir: &std::path::Path) -> Result<Vec<RefFace>, String> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("ttf") || x.eq_ignore_ascii_case("otf")))
+        .collect();
+    files.sort();
+    files
+        .iter()
+        .map(|path| {
+            let stem = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            RefFace::load(path, stem).map_err(|e| format!("{}: {e}", path.display()))
+        })
+        .collect()
+}
+
 /// The reference fonts in `$RACHIS_REFS`: all of them when the directory holds a handful, else the ones named in
 /// `REFERENCES`, in that order.
 fn reference_faces() -> Vec<RefFace> {

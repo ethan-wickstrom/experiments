@@ -219,13 +219,13 @@ th { font-weight: 600; white-space: nowrap; }
       <div class="pairs" id="pairs"></div>
       <div class="legend"><span><i class="k1"></i>Rachis Mono Regular</span><span><i class="k2"></i>Commit Mono, DejaVu Sans Mono, Fira Code, IBM Plex Mono, Iosevka, JetBrains Mono, JuliaMono, Source Code Pro</span></div>
     </div>
-    <p class="note col">Further right is more distinct. Rachis is ahead of every reference on 0 and O, 6 and b, 8 and B, and inside their range on the rest. The measure is a screening tool: its rank agreement with human confusion data is weak (at most 0.33), so it compares typefaces and does not predict misreadings.</p>
+    <p class="note col">Further right is more distinct. Rachis Mono is ahead of every reference on 0 and O, 6 and b and 8 and B, level with the best on p and ρ, and inside their range on the rest. The measure is a screening tool: its rank agreement with human confusion data is weak (at most 0.33), so it compares typefaces and does not predict misreadings.</p>
   </section>
 
   <section aria-labelledby="h-math">
     <div class="col">
       <h2 id="h-math">Mathematics</h2>
-      <p>336 operators and relations, 140 arrows, Greek, double-struck letters, delimiters, and superscripts and subscripts that are drawn at their own size with strokes of their own, not scaled down. Signs sit on one axis and are built from the same bar, chevron, stem and ring as the ASCII operators, so <span class="mono">-&gt;</span> and → have the same height and weight.</p>
+      <p>336 operators and relations, 140 arrows, Greek, double-struck letters, delimiters, and superscripts and subscripts that are drawn at their own size with strokes of their own, not scaled down. Signs sit on one axis and are built from the same bar, chevron, stem and ring as the ASCII operators, so <span class="mono">-&gt;</span> and → have the same height and weight. In Rachis Mono every sign has the cell. In Rachis the signs of arithmetic are as wide as a figure and every other sign has the room its shape wants: an arrow is 1.9 times as long as a plus is wide, a relation between sets 1.3 times.</p>
     </div>
     <div class="two">
       <div class="plate">
@@ -266,15 +266,15 @@ th { font-weight: 600; white-space: nowrap; }
     <div class="term" role="img" aria-label="A terminal session set in Rachis Mono with box drawing, a git graph and block elements">
 <pre><span class="inv b"> rachis </span><span class="a">&#xE0B0;</span> <span class="d">~/experiments/rachis</span> <span class="a">&#xE0A0; main ✔</span>
 $ cargo run --release -p rachis -- build
-   599508  fonts/variable/Rachis[opsz,wght].ttf
-   437576  fonts/variable/RachisMono[wght].ttf
-<span class="a">38 files in 14.50 s</span> <span class="d">(statics hinted)</span>
+   {{size:variable/Rachis[opsz,wght].ttf}}  fonts/variable/Rachis[opsz,wght].ttf
+   {{size:variable/RachisMono[wght].ttf}}  fonts/variable/RachisMono[wght].ttf
+<span class="a">38 files in 16.79 s</span> <span class="d">(statics hinted)</span>
 
 ┌──────────────┬────────┬────────┐   ╭─ glyphs ─────────────╮
 │ face         │ glyphs │  bytes │   │ ▁▂▃▄▅▆▇█ ░▒▓ ▖▗▘▝▚▞  │
 ├──────────────┼────────┼────────┤   │ ●○◆◇■□▲△ ✓✗ ← ↑ → ↓  │
-│ Rachis Mono  │   2109 │ 437576 │   ╰──────────────────────╯
-│ Rachis       │   1529 │ 599508 │   <span class="d">fn kern(a: &amp;Sides, b: &amp;Sides) -&gt; f64 {</span>
+│ Rachis Mono  │   2109 │ {{size:variable/RachisMono[wght].ttf}} │   ╰──────────────────────╯
+│ Rachis       │   1529 │ {{size:variable/Rachis[opsz,wght].ttf}} │   <span class="d">fn kern(a: &amp;Sides, b: &amp;Sides) -&gt; f64 {</span>
 └──────────────┴────────┴────────┘   <span class="d">    if a.rows.1 &lt; b.rows.0 { return 0.0; }</span>
 <span class="a">*</span> 1aff9c9 <span class="d">the fonts, the documents, the measurements</span>
 <span class="a">│╲</span>
@@ -361,11 +361,17 @@ code, pre { font-family: "Rachis Mono", monospace; }</pre>
 </div>
 
 <script>
-// Distances at 14 px and a blur of 1 px, from rachis/docs/measurements.md: [pair, Rachis Mono, lowest and highest of the eight references].
+// Distances at 14 px and a blur of 1 px: [pair, Rachis Mono (from tests/snapshot/distances.tsv, filled in by
+// `rachis specimen`), lowest and highest of the eight references (from rachis/docs/measurements.md)].
 const PAIRS = [
-  ["0 O", 0.495, 0.150, 0.378], ["6 b", 0.412, 0.329, 0.391], ["l |", 0.406, 0.356, 0.565], ["l I", 0.388, 0.192, 0.405],
-  ["1 l", 0.327, 0.291, 0.403], ["g q", 0.317, 0.259, 0.501], ["1 I", 0.284, 0.229, 0.422], ["2 Z", 0.268, 0.264, 0.299],
-  ["8 B", 0.222, 0.123, 0.212], ["5 S", 0.200, 0.138, 0.278], ["O D", 0.168, 0.105, 0.214],
+  ["0 O", {{distance:Mono Regular:0 O}}, 0.150, 0.378], [". ,", {{distance:Mono Regular:. ,}}, 0.401, 0.508],
+  ["6 b", {{distance:Mono Regular:6 b}}, 0.329, 0.391], ["l |", {{distance:Mono Regular:l |}}, 0.356, 0.565],
+  ["l I", {{distance:Mono Regular:l I}}, 0.192, 0.405], ["1 l", {{distance:Mono Regular:1 l}}, 0.291, 0.403],
+  ["g q", {{distance:Mono Regular:g q}}, 0.259, 0.501], ["} ]", {{distance:Mono Regular:} ]}}, 0.235, 0.298],
+  ["1 I", {{distance:Mono Regular:1 I}}, 0.229, 0.422], ["8 B", {{distance:Mono Regular:8 B}}, 0.123, 0.212],
+  ["2 Z", {{distance:Mono Regular:2 Z}}, 0.264, 0.299], ["0 8", {{distance:Mono Regular:0 8}}, 0.187, 0.306],
+  ["5 S", {{distance:Mono Regular:5 S}}, 0.138, 0.278], ["p ρ", {{distance:Mono Regular:p ρ}}, 0.070, 0.179],
+  ["O D", {{distance:Mono Regular:O D}}, 0.105, 0.214],
 ];
 const pairs = document.getElementById("pairs");
 for (const [glyphs, ours, lo, hi] of PAIRS) {

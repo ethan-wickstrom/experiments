@@ -20,29 +20,33 @@ use tiny_skia::{FillRule, Paint, Path, PathSegment, Pixmap};
 use crate::proof::{Face, OurFace, RefFace, glyph_transform};
 
 // ---------------------------------------------------------------------------------------------------------------
-// The pairs and their gates
+// The pairs and their targets
 
-/// A pair of strings that could be mistaken for each other, the least distance it must reach at the gate's
-/// viewing condition (`None`: reported, not gated), and why it is watched.
+/// A pair of strings that could be mistaken for each other, the distance it should reach at the targets' viewing
+/// condition (`None`: reported, with no target), and why it is watched.
 pub(crate) struct Pair {
     pub a: &'static str,
     pub b: &'static str,
-    pub gate: Option<f64>,
+    pub target: Option<f64>,
     pub note: &'static str,
 }
 
-const fn pair(a: &'static str, b: &'static str, gate: Option<f64>, note: &'static str) -> Pair {
-    Pair { a, b, gate, note }
+const fn pair(a: &'static str, b: &'static str, target: Option<f64>, note: &'static str) -> Pair {
+    Pair { a, b, target, note }
 }
 
-/// The default gate of a pair from mathematical notation.
+/// The default target of a pair from mathematical notation: a little above the median distance of the seven
+/// classic confusable pairs ([`CLASSIC`]) in the eight reference faces, which is 0.233. A notation pair under it
+/// is more alike than a classic confusable pair usually is. The document states the median of the references it
+/// was generated with.
 const MATH: Option<f64> = Some(0.25);
 
 /// Every watched pair. The first block is `_WATCHED` and `_WATCHED_SIGNS` of the prototype's `measure.py`, with
-/// the gates of `report.py` (decision T07) and of `docs/research/legibility-science.md` ("What this means for our
-/// font", items 3, 4, 5, 7 and 9). The second block is the notation of mathematics in plain text, gated at 0.25
-/// where a reader must tell the two apart; pairs that mean the same sign in plain-text mathematics, or that every
-/// typeface draws alike by convention, are reported without a gate (the note says which).
+/// the targets of `report.py` (decision T07) and of `docs/research/legibility-science.md` ("What this means for
+/// our font", items 3, 4, 5, 7 and 9). The second block is the notation of mathematics in plain text, with the
+/// default target where a reader must tell the two apart; pairs that mean the same sign in plain-text
+/// mathematics, or that every typeface draws alike by convention, are reported without one (the note says
+/// which).
 pub(crate) const PAIRS: &[Pair] = &[
     pair("0", "O", Some(0.30), "research item 4"),
     pair("0", "o", None, ""),
@@ -55,7 +59,7 @@ pub(crate) const PAIRS: &[Pair] = &[
     pair("l", "I", Some(0.40), "research item 3"),
     pair("l", "|", Some(0.40), "research item 3"),
     pair("I", "|", Some(0.40), "research item 3"),
-    pair("1", "|", Some(0.40), "research item 3 (not in report.py's gates)"),
+    pair("1", "|", Some(0.40), "research item 3 (not in report.py's targets)"),
     pair("1", "7", None, ""),
     pair("i", "l", None, ""),
     pair("i", "j", None, ""),
@@ -139,6 +143,7 @@ pub(crate) const PAIRS: &[Pair] = &[
     pair("⟨", "(", MATH, ""),
     pair("∅", "0", MATH, "empty set"),
     pair("∅", "Ø", MATH, ""),
+    pair("∅", "ø", MATH, "empty set and o with stroke"),
     pair("∞", "8", MATH, ""),
     pair("ℝ", "R", MATH, "double-struck"),
     pair("ℕ", "N", MATH, "double-struck"),
@@ -168,7 +173,10 @@ pub(crate) const PAIRS: &[Pair] = &[
     pair("vv", "w", MATH, "two letters against one: proportional family"),
 ];
 
-/// No pair of letters and figures may come closer than this at the gate's view (the research's measurement
+/// The classic confusable pairs of letters and figures: what the default target of a notation pair is set against.
+const CLASSIC: [(&str, &str); 7] = [("0", "O"), ("O", "D"), ("1", "l"), ("1", "I"), ("l", "I"), ("8", "B"), ("5", "S")];
+
+/// No pair of letters and figures should come closer than this at the targets' view (the research's measurement
 /// plan, item 2).
 pub(crate) const ALPHANUMERIC_FLOOR: f64 = 0.20;
 
@@ -206,8 +214,8 @@ pub(crate) const SUPERSAMPLE: usize = 8;
 pub(crate) const VIEWS: [View; 3] =
     [View { px: 14.0, sigma: 0.6 }, View { px: 14.0, sigma: 1.0 }, View { px: 14.0, sigma: 1.5 }];
 
-/// The view the gates are read at (`GATE_VIEW` in `report.py`).
-pub(crate) const GATE: usize = 1;
+/// The view the targets are read at (`GATE_VIEW` in `report.py`).
+pub(crate) const TARGET_VIEW: usize = 1;
 
 impl View {
     /// The rendering size in samples per em.
@@ -728,14 +736,19 @@ fn all_pairs(glyphs: &Glyphs, chars: &[char], view: View, keep: impl Fn(char, ch
 // ---------------------------------------------------------------------------------------------------------------
 // The command
 
-const USAGE: &str =
-    "usage: rachis measure [--master NAME] [--refs DIR] [--out FILE.md] [--gate] [--distance-refs PREFIX...]";
+const USAGE: &str = "usage: rachis measure [--master NAME] [--refs DIR] [--out FILE.md] [--targets] [--distance-refs PREFIX...]\n       \
+     rachis measure --check | --write";
 
 struct Opts {
     master: Option<String>,
     refs: Option<PathBuf>,
     out: Option<PathBuf>,
-    gate: bool,
+    /// Exit with a failure when a target is not met.
+    targets: bool,
+    /// Compare the watched pairs of the Regular masters with the snapshot.
+    check: bool,
+    /// Write the snapshot.
+    write: bool,
     distance_refs: Vec<String>,
 }
 
@@ -745,7 +758,9 @@ impl Opts {
             master: None,
             refs: None,
             out: None,
-            gate: false,
+            targets: false,
+            check: false,
+            write: false,
             distance_refs: DISTANCE_REFS.map(String::from).to_vec(),
         };
         let mut i = 0;
@@ -760,7 +775,9 @@ impl Opts {
                 "--master" => opts.master = Some(value()?),
                 "--refs" => opts.refs = Some(PathBuf::from(value()?)),
                 "--out" | "-o" => opts.out = Some(PathBuf::from(value()?)),
-                "--gate" => opts.gate = true,
+                "--targets" => opts.targets = true,
+                "--check" => opts.check = true,
+                "--write" => opts.write = true,
                 "--distance-refs" => {
                     opts.distance_refs.clear();
                     while i < args.len() && !args[i].starts_with("--") {
@@ -790,7 +807,7 @@ struct Ours {
 struct Reference {
     label: String,
     props: Proportions,
-    /// At the gate's view, per watched pair; `None` when its distances were not measured.
+    /// At the targets' view, per watched pair; `None` when its distances were not measured.
     pairs: Option<Vec<Option<f64>>>,
 }
 
@@ -798,6 +815,130 @@ struct Reference {
 struct Section {
     family: &'static str,
     table: Vec<Ours>,
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The snapshot: distances that may not fall
+
+/// How much nearer than its recorded distance a pair may be measured before the check fails. The distances are
+/// recorded to three decimals; the rest allows for arithmetic that differs in its last bits between machines.
+const SNAPSHOT_TOLERANCE: f64 = 0.004;
+
+/// The snapshot, under the workspace root.
+pub fn snapshot_path() -> PathBuf {
+    let crate_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = crate_dir.parent().and_then(std::path::Path::parent).unwrap_or(crate_dir);
+    root.join("tests/snapshot/distances.tsv")
+}
+
+/// The distance of every watched pair at the targets' view in every master of the upright faces (each weight
+/// of the fixed pitch, and of the proportional family at both optical sizes): the lines of the snapshot,
+/// `master<TAB>pair<TAB>distance`. A pair the face lacks a character of has no line. The italics are the same
+/// programs sheared and are not measured.
+fn snapshot(registry: &Registry) -> Vec<(String, String, f64)> {
+    let masters: Vec<Params> = faces().into_iter().filter(|f| !f.italic).flat_map(|f| f.masters).collect();
+    let mut lines = Vec::new();
+    for p in masters {
+        let mut face = OurFace::new(registry, p.clone());
+        let align = if p.mono { Align::Origin } else { Align::Centre };
+        let chars: BTreeSet<char> = PAIRS.iter().flat_map(|pair| pair.a.chars().chain(pair.b.chars())).collect();
+        let glyphs = Glyphs::load(&mut face, align, chars);
+        for (pair, d) in PAIRS.iter().zip(watched(&glyphs, VIEWS[TARGET_VIEW])) {
+            if let Some(d) = d {
+                lines.push((p.name.to_string(), format!("{} {}", pair.a, pair.b), d));
+            }
+        }
+    }
+    lines
+}
+
+fn snapshot_text(lines: &[(String, String, f64)]) -> String {
+    let mut out = String::new();
+    for (master, pair, d) in lines {
+        let _ = writeln!(out, "{master}\t{pair}\t{d:.3}");
+    }
+    out
+}
+
+/// What differs between the recorded distances and the measured ones: the pairs that are nearer than recorded
+/// or are not in both (problems), and the pairs that are further apart (notes).
+fn compare(recorded: &str, measured: &[(String, String, f64)]) -> (Vec<String>, Vec<String>) {
+    let mut old: HashMap<(String, String), f64> = HashMap::new();
+    let mut problems = Vec::new();
+    for line in recorded.lines().filter(|l| !l.is_empty()) {
+        let mut parts = line.split('\t');
+        match (parts.next(), parts.next(), parts.next().and_then(|d| d.parse::<f64>().ok())) {
+            (Some(master), Some(pair), Some(d)) => {
+                old.insert((master.to_string(), pair.to_string()), d);
+            }
+            _ => problems.push(format!("a line of the snapshot is not `master<TAB>pair<TAB>distance`: {line:?}")),
+        }
+    }
+    let mut notes = Vec::new();
+    for (master, pair, d) in measured {
+        match old.remove(&(master.clone(), pair.clone())) {
+            // a distance that is not a number is nearer or further than nothing: it must not pass
+            _ if !d.is_finite() => problems.push(format!("{master}: {pair} has the distance {d}")),
+            None => problems.push(format!("{master}: {pair} is not in the snapshot")),
+            Some(was) if *d < was - SNAPSHOT_TOLERANCE => {
+                problems.push(format!("{master}: {pair} fell from {was:.3} to {d:.3}"));
+            }
+            Some(was) if *d > was + SNAPSHOT_TOLERANCE => {
+                notes.push(format!("{master}: {pair} rose from {was:.3} to {d:.3}"));
+            }
+            Some(_) => {}
+        }
+    }
+    let mut gone: Vec<String> = old
+        .into_keys()
+        .map(|(master, pair)| format!("{master}: {pair} is in the snapshot and no longer measured"))
+        .collect();
+    gone.sort();
+    problems.extend(gone);
+    (problems, notes)
+}
+
+/// `--write` records the distances; `--check` fails when a pair is nearer than recorded.
+fn run_snapshot(registry: &Registry, write: bool) -> ExitCode {
+    let path = snapshot_path();
+    let measured = snapshot(registry);
+    if write {
+        if let Err(e) = std::fs::write(&path, snapshot_text(&measured)) {
+            eprintln!("rachis measure: cannot write {}: {e}", path.display());
+            return ExitCode::FAILURE;
+        }
+        println!("wrote {} ({} distances)", path.display(), measured.len());
+        return ExitCode::SUCCESS;
+    }
+    let recorded = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) => {
+            eprintln!("rachis measure: cannot read {}: {e}; `rachis measure --write` creates it", path.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let (problems, notes) = compare(&recorded, &measured);
+    for n in &notes {
+        println!("note: {n}");
+    }
+    for p in &problems {
+        println!("FAIL: {p}");
+    }
+    if !problems.is_empty() {
+        println!(
+            "{} of {} distances differ from {}; if the change is meant, `rachis measure --write` records it",
+            problems.len(),
+            measured.len(),
+            path.display()
+        );
+        return ExitCode::FAILURE;
+    }
+    if notes.is_empty() {
+        println!("no watched pair is nearer than in the snapshot ({} distances)", measured.len());
+    } else {
+        println!("{} pairs are further apart than in the snapshot; `rachis measure --write` records them", notes.len());
+    }
+    ExitCode::SUCCESS
 }
 
 pub fn run(registry: &Registry, args: &[String]) -> ExitCode {
@@ -808,6 +949,16 @@ pub fn run(registry: &Registry, args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if opts.check || opts.write {
+        // the snapshot is of every master and of nothing else: an option that asks for less or for a document
+        // would be ignored, so it is refused
+        let alone = opts.master.is_none() && opts.refs.is_none() && opts.out.is_none() && !opts.targets;
+        if !alone || (opts.check && opts.write) {
+            eprintln!("rachis measure: --check and --write take no other option, and not each other\n{USAGE}");
+            return ExitCode::FAILURE;
+        }
+        return run_snapshot(registry, opts.write);
+    }
     let mut sections = Vec::new();
     match &opts.master {
         Some(name) => {
@@ -842,7 +993,7 @@ pub fn run(registry: &Registry, args: &[String]) -> ExitCode {
         },
         None => Vec::new(),
     };
-    let failures = gate_failures(&sections);
+    let failures = unmet_targets(&sections);
     let doc = document(&sections, &refs, &opts, &failures);
     match &opts.out {
         Some(path) => {
@@ -856,11 +1007,11 @@ pub fn run(registry: &Registry, args: &[String]) -> ExitCode {
             let _ = std::io::Write::write_all(&mut std::io::stdout(), doc.as_bytes());
         }
     }
-    if opts.gate && !failures.is_empty() {
+    if opts.targets && !failures.is_empty() {
         for f in &failures {
             eprintln!("FAIL: {f}");
         }
-        eprintln!("{} gates fail", failures.len());
+        eprintln!("{} targets are not met", failures.len());
         return ExitCode::FAILURE;
     }
     ExitCode::SUCCESS
@@ -910,7 +1061,7 @@ fn measure_master(registry: &Registry, p: &Params, distances: bool) -> Ours {
     let align = if p.mono { Align::Origin } else { Align::Centre };
     let glyphs = Glyphs::load(&mut face, align, wanted_chars(registry));
     ours.pairs = Some(VIEWS.map(|v| watched(&glyphs, v)));
-    let view = VIEWS[GATE];
+    let view = VIEWS[TARGET_VIEW];
     let alnum: Vec<char> = ALPHANUMERIC.chars().collect();
     ours.alphanumeric = all_pairs(&glyphs, &alnum, view, |_, _| true);
     ours.signs = all_pairs(&glyphs, &sign_chars(registry), view, |_, _| true);
@@ -946,25 +1097,25 @@ fn references(dir: &std::path::Path, distance_refs: &[String]) -> Result<Vec<Ref
             eprintln!("measuring {label}");
             let texts = PAIRS.iter().flat_map(|p| p.a.chars().chain(p.b.chars()));
             let glyphs = Glyphs::load(&mut face, Align::Centre, texts);
-            watched(&glyphs, VIEWS[GATE])
+            watched(&glyphs, VIEWS[TARGET_VIEW])
         });
         out.push(Reference { label, props, pairs });
     }
     Ok(out)
 }
 
-/// Every gate that a measured Regular fails, in words.
-fn gate_failures(sections: &[Section]) -> Vec<String> {
+/// Every target that a measured Regular does not meet, in words.
+fn unmet_targets(sections: &[Section]) -> Vec<String> {
     let mut out = Vec::new();
     for ours in sections.iter().flat_map(|s| &s.table) {
         let Some(pairs) = &ours.pairs else {
             continue;
         };
-        for (p, d) in PAIRS.iter().zip(&pairs[GATE]) {
-            if let (Some(gate), Some(d)) = (p.gate, d)
-                && *d < gate
+        for (p, d) in PAIRS.iter().zip(&pairs[TARGET_VIEW]) {
+            if let (Some(target), Some(d)) = (p.target, d)
+                && *d < target
             {
-                out.push(format!("{}: {} {} at {} < {}", ours.params.name, p.a, p.b, below(*d, gate), sig3(gate)));
+                out.push(format!("{}: {} {} at {} < {}", ours.params.name, p.a, p.b, below(*d, target), sig3(target)));
             }
         }
         for &(d, a, b) in ours.alphanumeric.iter().take_while(|e| e.0 < ALPHANUMERIC_FLOOR) {
@@ -982,9 +1133,10 @@ fn gate_failures(sections: &[Section]) -> Vec<String> {
 // ---------------------------------------------------------------------------------------------------------------
 // The document
 
-/// `d`, a distance under `gate`, to three significant figures, or to four when three would round it up to `gate`.
-fn below(d: f64, gate: f64) -> String {
-    if sig3(d) == sig3(gate) { format!("{d:.4}") } else { sig3(d) }
+/// `d`, a distance under `target`, to three significant figures, or to four when three would round it up to
+/// `target`.
+fn below(d: f64, target: f64) -> String {
+    if sig3(d) == sig3(target) { format!("{d:.4}") } else { sig3(d) }
 }
 
 /// `x` to three significant figures.
@@ -1144,13 +1296,13 @@ themes, defocus and a glance). Then D = ||A − B|| / sqrt((||A||² + ||B||²) /
 sqrt(2) ≈ 1.41 for images that share no ink, and the least value over displacements of up to one pixel each way \
 in half-pixel steps, since a reader does not know where a character sits to the pixel. In the fixed-pitch family \
 both are placed at the same origin, as a terminal sets them; in the proportional family and in the reference \
-fonts the centres of their advances coincide. Strings of two letters are set with their real advances. Gates are \
-read at 14 px, sigma 1.0 px.
+fonts the centres of their advances coincide. Strings of two letters are set with their real advances. Targets \
+are read at 14 px, sigma 1.0 px.
 
 **Limits.** The distance is a screening tool for comparing pairs and typefaces under one viewing model. It does \
 not predict how often a person misreads a character: against the only human confusion data we could test it on \
 (Mueller and Weidemann's letter matrices), its rank correlation was at most 0.33 \
-(`docs/research/legibility-science.md`, section f). A gate passed is a pair that is no closer than the threshold \
+(`docs/research/legibility-science.md`, section f). A target met is a pair that is no closer than the threshold \
 under this model; it is not a legibility claim. Nothing here was tested on people reading code.";
 
 fn document(sections: &[Section], refs: &[Reference], opts: &Opts, failures: &[String]) -> String {
@@ -1158,10 +1310,42 @@ fn document(sections: &[Section], refs: &[Reference], opts: &Opts, failures: &[S
     let _ = writeln!(out, "# Measurements\n");
     let _ = writeln!(out, "Generated by `rachis measure`; regenerate with:\n\n```\n{}\n```\n", command_line(opts));
     let _ = writeln!(out, "{METHOD}\n");
+    let _ = writeln!(
+        out,
+        "**What must hold.** `tests/snapshot/distances.tsv` records the distance of every watched pair at 14 px and a \
+         blur of 1.0 px in every upright master. `rachis measure --check` fails when a pair is more than \
+         {SNAPSHOT_TOLERANCE} nearer than recorded there. `rachis measure --write` records a change that is meant, \
+         and the diff of the file shows what the change cost and what it gained.\n"
+    );
+    let classic: Vec<f64> = refs
+        .iter()
+        .filter_map(|r| r.pairs.as_ref())
+        .flat_map(|pairs| {
+            PAIRS.iter().zip(pairs).filter(|(p, _)| CLASSIC.contains(&(p.a, p.b))).filter_map(|(_, d)| *d)
+        })
+        .collect();
+    let reason = match median(&classic) {
+        Some(m) => format!(
+            " In the reference faces of this run the classic confusable pairs ({}) are {} apart at the median of \
+             {} distances: a notation pair under its target is more alike than a classic confusable pair usually \
+             is.",
+            CLASSIC.map(|(a, b)| format!("{a} {b}")).join(", "),
+            sig3(m),
+            classic.len()
+        ),
+        None => String::new(),
+    };
+    let _ = writeln!(
+        out,
+        "**Targets.** A target is a distance a pair should reach; it is not a check. The targets of the letters, \
+         figures and punctuation are the research's (`docs/research/legibility-science.md`), and several are above \
+         what any reference face reaches. A pair of mathematical notation has the default target of {}.{reason}\n",
+        MATH.map_or_else(String::new, sig3),
+    );
     if failures.is_empty() {
-        let _ = writeln!(out, "**Gates.** Every gate passes.\n");
+        let _ = writeln!(out, "Every target is met.\n");
     } else {
-        let _ = writeln!(out, "**Gates.** {} fail:\n", failures.len());
+        let _ = writeln!(out, "{} are not met:\n", failures.len());
         for f in failures {
             let _ = writeln!(out, "- {}", f.replace('|', "\\|"));
         }
@@ -1188,15 +1372,15 @@ fn document(sections: &[Section], refs: &[Reference], opts: &Opts, failures: &[S
         let _ = writeln!(out, "### Watched pairs\n");
         let _ = writeln!(
             out,
-            "Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px. **Bold** marks a failed \
-             gate; \"missing\" a character the master does not have yet.{}\n",
+            "Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the target is read at 1.0 px. **Bold** marks a \
+             target that is not met; \"missing\" a character the master does not have yet.{}\n",
             if with_refs.is_empty() {
                 ""
             } else {
                 " Reference fonts at 1.0 px, with the centres of their advances together."
             }
         );
-        let mut head = vec!["pair".to_string(), "gate".to_string()];
+        let mut head = vec!["pair".to_string(), "target".to_string()];
         for o in &measured {
             for v in VIEWS {
                 head.push(format!("{} σ {:.1}", o.params.name, v.sigma));
@@ -1208,13 +1392,15 @@ fn document(sections: &[Section], refs: &[Reference], opts: &Opts, failures: &[S
             .iter()
             .enumerate()
             .map(|(i, p)| {
-                let mut r = vec![format!("{} {}", code(p.a), code(p.b)), p.gate.map_or_else(String::new, sig3)];
+                let mut r = vec![format!("{} {}", code(p.a), code(p.b)), p.target.map_or_else(String::new, sig3)];
                 for o in &measured {
                     let pairs = o.pairs.as_ref().expect("measured");
                     for (vi, per_view) in pairs.iter().enumerate() {
                         r.push(match per_view[i] {
                             None => "missing".into(),
-                            Some(d) if vi == GATE && p.gate.is_some_and(|g| d < g) => format!("**{}**", sig3(d)),
+                            Some(d) if vi == TARGET_VIEW && p.target.is_some_and(|t| d < t) => {
+                                format!("**{}**", sig3(d))
+                            }
                             Some(d) => sig3(d),
                         });
                     }
@@ -1300,6 +1486,35 @@ mod tests {
     use super::*;
     use tiny_skia::PathBuilder;
 
+    #[test]
+    fn a_pair_that_comes_nearer_fails_the_snapshot_and_one_that_moves_apart_is_noted() {
+        let recorded =
+            "Mono Regular\t0 O\t0.495\nMono Regular\t1 l\t0.327\nMono Regular\tO D\t0.168\nMono Regular\tg q\t0.317\n";
+        let line = |pair: &str, d: f64| ("Mono Regular".to_string(), pair.to_string(), d);
+        let measured = [
+            line("0 O", 0.493), // within the tolerance
+            line("1 l", 0.320), // nearer
+            line("O D", 0.190), // further apart
+            line("p ρ", 0.180), // not recorded
+        ];
+        let (problems, notes) = compare(recorded, &measured);
+        assert_eq!(
+            problems,
+            [
+                "Mono Regular: 1 l fell from 0.327 to 0.320",
+                "Mono Regular: p ρ is not in the snapshot",
+                "Mono Regular: g q is in the snapshot and no longer measured",
+            ]
+        );
+        // a distance that is not a number fails, recorded or not
+        let (problems, _) = compare("Mono Regular\t0 O\t0.495\n", &[line("0 O", f64::NAN)]);
+        assert_eq!(problems, ["Mono Regular: 0 O has the distance NaN"]);
+        assert_eq!(notes, ["Mono Regular: O D rose from 0.168 to 0.190"]);
+        // what was written is what is read back
+        let (problems, notes) = compare(&snapshot_text(&measured), &measured);
+        assert!(problems.is_empty() && notes.is_empty(), "{problems:?} {notes:?}");
+    }
+
     fn rect(pb: &mut PathBuilder, x0: f32, y0: f32, x1: f32, y1: f32) {
         pb.move_to(x0, y0);
         pb.line_to(x1, y0);
@@ -1383,7 +1598,7 @@ mod tests {
 
     #[test]
     fn distance_is_zero_for_the_same_image_and_symmetric() {
-        let view = VIEWS[GATE];
+        let view = VIEWS[TARGET_VIEW];
         let a = filter(&blob(80, 60, 10, 30, 10, 40), view);
         let b = filter(&blob(80, 60, 25, 50, 15, 30), view);
         assert_eq!(distance(&a, &a, true), 0.0);
@@ -1400,7 +1615,7 @@ mod tests {
         let a = blob(300, 40, 60, 80, 10, 30);
         let b = blob(300, 40, 200, 220, 10, 30);
         assert!((distance(&a, &b, false) - 2f64.sqrt()).abs() < 1e-12);
-        let (a, b) = (filter(&a, VIEWS[GATE]), filter(&b, VIEWS[GATE]));
+        let (a, b) = (filter(&a, VIEWS[TARGET_VIEW]), filter(&b, VIEWS[TARGET_VIEW]));
         assert!((distance(&a, &b, true) - 2f64.sqrt()).abs() < 1e-12);
     }
 
@@ -1419,8 +1634,8 @@ mod tests {
     #[test]
     fn a_shift_of_half_a_pixel_is_forgiven() {
         // b is a moved 4 samples (half a pixel) to the right: the best shift brings it back
-        let a = filter(&blob(120, 60, 40, 60, 10, 40), VIEWS[GATE]);
-        let b = filter(&blob(120, 60, 44, 64, 10, 40), VIEWS[GATE]);
+        let a = filter(&blob(120, 60, 40, 60, 10, 40), VIEWS[TARGET_VIEW]);
+        let b = filter(&blob(120, 60, 44, 64, 10, 40), VIEWS[TARGET_VIEW]);
         assert!(distance(&a, &b, false) > 0.05);
         assert!(distance(&a, &b, true) < 1e-9);
     }

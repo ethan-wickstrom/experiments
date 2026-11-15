@@ -17,6 +17,28 @@ pub fn half_span(p: &Params) -> f64 {
     (p.op_r() - p.op_l) / 2.0
 }
 
+/// Half the span of the master's own cell, whatever cell the sign is drawn in.
+pub fn standard_half_span(p: &Params) -> f64 {
+    (p.own_cell() - 2.0 * p.op_l) / 2.0
+}
+
+/// How much taller than in the master's own cell a relation between sets is drawn: as much as its span is wider,
+/// and no more than the span of that kind. A relation with something beside it is wider and no taller, so the
+/// kind has one height.
+pub fn relation_growth(p: &Params) -> f64 {
+    p.grown.min(crate::signs::RELATION)
+}
+
+/// The same for tacks and turnstiles, circled and boxed operators and bowties.
+pub fn round_growth(p: &Params) -> f64 {
+    p.grown.min(crate::signs::ROUND)
+}
+
+/// Half the height of a turnstile: half the span in the master's own cell, and as tall in every wider one.
+pub fn tack_rise(p: &Params) -> f64 {
+    standard_half_span(p) * round_growth(p)
+}
+
 /// The stroke of a part drawn inside another shape, or doubled: it grows with weight more slowly than
 /// `p.op`, so that counters stay open in the Bold.
 pub fn fine(p: &Params) -> f64 {
@@ -33,9 +55,9 @@ pub fn chevron_rise(p: &Params) -> f64 {
     160.0 + 0.55 * p.op
 }
 
-/// The same for a chevron or an arc that stands over a bar: shortened.
+/// The same for a chevron or an arc that stands over a bar: shortened. In a wider cell it grows with the span.
 pub fn rel_rise(p: &Params) -> f64 {
-    0.87 * chevron_rise(p)
+    0.87 * chevron_rise(p) * relation_growth(p)
 }
 
 /// The white between a relation and the bar or wave under it.
@@ -43,9 +65,10 @@ pub fn rel_gap(p: &Params) -> f64 {
     40.0 + 0.5 * p.op
 }
 
-/// How far the arms of the subset and element signs lie above and below the axis (their outer edges).
+/// How far the arms of the subset and element signs lie above and below the axis (their outer edges). In a
+/// wider cell it grows with the span, so the sign keeps its proportions.
 pub fn set_rise(p: &Params) -> f64 {
-    185.0 + 0.5 * p.op
+    (185.0 + 0.5 * p.op) * relation_growth(p)
 }
 
 /// The top of the signs that stand on the baseline (the cup, the wedge, the divides bar): as far above the
@@ -122,6 +145,17 @@ pub fn slash(g: &mut Draw, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) {
 pub fn rake(x0: f64, y0: f64, x1: f64, y1: f64, t: f64) -> Vec<Knot> {
     let w = t * (x1 - x0).hypot(y1 - y0) / (x1 - x0).abs();
     vec![knot(x0, y0, w).pen(90.0).line(), knot(x1, y1, w).pen(90.0)]
+}
+
+/// The middle of the ink of the glyph of `c` as this master draws it upright: where what a sign adds to that
+/// glyph, used as a component, is centred. In the proportional family a glyph's ink is where its own room puts
+/// it, which need not be the middle of the cell of the sign built on it. The middle of the cell when the glyph
+/// cannot be looked up.
+pub fn middle_of(g: &Draw, c: char) -> f64 {
+    let upright = Params { slant: 0.0, ..g.master().clone() };
+    g.glyph_as(&rachis_kernel::name_of(c), &upright)
+        .and_then(|base| base.bounds())
+        .map_or(g.p.mid(), |(x0, _, x1, _)| (x0 + x1) / 2.0)
 }
 
 /// The slash that negates a sign: through (`cx`, `cy`), reaching `dx` across and `dy` up and down.
@@ -440,9 +474,9 @@ fn cube_root(g: &mut Draw) {
     small_three(g, 44.0, 44.0 + 150.0, p.axis + 30.0 + 60.0, big_top(p) - 8.0);
 }
 
-/// The outer half-height of the loops of the infinity sign.
+/// The outer half-height of the loops of the infinity sign. In a wider cell it grows with the span.
 pub fn loop_rise(p: &Params) -> f64 {
-    118.0 + 0.42 * p.op
+    (118.0 + 0.42 * p.op) * p.grown
 }
 
 fn infinity(g: &mut Draw) {
@@ -494,9 +528,16 @@ fn proportional(g: &mut Draw) {
 
 /// The slash through a relation that reaches `rise` above and below the axis: it passes through all of it.
 pub fn struck(g: &mut Draw, rise: f64, t: Option<f64>) {
+    let cx = g.p.mid();
+    struck_about(g, cx, rise, t);
+}
+
+/// [`struck`] with the slash through (`cx`, the axis): for a relation that is a component and stands where its
+/// own room put it ([`middle_of`]).
+pub fn struck_about(g: &mut Draw, cx: f64, rise: f64, t: Option<f64>) {
     let p = g.p;
     let dy = rise + 0.9 * p.op;
-    strike(g, p.mid(), p.axis, 0.42 * dy, dy, t);
+    strike(g, cx, p.axis, 0.42 * dy, dy, t);
 }
 
 fn notequal(g: &mut Draw) {
@@ -748,8 +789,9 @@ fn divides(g: &mut Draw) {
 
 fn notdivides(g: &mut Draw) {
     let p = g.p;
+    let cx = middle_of(g, '∣');
     g.use_char('∣', 0.0, 0.0);
-    strike(g, p.mid(), p.axis, 112.0, 112.0, Some(0.5 * (p.op + fine(p))));
+    strike(g, cx, p.axis, 112.0, 112.0, Some(0.5 * (p.op + fine(p))));
 }
 
 fn parallel(g: &mut Draw) {
@@ -761,8 +803,9 @@ fn parallel(g: &mut Draw) {
 
 fn notparallel(g: &mut Draw) {
     let p = g.p;
+    let cx = middle_of(g, '∥');
     g.use_char('∥', 0.0, 0.0);
-    strike(g, p.mid(), p.axis, 150.0, 132.0, Some(0.5 * (p.op + fine(p))));
+    strike(g, cx, p.axis, 150.0, 132.0, Some(0.5 * (p.op + fine(p))));
 }
 
 fn double_bar(g: &mut Draw) {
@@ -847,7 +890,7 @@ fn up_tack(g: &mut Draw) {
 /// The turnstile: stems at the left end of the span, bars from them to its right end.
 pub fn tack(g: &mut Draw, bars: usize, stems: usize, right: bool) {
     let p = g.p;
-    let h = half_span(p);
+    let h = tack_rise(p);
     let pitch = twin_pitch(p, p.op) * 0.88;
     let mut strokes: Vec<Vec<Knot>> =
         (0..stems).map(|i| vstem(p.op_l + p.op / 2.0 + i as f64 * pitch, p.axis - h, p.axis + h, p.op)).collect();
@@ -959,11 +1002,13 @@ fn notsupersetequal(g: &mut Draw) {
     struck(g, top - p.axis, None);
 }
 
-/// The short slash through the bar alone, of the signs that say 'but not equal'.
+/// The slash through the bar alone, of the signs that say 'but not equal'. It is all that tells ⊊ from ⊆, so it
+/// is as long as it can be: up to the relation above the bar, and further down, where nothing is in its way.
 pub fn bar_struck(g: &mut Draw, yb: f64) {
     let p = g.p;
-    let d = p.op / 2.0 + 0.8 * rel_gap(p);
-    strike(g, p.mid(), yb, 0.62 * d, d, Some(0.5 * (p.op + fine(p))));
+    let (up, down) = (p.op / 2.0 + 0.9 * rel_gap(p), p.op / 2.0 + 1.7 * rel_gap(p));
+    let d = (up + down) / 2.0;
+    strike(g, p.mid(), yb + (up - down) / 2.0, 0.62 * d, d, Some(0.5 * (p.op + fine(p))));
 }
 
 fn subsetnotequal(g: &mut Draw) {
@@ -1000,10 +1045,12 @@ fn multiset_union(g: &mut Draw) {
     g.stroke(&vstem(p.mid(), cy - h, cy + h, t));
 }
 
+/// A ring with a slash that runs out of it on both sides. The ring is no taller than it is wide: in the fixed
+/// pitch's cell that makes it a circle, well short of the slashed zero it would otherwise be taken for.
 fn emptyset(g: &mut Draw) {
     let p = g.p;
-    let ry = 0.5 * (p.xh + 2.0 * p.over) + 0.1 * p.op;
     let rx = half_span(p) - 14.0;
+    let ry = (0.5 * (p.xh + 2.0 * p.over) + 0.1 * p.op).min(rx);
     circle(g, p.mid(), p.axis, rx, Some(ry), None);
     let dy = ry + 0.9 * p.op;
     strike(g, p.mid(), p.axis, 0.56 * dy, dy, Some(0.5 * (p.op + fine(p))));
@@ -1170,11 +1217,14 @@ fn squared_dot(g: &mut Draw) {
 // ---------------------------------------------------------------------------------------------------------------
 // Dots, stars and small shapes
 
+/// Dots at `places`, counted from the middle of the cell on the axis. In a wider cell they stand as much
+/// further apart as the span is wider.
 pub fn dots(g: &mut Draw, places: &[(f64, f64)], r: Option<f64>) {
     let p = g.p;
     let r = r.unwrap_or(0.5 * p.punct + 16.0);
+    let k = p.grown;
     for &(dx, dy) in places {
-        g.dot(p.mid() + dx, p.axis + dy, r);
+        g.dot(p.mid() + k * dx, p.axis + k * dy, r);
     }
 }
 
@@ -1211,7 +1261,7 @@ fn end_of_proof(g: &mut Draw) {
 
 fn star_operator(g: &mut Draw) {
     let p = g.p;
-    let ro = 190.0 + 0.3 * p.op;
+    let ro = (190.0 + 0.3 * p.op) * p.grown;
     let ri = 0.44 * ro;
     let c = pt(p.mid(), p.axis - 0.05 * ro);
     let points: Vec<V> =
@@ -1232,7 +1282,7 @@ fn diamond_operator(g: &mut Draw) {
 pub fn bowtie(g: &mut Draw, left: bool, right: bool) {
     let p = g.p;
     let t = p.op;
-    let h = chevron_rise(p);
+    let h = chevron_rise(p) * round_growth(p);
     let td = 0.5 * (p.op + fine(p));
     let (x0, x1) = (p.op_l, p.op_r());
     let w = rake(x0, 0.0, x1, 2.0 * h, td)[0].w; // the height of a diagonal's vertical cut
@@ -1271,11 +1321,11 @@ pub fn triangle(g: &mut Draw, cy: f64, rise: f64, right: bool) {
 }
 
 fn normal_subgroup(g: &mut Draw) {
-    triangle(g, g.p.axis, chevron_rise(g.p), false);
+    triangle(g, g.p.axis, chevron_rise(g.p) * relation_growth(g.p), false);
 }
 
 fn contains_normal_subgroup(g: &mut Draw) {
-    triangle(g, g.p.axis, chevron_rise(g.p), true);
+    triangle(g, g.p.axis, chevron_rise(g.p) * relation_growth(g.p), true);
 }
 
 pub fn triangle_equal(g: &mut Draw, right: bool) {

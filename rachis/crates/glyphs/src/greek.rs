@@ -5,7 +5,7 @@
 //! shape of a Latin capital is that glyph as a component. Letters with three vertical strokes in the cell (Φ Ψ φ
 //! ϕ ψ ω ϖ) take thinner strokes, as m and w do. Every letter that looks like a Latin letter, a figure or a sign is
 //! told apart from it by the feature a mathematician reads it by: ν's right stroke is curved, υ and ω are round
-//! at the bottom, ρ has no spur, σ's top runs out flat, ι has no dot and a foot, χ descends.
+//! at the bottom, ρ has no spur and a tail that swings left, σ's top runs out flat, ι has no dot and a foot, χ descends.
 //!
 //! The marks are drawn here: the tonos is a steep stroke a little lighter than a hair, the dialytika i's dots. A
 //! letter with a mark is its base as a component with the mark placed over the base's outline; a capital takes
@@ -446,7 +446,12 @@ fn rho(g: &mut Draw) {
     let p = g.p;
     let (bowl, x) = rho_bowl(p);
     g.stroke_closed(&bowl);
-    g.stroke(&vstem(x, p.desc, p.xh / 2.0, p.stem));
+    // The tail leaves the bowl's left side and swings left as it goes down: by a stem's breadth, or in the
+    // fixed-pitch family by what the sidebearing leaves. The stem of p is straight and stands the letter's whole
+    // height, so the two letters differ all the way down, not only where p has its spur. A small swing is lost
+    // at 14 px: the distance to p falls before it rises (decision T28).
+    let swing = if p.mono { p.sb - 4.0 } else { p.stem };
+    g.stroke(&[knot(x, 0.42 * p.xh, p.stem).pen(0.0).dir(-90.0), cut_pen(x - swing, p.desc, p.stem, -104.0, 0.0)]);
 }
 
 fn rho_sym(g: &mut Draw) {

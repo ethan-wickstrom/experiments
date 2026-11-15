@@ -8,73 +8,65 @@ cargo run -q -p rachis -- measure --refs <directory of reference fonts> --out do
 
 **Method.** Proportions are read from the outlines with scan lines through the contours, each curve flattened into 24 straight pieces; where contours overlap, ink is where the nonzero winding number is not zero. They are in thousandths of the em: x-height, cap height, ascender and descender are the tops of x, H and b and the bottom of p; n's stems, counter and sidebearings are read at a quarter of the x-height, n's arch through the middle of its counter, o's side at half its height and its top through its middle, H's stem at a quarter of the cap height and its bar through the middle of its advance, the bar of + a quarter of the way across its advance; the dot of i and the period are their widths. Gap / counter is n's two sidebearings over its counter.
 
-The distance of two characters is computed as the prototype's `measure.py` computes it. Each is rendered at 14 pixels per em, eight times supersampled, into a box as wide as its advance or 0.6 em, whichever is wider, with 3 pixels each side, and filtered at that resolution by a box one pixel wide (the pixel's aperture) and a Gaussian of sigma pixels (the eye: 0.6 px is ordinary optics, 1.0 px where the detail reading uses runs out, 1.5 px dark themes, defocus and a glance). Then D = ||A − B|| / sqrt((||A||² + ||B||²) / 2): 0 for identical images, sqrt(2) ≈ 1.41 for images that share no ink, and the least value over displacements of up to one pixel each way in half-pixel steps, since a reader does not know where a character sits to the pixel. In the fixed-pitch family both are placed at the same origin, as a terminal sets them; in the proportional family and in the reference fonts the centres of their advances coincide. Strings of two letters are set with their real advances. Gates are read at 14 px, sigma 1.0 px.
+The distance of two characters is computed as the prototype's `measure.py` computes it. Each is rendered at 14 pixels per em, eight times supersampled, into a box as wide as its advance or 0.6 em, whichever is wider, with 3 pixels each side, and filtered at that resolution by a box one pixel wide (the pixel's aperture) and a Gaussian of sigma pixels (the eye: 0.6 px is ordinary optics, 1.0 px where the detail reading uses runs out, 1.5 px dark themes, defocus and a glance). Then D = ||A − B|| / sqrt((||A||² + ||B||²) / 2): 0 for identical images, sqrt(2) ≈ 1.41 for images that share no ink, and the least value over displacements of up to one pixel each way in half-pixel steps, since a reader does not know where a character sits to the pixel. In the fixed-pitch family both are placed at the same origin, as a terminal sets them; in the proportional family and in the reference fonts the centres of their advances coincide. Strings of two letters are set with their real advances. Targets are read at 14 px, sigma 1.0 px.
 
-**Limits.** The distance is a screening tool for comparing pairs and typefaces under one viewing model. It does not predict how often a person misreads a character: against the only human confusion data we could test it on (Mueller and Weidemann's letter matrices), its rank correlation was at most 0.33 (`docs/research/legibility-science.md`, section f). A gate passed is a pair that is no closer than the threshold under this model; it is not a legibility claim. Nothing here was tested on people reading code.
+**Limits.** The distance is a screening tool for comparing pairs and typefaces under one viewing model. It does not predict how often a person misreads a character: against the only human confusion data we could test it on (Mueller and Weidemann's letter matrices), its rank correlation was at most 0.33 (`docs/research/legibility-science.md`, section f). A target met is a pair that is no closer than the threshold under this model; it is not a legibility claim. Nothing here was tested on people reading code.
 
-**Gates.** 89 fail:
+**What must hold.** `tests/snapshot/distances.tsv` records the distance of every watched pair at 14 px and a blur of 1.0 px in every upright master. `rachis measure --check` fails when a pair is more than 0.004 nearer than recorded there. `rachis measure --write` records a change that is meant, and the diff of the file shows what the change cost and what it gained.
 
-- Mono Regular: 0 8 at 0.183 < 0.250
+**Targets.** A target is a distance a pair should reach; it is not a check. The targets of the letters, figures and punctuation are the research's (`docs/research/legibility-science.md`), and several are above what any reference face reaches. A pair of mathematical notation has the default target of 0.250. In the reference faces of this run the classic confusable pairs (0 O, O D, 1 l, 1 I, l I, 8 B, 5 S) are 0.233 apart at the median of 56 distances: a notation pair under its target is more alike than a classic confusable pair usually is.
+
+71 are not met:
+
+- Mono Regular: 0 8 at 0.208 < 0.250
 - Mono Regular: O D at 0.168 < 0.250
 - Mono Regular: 1 l at 0.327 < 0.400
 - Mono Regular: 1 I at 0.284 < 0.400
 - Mono Regular: l I at 0.388 < 0.400
 - Mono Regular: 1 \| at 0.333 < 0.400
-- Mono Regular: 8 B at 0.222 < 0.250
 - Mono Regular: 5 S at 0.200 < 0.250
 - Mono Regular: g q at 0.317 < 0.350
-- Mono Regular: . , at 0.357 < 0.400
-- Mono Regular: : ; at 0.326 < 0.400
 - Mono Regular: ' ` at 0.324 < 0.400
-- Mono Regular: ( { at 0.276 < 0.350
-- Mono Regular: } ] at 0.208 < 0.350
+- Mono Regular: ( { at 0.284 < 0.350
+- Mono Regular: } ] at 0.287 < 0.350
 - Mono Regular: u υ at 0.130 < 0.250
-- Mono Regular: p ρ at 0.117 < 0.250
+- Mono Regular: p ρ at 0.180 < 0.250
 - Mono Regular: θ 0 at 0.234 < 0.250
 - Mono Regular: - − at 0.134 < 0.250
 - Mono Regular: − – at 0.115 < 0.250
 - Mono Regular: ′ ' at 0.219 < 0.250
 - Mono Regular: ∨ v at 0.143 < 0.250
 - Mono Regular: ⟨ ( at 0.182 < 0.250
-- Mono Regular: ∅ 0 at 0.244 < 0.250
-- Mono Regular: ℝ R at 0.166 < 0.250
-- Mono Regular: ℕ N at 0.194 < 0.250
-- Mono Regular: ℤ Z at 0.166 < 0.250
-- Mono Regular: ℂ C at 0.245 < 0.250
-- Mono Regular: ℚ Q at 0.197 < 0.250
-- Mono Regular: ⊆ ⊊ at 0.151 < 0.250
+- Mono Regular: ℝ R at 0.194 < 0.250
+- Mono Regular: ℕ N at 0.215 < 0.250
+- Mono Regular: ℤ Z at 0.187 < 0.250
+- Mono Regular: ℚ Q at 0.221 < 0.250
+- Mono Regular: ⊆ ⊊ at 0.226 < 0.250
 - Mono Regular: ≤ ≦ at 0.211 < 0.250
 - Mono Regular: → ⟶ at 0.243 < 0.250
 - Mono Regular: D O at 0.168 < 0.200 (letters and figures)
-- Mono Regular: 0 8 at 0.183 < 0.200 (letters and figures)
 - Mono Regular: S 5 at 0.1998 < 0.200 (letters and figures)
 - Text Regular: O D at 0.246 < 0.250
 - Text Regular: 1 I at 0.257 < 0.400
 - Text Regular: l I at 0.315 < 0.400
 - Text Regular: l \| at 0.308 < 0.400
 - Text Regular: I \| at 0.277 < 0.400
-- Text Regular: 8 B at 0.223 < 0.250
 - Text Regular: 5 S at 0.200 < 0.250
 - Text Regular: g q at 0.304 < 0.350
-- Text Regular: . , at 0.367 < 0.400
-- Text Regular: : ; at 0.337 < 0.400
 - Text Regular: ' ` at 0.328 < 0.400
-- Text Regular: ( { at 0.266 < 0.350
-- Text Regular: } ] at 0.244 < 0.350
+- Text Regular: ( { at 0.263 < 0.350
+- Text Regular: } ] at 0.332 < 0.350
 - Text Regular: u υ at 0.138 < 0.250
 - Text Regular: o σ at 0.246 < 0.250
 - Text Regular: ο σ at 0.246 < 0.250
-- Text Regular: p ρ at 0.122 < 0.250
+- Text Regular: p ρ at 0.182 < 0.250
 - Text Regular: − – at 0.101 < 0.250
 - Text Regular: ′ ' at 0.218 < 0.250
-- Text Regular: ∨ v at 0.146 < 0.250
-- Text Regular: ⟨ ( at 0.235 < 0.250
-- Text Regular: ℝ R at 0.223 < 0.250
-- Text Regular: ℕ N at 0.236 < 0.250
-- Text Regular: ℤ Z at 0.162 < 0.250
-- Text Regular: ℂ C at 0.221 < 0.250
-- Text Regular: ℚ Q at 0.186 < 0.250
-- Text Regular: ⊆ ⊊ at 0.154 < 0.250
+- Text Regular: ∨ v at 0.234 < 0.250
+- Text Regular: ⟨ ( at 0.180 < 0.250
+- Text Regular: ℤ Z at 0.225 < 0.250
+- Text Regular: ℚ Q at 0.239 < 0.250
+- Text Regular: ⊆ ⊊ at 0.202 < 0.250
 - Text Regular: ≤ ≦ at 0.210 < 0.250
 - Text Regular: rn m at 0.231 < 0.250
 - Text Regular: S 5 at 0.1996 < 0.200 (letters and figures)
@@ -84,24 +76,18 @@ The distance of two characters is computed as the prototype's `measure.py` compu
 - Small Regular: I \| at 0.294 < 0.400
 - Small Regular: 5 S at 0.213 < 0.250
 - Small Regular: g q at 0.316 < 0.350
-- Small Regular: . , at 0.360 < 0.400
-- Small Regular: : ; at 0.330 < 0.400
 - Small Regular: ' ` at 0.326 < 0.400
-- Small Regular: ( { at 0.259 < 0.350
-- Small Regular: } ] at 0.245 < 0.350
+- Small Regular: ( { at 0.260 < 0.350
+- Small Regular: } ] at 0.330 < 0.350
 - Small Regular: u υ at 0.142 < 0.250
-- Small Regular: p ρ at 0.125 < 0.250
+- Small Regular: p ρ at 0.185 < 0.250
 - Small Regular: − – at 0.138 < 0.250
 - Small Regular: ′ ' at 0.217 < 0.250
-- Small Regular: ∨ v at 0.137 < 0.250
-- Small Regular: ∩ n at 0.241 < 0.250
-- Small Regular: ⟨ ( at 0.234 < 0.250
-- Small Regular: ℝ R at 0.225 < 0.250
-- Small Regular: ℕ N at 0.242 < 0.250
-- Small Regular: ℤ Z at 0.152 < 0.250
-- Small Regular: ℂ C at 0.209 < 0.250
-- Small Regular: ℚ Q at 0.175 < 0.250
-- Small Regular: ⊆ ⊊ at 0.151 < 0.250
+- Small Regular: ∨ v at 0.234 < 0.250
+- Small Regular: ⟨ ( at 0.191 < 0.250
+- Small Regular: ℤ Z at 0.224 < 0.250
+- Small Regular: ℚ Q at 0.220 < 0.250
+- Small Regular: ⊆ ⊊ at 0.201 < 0.250
 - Small Regular: ≤ ≦ at 0.209 < 0.250
 
 ## Rachis Mono
@@ -330,13 +316,13 @@ The distance of two characters is computed as the prototype's `measure.py` compu
 
 ### Watched pairs
 
-Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px. **Bold** marks a failed gate; "missing" a character the master does not have yet. Reference fonts at 1.0 px, with the centres of their advances together.
+Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the target is read at 1.0 px. **Bold** marks a target that is not met; "missing" a character the master does not have yet. Reference fonts at 1.0 px, with the centres of their advances together.
 
-| pair | gate | Mono Regular σ 0.6 | Mono Regular σ 1.0 | Mono Regular σ 1.5 | CommitMono-400-Regular | DejaVuSansMono | FiraCode[wght] | IBMPlexMono-Regular | Iosevka-Regular | JetBrainsMono[wght] | JuliaMono-Regular | SourceCodePro[wght] | note |
+| pair | target | Mono Regular σ 0.6 | Mono Regular σ 1.0 | Mono Regular σ 1.5 | CommitMono-400-Regular | DejaVuSansMono | FiraCode[wght] | IBMPlexMono-Regular | Iosevka-Regular | JetBrainsMono[wght] | JuliaMono-Regular | SourceCodePro[wght] | note |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `0` `O` | 0.300 | 0.580 | 0.495 | 0.398 | 0.362 | 0.207 | 0.378 | 0.200 | 0.266 | 0.150 | 0.201 | 0.301 | research item 4 |
 | `0` `o` |  | 0.597 | 0.485 | 0.423 | 0.411 | 0.405 | 0.385 | 0.465 | 0.494 | 0.438 | 0.471 | 0.350 |  |
-| `0` `8` | 0.250 | 0.294 | **0.183** | 0.114 | 0.224 | 0.187 | 0.246 | 0.200 | 0.258 | 0.245 | 0.306 | 0.207 | research item 4 |
+| `0` `8` | 0.250 | 0.321 | **0.208** | 0.135 | 0.224 | 0.187 | 0.246 | 0.200 | 0.258 | 0.245 | 0.306 | 0.207 | research item 4 |
 | `0` `D` |  | 0.524 | 0.438 | 0.344 | 0.334 | 0.264 | 0.341 | 0.214 | 0.264 | 0.183 | 0.194 | 0.292 |  |
 | `O` `D` | 0.250 | 0.241 | **0.168** | 0.121 | 0.187 | 0.191 | 0.170 | 0.167 | 0.105 | 0.116 | 0.214 | 0.162 | research item 4 |
 | `O` `Q` |  | 0.243 | 0.219 | 0.179 | 0.253 | 0.174 | 0.291 | 0.271 | 0.258 | 0.254 | 0.306 | 0.290 |  |
@@ -345,12 +331,12 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `l` `I` | 0.400 | 0.461 | **0.388** | 0.328 | 0.387 | 0.402 | 0.346 | 0.238 | 0.192 | 0.405 | 0.354 | 0.370 | research item 3 |
 | `l` `\|` | 0.400 | 0.535 | 0.406 | 0.292 | 0.445 | 0.450 | 0.565 | 0.472 | 0.356 | 0.496 | 0.543 | 0.477 | research item 3 |
 | `I` `\|` | 0.400 | 0.574 | 0.431 | 0.340 | 0.517 | 0.504 | 0.588 | 0.518 | 0.386 | 0.432 | 0.479 | 0.524 | research item 3 |
-| `1` `\|` | 0.400 | 0.460 | **0.333** | 0.240 | 0.529 | 0.488 | 0.615 | 0.577 | 0.412 | 0.493 | 0.561 | 0.518 | research item 3 (not in report.py's gates) |
+| `1` `\|` | 0.400 | 0.460 | **0.333** | 0.240 | 0.529 | 0.488 | 0.615 | 0.577 | 0.412 | 0.493 | 0.561 | 0.518 | research item 3 (not in report.py's targets) |
 | `1` `7` |  | 0.560 | 0.394 | 0.256 | 0.528 | 0.521 | 0.520 | 0.549 | 0.425 | 0.535 | 0.557 | 0.531 |  |
 | `i` `l` |  | 0.512 | 0.391 | 0.270 | 0.400 | 0.389 | 0.388 | 0.345 | 0.250 | 0.430 | 0.397 | 0.473 |  |
 | `i` `j` |  | 0.638 | 0.472 | 0.355 | 0.446 | 0.440 | 0.425 | 0.495 | 0.494 | 0.470 | 0.546 | 0.524 |  |
 | `!` `\|` |  | 0.444 | 0.338 | 0.272 | 0.345 | 0.453 | 0.626 | 0.344 | 0.389 | 0.368 | 0.489 | 0.499 |  |
-| `8` `B` | 0.250 | 0.308 | **0.222** | 0.160 | 0.149 | 0.153 | 0.141 | 0.123 | 0.200 | 0.170 | 0.134 | 0.212 | research item 5 |
+| `8` `B` | 0.250 | 0.385 | 0.278 | 0.194 | 0.149 | 0.153 | 0.141 | 0.123 | 0.200 | 0.170 | 0.134 | 0.212 | research item 5 |
 | `5` `S` | 0.250 | 0.335 | **0.200** | 0.106 | 0.181 | 0.204 | 0.168 | 0.156 | 0.261 | 0.223 | 0.278 | 0.138 | research item 5 |
 | `2` `Z` |  | 0.382 | 0.268 | 0.185 | 0.264 | 0.272 | 0.280 | 0.283 | 0.266 | 0.285 | 0.285 | 0.299 |  |
 | `6` `b` |  | 0.591 | 0.412 | 0.252 | 0.373 | 0.334 | 0.329 | 0.331 | 0.350 | 0.360 | 0.351 | 0.391 |  |
@@ -368,14 +354,14 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `u` `v` |  | 0.682 | 0.501 | 0.327 | 0.430 | 0.409 | 0.415 | 0.425 | 0.419 | 0.376 | 0.556 | 0.449 |  |
 | `v` `y` |  | 0.351 | 0.297 | 0.244 | 0.376 | 0.371 | 0.335 | 0.380 | 0.309 | 0.298 | 0.373 | 0.401 |  |
 | `t` `f` |  | 0.504 | 0.394 | 0.281 | 0.346 | 0.349 | 0.444 | 0.365 | 0.477 | 0.415 | 0.406 | 0.429 |  |
-| `.` `,` | 0.400 | 0.416 | **0.357** | 0.353 | 0.401 | 0.465 | 0.425 | 0.429 | 0.499 | 0.406 | 0.493 | 0.508 | research item 9 |
-| `:` `;` | 0.400 | 0.348 | **0.326** | 0.279 | 0.445 | 0.398 | 0.460 | 0.377 | 0.428 | 0.444 | 0.377 | 0.427 | research item 9 |
+| `.` `,` | 0.400 | 0.543 | 0.486 | 0.463 | 0.401 | 0.465 | 0.425 | 0.429 | 0.499 | 0.406 | 0.493 | 0.508 | research item 9 |
+| `:` `;` | 0.400 | 0.464 | 0.419 | 0.383 | 0.445 | 0.398 | 0.460 | 0.377 | 0.428 | 0.444 | 0.377 | 0.427 | research item 9 |
 | `'` `` ` `` | 0.400 | 0.511 | **0.324** | 0.198 | 0.312 | 0.507 | 0.463 | 0.440 | 0.377 | 0.680 | 0.291 | 0.674 | research item 9 |
 | `'` `"` |  | 0.752 | 0.566 | 0.522 | 0.647 | 0.625 | 0.587 | 0.606 | 0.657 | 0.647 | 0.626 | 0.733 |  |
-| `(` `{` | 0.350 | 0.380 | **0.276** | 0.235 | 0.259 | 0.294 | 0.323 | 0.460 | 0.326 | 0.311 | 0.311 | 0.212 | research item 9 |
+| `(` `{` | 0.350 | 0.379 | **0.284** | 0.242 | 0.259 | 0.294 | 0.323 | 0.460 | 0.326 | 0.311 | 0.311 | 0.212 | research item 9 |
 | `(` `[` | 0.350 | 0.485 | 0.366 | 0.303 | 0.386 | 0.332 | 0.392 | 0.425 | 0.368 | 0.374 | 0.387 | 0.327 | research item 9 |
-| `}` `]` | 0.350 | 0.262 | **0.208** | 0.169 | 0.298 | 0.261 | 0.259 | 0.260 | 0.249 | 0.294 | 0.235 | 0.237 | research item 9 |
-| `{` `[` |  | 0.266 | 0.211 | 0.174 | 0.298 | 0.262 | 0.256 | 0.260 | 0.249 | 0.294 | 0.235 | 0.237 |  |
+| `}` `]` | 0.350 | 0.348 | **0.287** | 0.243 | 0.298 | 0.261 | 0.259 | 0.260 | 0.249 | 0.294 | 0.235 | 0.237 | research item 9 |
+| `{` `[` |  | 0.350 | 0.289 | 0.246 | 0.298 | 0.262 | 0.256 | 0.260 | 0.249 | 0.294 | 0.235 | 0.237 |  |
 | `-` `_` |  | 1.41 | 1.40 | 1.32 | 1.41 | 1.41 | 1.41 | 1.41 | 1.40 | 1.41 | 1.21 | 1.41 |  |
 | `-` `~` |  | 0.549 | 0.394 | 0.338 | 0.485 | 0.636 | 0.316 | 0.563 | 0.490 | 0.633 | 0.365 | 0.154 |  |
 | `v` `ν` | 0.250 | 0.430 | 0.292 | 0.177 | 0.125 | 0.191 | 0.0482 | – | 0.0605 | 0 | 0.264 | 0.116 | nu |
@@ -384,7 +370,7 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `o` `ο` |  | 0 | 0 | 0 | 0 | 0 | 0 | – | 0 | 0 | 0.189 | 0.0220 | omicron: drawn as o in every Greek typeface |
 | `o` `σ` | 0.250 | 0.418 | 0.302 | 0.219 | 0.145 | 0.172 | 0.142 | – | 0.163 | 0.121 | 0.228 | 0.168 | sigma |
 | `ο` `σ` | 0.250 | 0.418 | 0.302 | 0.219 | 0.145 | 0.172 | 0.142 | – | 0.163 | 0.121 | 0.255 | 0.164 | omicron and sigma |
-| `p` `ρ` | 0.250 | 0.149 | **0.117** | 0.0910 | 0.109 | 0.106 | 0.0854 | – | 0.0704 | 0.0805 | 0.179 | 0.108 | rho |
+| `p` `ρ` | 0.250 | 0.263 | **0.180** | 0.124 | 0.109 | 0.106 | 0.0854 | – | 0.0704 | 0.0805 | 0.179 | 0.108 | rho |
 | `x` `χ` | 0.250 | 0.535 | 0.396 | 0.309 | 0.410 | 0.504 | 0.366 | – | 0.391 | 0.328 | 0.417 | 0.359 | chi |
 | `x` `×` | 0.250 | 0.524 | 0.412 | 0.350 | 0.367 | 0.277 | 0.451 | 0.289 | 0.345 | 0.459 | 0.306 | 0.292 | multiplication sign |
 | `χ` `×` | 0.250 | 0.843 | 0.716 | 0.625 | 0.697 | 0.694 | 0.714 | – | 0.694 | 0.714 | 0.648 | 0.674 |  |
@@ -426,16 +412,17 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `∕` `/` |  | 0.796 | 0.720 | 0.653 | 0.406 | 0 | 0.968 | 0.793 | 0 | 0.599 | 0.149 | 0.966 | division slash: written / in plain text |
 | `⟨` `<` | 0.250 | 1.01 | 0.856 | 0.699 | – | 0.838 | 0.621 | – | 0.670 | 0.720 | 0.837 | – | angle bracket and less-than |
 | `⟨` `(` | 0.250 | 0.242 | **0.182** | 0.156 | – | 0.111 | 0.176 | – | 0.236 | 0.210 | 0.176 | – |  |
-| `∅` `0` | 0.250 | 0.379 | **0.244** | 0.175 | 0.397 | 0.447 | 0.244 | – | 0.253 | – | 0.481 | – | empty set |
-| `∅` `Ø` | 0.250 | 0.480 | 0.360 | 0.294 | 0.485 | 0.488 | 0.290 | – | 0.0946 | – | 0.512 | – |  |
-| `∞` `8` | 0.250 | 0.866 | 0.726 | 0.613 | 0.766 | 0.704 | 0.614 | 0.688 | 0.726 | 0.729 | 0.681 | 0.623 |  |
-| `ℝ` `R` | 0.250 | 0.283 | **0.166** | 0.111 | – | 0.275 | 0.337 | – | 0.299 | – | 0.264 | – | double-struck |
-| `ℕ` `N` | 0.250 | 0.292 | **0.194** | 0.137 | – | 0.509 | 0.260 | – | 0.140 | 0.324 | 0.294 | – | double-struck |
-| `ℤ` `Z` | 0.250 | 0.273 | **0.166** | 0.144 | – | 0.271 | 0.300 | – | 0.162 | – | 0.266 | – | double-struck |
-| `ℂ` `C` | 0.250 | 0.315 | **0.245** | 0.226 | – | 0.267 | 0.443 | – | 0.261 | – | 0.356 | – | double-struck |
-| `ℚ` `Q` | 0.250 | 0.250 | **0.197** | 0.165 | – | 0.232 | 0.455 | – | 0.365 | – | 0.441 | – | double-struck |
+| `∅` `0` | 0.250 | 0.558 | 0.413 | 0.327 | 0.397 | 0.447 | 0.244 | – | 0.253 | – | 0.481 | – | empty set |
+| `∅` `Ø` | 0.250 | 0.718 | 0.584 | 0.482 | 0.485 | 0.488 | 0.290 | – | 0.0946 | – | 0.512 | – |  |
+| `∅` `ø` | 0.250 | 0.381 | 0.284 | 0.231 | 0.208 | 0.201 | 0.178 | – | 0.371 | – | 0.338 | – | empty set and o with stroke |
+| `∞` `8` | 0.250 | 0.874 | 0.735 | 0.615 | 0.766 | 0.704 | 0.614 | 0.688 | 0.726 | 0.729 | 0.681 | 0.623 |  |
+| `ℝ` `R` | 0.250 | 0.339 | **0.194** | 0.126 | – | 0.275 | 0.337 | – | 0.299 | – | 0.264 | – | double-struck |
+| `ℕ` `N` | 0.250 | 0.340 | **0.215** | 0.151 | – | 0.509 | 0.260 | – | 0.140 | 0.324 | 0.294 | – | double-struck |
+| `ℤ` `Z` | 0.250 | 0.341 | **0.187** | 0.140 | – | 0.271 | 0.300 | – | 0.162 | – | 0.266 | – | double-struck |
+| `ℂ` `C` | 0.250 | 0.356 | 0.251 | 0.225 | – | 0.267 | 0.443 | – | 0.261 | – | 0.356 | – | double-struck |
+| `ℚ` `Q` | 0.250 | 0.286 | **0.221** | 0.179 | – | 0.232 | 0.455 | – | 0.365 | – | 0.441 | – | double-struck |
 | `⊂` `⊆` | 0.250 | 0.527 | 0.397 | 0.339 | 0.467 | 0.543 | 0.444 | – | 0.461 | 0.526 | 0.671 | – |  |
-| `⊆` `⊊` | 0.250 | 0.176 | **0.151** | 0.129 | 0.226 | 0.203 | 0.250 | – | 0.242 | – | 0.630 | – |  |
+| `⊆` `⊊` | 0.250 | 0.262 | **0.226** | 0.168 | 0.226 | 0.203 | 0.250 | – | 0.242 | – | 0.630 | – |  |
 | `≤` `<` | 0.250 | 0.617 | 0.518 | 0.396 | 0.511 | 0.487 | 0.429 | 0.452 | 0.518 | 0.610 | 0.579 | 0.499 |  |
 | `≤` `≦` | 0.250 | 0.379 | **0.211** | 0.122 | – | 0.386 | – | – | 0.312 | – | 0.394 | – |  |
 | `≡` `=` | 0.250 | 0.590 | 0.374 | 0.349 | 0.564 | 0.409 | 0.473 | – | 0.325 | 0.343 | 0.487 | 0.538 |  |
@@ -458,20 +445,20 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 
 ### Closest pairs in Mono Regular (14 px, blur 1.0 px)
 
-All 1891 pairs of the letters and figures: 3 under 0.200, median 0.598. The ten closest of them, of the mathematical signs (the glyph modules operators and arrows: 30876 pairs) and of Greek letters against Latin letters, figures and each other (8840 pairs). Pairs drawn identically (D = 0: a Greek capital that is the Latin one, a sign that is another's glyph) are listed once, by the first of them: ~∼ ↺⟲ ↻⟳ and AΑ BΒ EΕ HΗ IΙ KΚ MΜ NΝ OΟ PΡ TΤ XΧ YΥ ZΖ oο ΩΩ μµ.
+All 1891 pairs of the letters and figures: 2 under 0.200, median 0.598. The ten closest of them, of the mathematical signs (the glyph modules operators and arrows: 30876 pairs) and of Greek letters against Latin letters, figures and each other (8840 pairs). Pairs drawn identically (D = 0: a Greek capital that is the Latin one, a sign that is another's glyph) are listed once, by the first of them: ~∼ ↺⟲ ↻⟳ and AΑ BΒ EΕ HΗ IΙ KΚ MΜ NΝ OΟ PΡ TΤ XΧ YΥ ZΖ oο ΩΩ μµ.
 
 |  | letters and figures | D | signs | D | Greek | D |
 |---|---|---|---|---|---|---|
-| 1 | `D` `O` | 0.168 | `⊕` `⊗` | 0.0506 | `p` `ρ` | 0.117 |
-| 2 | `0` `8` | 0.183 | `⊗` `⊛` | 0.0613 | `ε` `ϵ` | 0.124 |
-| 3 | `S` `5` | 0.200 | `⇴` `⇸` | 0.0658 | `u` `υ` | 0.130 |
-| 4 | `6` `8` | 0.218 | `⇝` `⇴` | 0.0710 | `y` `γ` | 0.153 |
-| 5 | `O` `Q` | 0.219 | `⊕` `⊛` | 0.0720 | `n` `π` | 0.155 |
-| 6 | `w` `W` | 0.219 | `➡` `➔` | 0.0751 | `O` `Ω` | 0.177 |
-| 7 | `B` `8` | 0.222 | `↔` `↭` | 0.0817 | `Ό` `Ώ` | 0.179 |
-| 8 | `H` `M` | 0.242 | `⊚` `⊛` | 0.0818 | `H` `Ή` | 0.186 |
-| 9 | `b` `h` | 0.261 | `→` `↝` | 0.0819 | `A` `Ά` | 0.188 |
-| 10 | `M` `N` | 0.265 | `←` `↜` | 0.0819 | `8` `θ` | 0.191 |
+| 1 | `D` `O` | 0.168 | `⊕` `⊗` | 0.0506 | `ε` `ϵ` | 0.124 |
+| 2 | `S` `5` | 0.200 | `⊗` `⊛` | 0.0613 | `u` `υ` | 0.130 |
+| 3 | `0` `8` | 0.208 | `⇴` `⇸` | 0.0658 | `y` `γ` | 0.153 |
+| 4 | `O` `Q` | 0.219 | `⇝` `⇴` | 0.0710 | `n` `π` | 0.155 |
+| 5 | `w` `W` | 0.219 | `⊕` `⊛` | 0.0720 | `O` `Ω` | 0.177 |
+| 6 | `6` `8` | 0.227 | `➡` `➔` | 0.0751 | `Ό` `Ώ` | 0.179 |
+| 7 | `H` `M` | 0.242 | `↔` `↭` | 0.0817 | `p` `ρ` | 0.180 |
+| 8 | `b` `h` | 0.261 | `⊚` `⊛` | 0.0818 | `H` `Ή` | 0.186 |
+| 9 | `M` `N` | 0.265 | `→` `↝` | 0.0819 | `A` `Ά` | 0.188 |
+| 10 | `Z` `2` | 0.268 | `←` `↜` | 0.0819 | `ϋ` `ΰ` | 0.192 |
 
 ## Rachis
 
@@ -497,13 +484,13 @@ All 1891 pairs of the letters and figures: 3 under 0.200, median 0.598. The ten 
 
 ### Watched pairs
 
-Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px. **Bold** marks a failed gate; "missing" a character the master does not have yet.
+Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the target is read at 1.0 px. **Bold** marks a target that is not met; "missing" a character the master does not have yet.
 
-| pair | gate | Text Regular σ 0.6 | Text Regular σ 1.0 | Text Regular σ 1.5 | Small Regular σ 0.6 | Small Regular σ 1.0 | Small Regular σ 1.5 | note |
+| pair | target | Text Regular σ 0.6 | Text Regular σ 1.0 | Text Regular σ 1.5 | Small Regular σ 0.6 | Small Regular σ 1.0 | Small Regular σ 1.5 | note |
 |---|---|---|---|---|---|---|---|---|
 | `0` `O` | 0.300 | 0.738 | 0.539 | 0.395 | 0.784 | 0.586 | 0.433 | research item 4 |
 | `0` `o` |  | 0.518 | 0.370 | 0.275 | 0.482 | 0.335 | 0.244 |  |
-| `0` `8` | 0.250 | 0.413 | 0.332 | 0.252 | 0.410 | 0.331 | 0.252 | research item 4 |
+| `0` `8` | 0.250 | 0.462 | 0.363 | 0.271 | 0.458 | 0.361 | 0.270 | research item 4 |
 | `0` `D` |  | 0.570 | 0.412 | 0.303 | 0.630 | 0.463 | 0.342 |  |
 | `O` `D` | 0.250 | 0.359 | **0.246** | 0.175 | 0.361 | 0.251 | 0.179 | research item 4 |
 | `O` `Q` |  | 0.230 | 0.208 | 0.187 | 0.230 | 0.207 | 0.187 |  |
@@ -512,12 +499,12 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `l` `I` | 0.400 | 0.379 | **0.315** | 0.283 | 0.385 | **0.318** | 0.284 | research item 3 |
 | `l` `\|` | 0.400 | 0.406 | **0.308** | 0.241 | 0.399 | **0.302** | 0.233 | research item 3 |
 | `I` `\|` | 0.400 | 0.412 | **0.277** | 0.192 | 0.432 | **0.294** | 0.207 | research item 3 |
-| `1` `\|` | 0.400 | 0.576 | 0.439 | 0.335 | 0.591 | 0.451 | 0.341 | research item 3 (not in report.py's gates) |
+| `1` `\|` | 0.400 | 0.576 | 0.439 | 0.335 | 0.591 | 0.451 | 0.341 | research item 3 (not in report.py's targets) |
 | `1` `7` |  | 0.654 | 0.495 | 0.370 | 0.656 | 0.501 | 0.377 |  |
 | `i` `l` |  | 0.349 | 0.259 | 0.202 | 0.357 | 0.260 | 0.193 |  |
 | `i` `j` |  | 0.509 | 0.419 | 0.361 | 0.513 | 0.412 | 0.345 |  |
 | `!` `\|` |  | 0.452 | 0.365 | 0.316 | 0.454 | 0.360 | 0.304 |  |
-| `8` `B` | 0.250 | 0.316 | **0.223** | 0.160 | 0.368 | 0.264 | 0.193 | research item 5 |
+| `8` `B` | 0.250 | 0.400 | 0.285 | 0.202 | 0.448 | 0.324 | 0.235 | research item 5 |
 | `5` `S` | 0.250 | 0.336 | **0.200** | 0.103 | 0.344 | **0.213** | 0.120 | research item 5 |
 | `2` `Z` |  | 0.410 | 0.289 | 0.191 | 0.410 | 0.295 | 0.198 |  |
 | `6` `b` |  | 0.544 | 0.381 | 0.239 | 0.591 | 0.407 | 0.256 |  |
@@ -535,14 +522,14 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `u` `v` |  | 0.698 | 0.517 | 0.340 | 0.707 | 0.529 | 0.353 |  |
 | `v` `y` |  | 0.349 | 0.297 | 0.243 | 0.346 | 0.295 | 0.242 |  |
 | `t` `f` |  | 0.395 | 0.280 | 0.186 | 0.413 | 0.293 | 0.197 |  |
-| `.` `,` | 0.400 | 0.422 | **0.367** | 0.368 | 0.419 | **0.360** | 0.357 | research item 9 |
-| `:` `;` | 0.400 | 0.356 | **0.337** | 0.295 | 0.350 | **0.330** | 0.286 | research item 9 |
+| `.` `,` | 0.400 | 0.568 | 0.506 | 0.484 | 0.564 | 0.499 | 0.472 | research item 9 |
+| `:` `;` | 0.400 | 0.490 | 0.441 | 0.407 | 0.483 | 0.433 | 0.397 | research item 9 |
 | `'` `` ` `` | 0.400 | 0.515 | **0.328** | 0.205 | 0.508 | **0.326** | 0.205 | research item 9 |
 | `'` `"` |  | 0.765 | 0.575 | 0.530 | 0.769 | 0.582 | 0.531 |  |
-| `(` `{` | 0.350 | 0.366 | **0.266** | 0.230 | 0.350 | **0.259** | 0.228 | research item 9 |
+| `(` `{` | 0.350 | 0.362 | **0.263** | 0.226 | 0.351 | **0.260** | 0.226 | research item 9 |
 | `(` `[` | 0.350 | 0.503 | 0.383 | 0.325 | 0.485 | 0.373 | 0.309 | research item 9 |
-| `}` `]` | 0.350 | 0.305 | **0.244** | 0.192 | 0.326 | **0.245** | 0.191 | research item 9 |
-| `{` `[` |  | 0.305 | 0.244 | 0.192 | 0.326 | 0.245 | 0.191 |  |
+| `}` `]` | 0.350 | 0.452 | **0.332** | 0.255 | 0.442 | **0.330** | 0.257 | research item 9 |
+| `{` `[` |  | 0.452 | 0.332 | 0.254 | 0.441 | 0.329 | 0.257 |  |
 | `-` `_` |  | 1.41 | 1.41 | 1.34 | 1.41 | 1.41 | 1.34 |  |
 | `-` `~` |  | 0.817 | 0.713 | 0.687 | 0.820 | 0.716 | 0.683 |  |
 | `v` `ν` | 0.250 | 0.427 | 0.284 | 0.171 | 0.432 | 0.295 | 0.179 | nu |
@@ -551,7 +538,7 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `o` `ο` |  | 0 | 0 | 0 | 0 | 0 | 0 | omicron: drawn as o in every Greek typeface |
 | `o` `σ` | 0.250 | 0.330 | **0.246** | 0.190 | 0.343 | 0.255 | 0.195 | sigma |
 | `ο` `σ` | 0.250 | 0.330 | **0.246** | 0.190 | 0.343 | 0.255 | 0.195 | omicron and sigma |
-| `p` `ρ` | 0.250 | 0.157 | **0.122** | 0.0945 | 0.163 | **0.125** | 0.0965 | rho |
+| `p` `ρ` | 0.250 | 0.265 | **0.182** | 0.125 | 0.269 | **0.185** | 0.127 | rho |
 | `x` `χ` | 0.250 | 0.535 | 0.395 | 0.307 | 0.542 | 0.399 | 0.308 | chi |
 | `x` `×` | 0.250 | 0.541 | 0.434 | 0.377 | 0.528 | 0.420 | 0.358 | multiplication sign |
 | `χ` `×` | 0.250 | 0.846 | 0.726 | 0.641 | 0.843 | 0.715 | 0.624 |  |
@@ -562,8 +549,8 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `t` `τ` | 0.250 | 0.394 | 0.265 | 0.172 | 0.390 | 0.264 | 0.171 | tau |
 | `B` `β` | 0.250 | 0.417 | 0.297 | 0.225 | 0.426 | 0.306 | 0.233 | beta |
 | `e` `ε` | 0.250 | 0.532 | 0.436 | 0.353 | 0.538 | 0.449 | 0.367 | epsilon |
-| `ε` `∈` | 0.250 | 0.537 | 0.398 | 0.298 | 0.554 | 0.418 | 0.309 | element of |
-| `ϵ` `∈` | 0.250 | 0.455 | 0.332 | 0.244 | 0.465 | 0.337 | 0.242 | lunate epsilon and element of |
+| `ε` `∈` | 0.250 | 0.658 | 0.516 | 0.407 | 0.647 | 0.514 | 0.409 | element of |
+| `ϵ` `∈` | 0.250 | 0.586 | 0.472 | 0.375 | 0.573 | 0.466 | 0.371 | lunate epsilon and element of |
 | `θ` `0` | 0.250 | 0.348 | 0.287 | 0.218 | 0.333 | 0.274 | 0.208 |  |
 | `θ` `ϑ` | 0.250 | 0.460 | 0.312 | 0.195 | 0.470 | 0.322 | 0.203 | two thetas with different uses |
 | `φ` `ϕ` | 0.250 | 0.447 | 0.384 | 0.298 | 0.446 | 0.385 | 0.300 | two phis with different uses |
@@ -573,10 +560,10 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `−` `–` | 0.250 | 0.111 | **0.101** | 0.0908 | 0.133 | **0.138** | 0.139 | minus and en dash |
 | `–` `—` | 0.250 | 0.744 | 0.698 | 0.643 | 0.775 | 0.733 | 0.680 | en and em dash |
 | `′` `'` | 0.250 | 0.328 | **0.218** | 0.151 | 0.325 | **0.217** | 0.151 | prime and apostrophe |
-| `∑` `Σ` | 0.250 | 0.639 | 0.456 | 0.323 | 0.645 | 0.462 | 0.326 | n-ary sum and Sigma |
-| `∏` `Π` | 0.250 | 0.581 | 0.422 | 0.321 | 0.612 | 0.445 | 0.336 | n-ary product and Pi |
+| `∑` `Σ` | 0.250 | 0.757 | 0.584 | 0.436 | 0.756 | 0.583 | 0.433 | n-ary sum and Sigma |
+| `∏` `Π` | 0.250 | 0.719 | 0.538 | 0.404 | 0.704 | 0.532 | 0.401 | n-ary product and Pi |
 | `∆` `Δ` |  | 0.391 | 0.286 | 0.210 | 0.448 | 0.332 | 0.244 | increment: the same Delta by convention |
-| `∇` `▽` | 0.250 | 0.800 | 0.666 | 0.543 | 0.796 | 0.656 | 0.540 | nabla and white triangle |
+| `∇` `▽` | 0.250 | 0.529 | 0.408 | 0.332 | 0.515 | 0.404 | 0.333 | nabla and white triangle |
 | `∂` `6` | 0.250 | 0.372 | 0.299 | 0.192 | 0.367 | 0.293 | 0.187 |  |
 | `∂` `δ` | 0.250 | 0.462 | 0.332 | 0.194 | 0.454 | 0.324 | 0.193 |  |
 | `·` `⋅` |  | 0 | 0 | 0 | 0 | 0 | 0 | middle dot and dot operator: the same sign in plain text |
@@ -584,41 +571,42 @@ Distances at 14 px for blurs of 0.6, 1.0 and 1.5 px; the gate is read at 1.0 px.
 | `∘` `°` | 0.250 | 1.12 | 1.03 | 0.893 | 1.12 | 1.02 | 0.892 | ring operator and degree |
 | `∘` `o` | 0.250 | 1.12 | 1.02 | 0.857 | 1.15 | 1.04 | 0.891 |  |
 | `~` `∼` |  | 0 | 0 | 0 | 0 | 0 | 0 | tilde operator: written ~ in plain text |
-| `^` `∧` | 0.250 | 0.791 | 0.681 | 0.617 | 0.773 | 0.671 | 0.612 |  |
-| `∨` `v` | 0.250 | 0.195 | **0.146** | 0.108 | 0.175 | **0.137** | 0.105 |  |
-| `∪` `U` | 0.250 | 0.508 | 0.403 | 0.334 | 0.515 | 0.406 | 0.337 |  |
-| `∩` `n` | 0.250 | 0.340 | 0.258 | 0.205 | 0.313 | **0.241** | 0.196 |  |
-| `∗` `*` |  | 0.366 | 0.338 | 0.352 | 0.333 | 0.302 | 0.312 | asterisk operator: written * in plain text |
+| `^` `∧` | 0.250 | 0.693 | 0.625 | 0.573 | 0.688 | 0.626 | 0.575 |  |
+| `∨` `v` | 0.250 | 0.306 | **0.234** | 0.176 | 0.296 | **0.234** | 0.174 |  |
+| `∪` `U` | 0.250 | 0.384 | 0.303 | 0.262 | 0.375 | 0.298 | 0.258 |  |
+| `∩` `n` | 0.250 | 0.822 | 0.603 | 0.454 | 0.805 | 0.594 | 0.446 |  |
+| `∗` `*` |  | 0.0895 | 0.0838 | 0.0868 | 0.0547 | 0.0494 | 0.0485 | asterisk operator: written * in plain text |
 | `∶` `:` |  | 0.708 | 0.592 | 0.487 | 0.691 | 0.580 | 0.477 | ratio: written : in plain text |
-| `∕` `/` |  | 0.813 | 0.743 | 0.678 | 0.792 | 0.717 | 0.648 | division slash: written / in plain text |
-| `⟨` `<` | 0.250 | 0.999 | 0.844 | 0.688 | 1.01 | 0.852 | 0.697 | angle bracket and less-than |
-| `⟨` `(` | 0.250 | 0.319 | **0.235** | 0.186 | 0.315 | **0.234** | 0.193 |  |
-| `∅` `0` | 0.250 | 0.614 | 0.478 | 0.349 | 0.565 | 0.439 | 0.321 | empty set |
-| `∅` `Ø` | 0.250 | 0.823 | 0.628 | 0.485 | 0.813 | 0.624 | 0.485 |  |
-| `∞` `8` | 0.250 | 0.854 | 0.720 | 0.618 | 0.856 | 0.724 | 0.622 |  |
-| `ℝ` `R` | 0.250 | 0.327 | **0.223** | 0.156 | 0.327 | **0.225** | 0.156 | double-struck |
-| `ℕ` `N` | 0.250 | 0.313 | **0.236** | 0.184 | 0.324 | **0.242** | 0.186 | double-struck |
-| `ℤ` `Z` | 0.250 | 0.268 | **0.162** | 0.140 | 0.266 | **0.152** | 0.125 | double-struck |
-| `ℂ` `C` | 0.250 | 0.293 | **0.221** | 0.200 | 0.280 | **0.209** | 0.185 | double-struck |
-| `ℚ` `Q` | 0.250 | 0.237 | **0.186** | 0.156 | 0.226 | **0.175** | 0.144 | double-struck |
-| `⊂` `⊆` | 0.250 | 0.525 | 0.394 | 0.334 | 0.537 | 0.399 | 0.339 |  |
-| `⊆` `⊊` | 0.250 | 0.180 | **0.154** | 0.132 | 0.176 | **0.151** | 0.130 |  |
+| `∕` `/` |  | 0.698 | 0.585 | 0.499 | 0.675 | 0.553 | 0.462 | division slash: written / in plain text |
+| `⟨` `<` | 0.250 | 1.00 | 0.843 | 0.688 | 1.01 | 0.853 | 0.696 | angle bracket and less-than |
+| `⟨` `(` | 0.250 | 0.239 | **0.180** | 0.155 | 0.242 | **0.191** | 0.170 |  |
+| `∅` `0` | 0.250 | 0.723 | 0.464 | 0.291 | 0.737 | 0.478 | 0.295 | empty set |
+| `∅` `Ø` | 0.250 | 0.505 | 0.383 | 0.299 | 0.478 | 0.367 | 0.293 |  |
+| `∅` `ø` | 0.250 | 0.498 | 0.332 | 0.225 | 0.505 | 0.344 | 0.236 | empty set and o with stroke |
+| `∞` `8` | 0.250 | 0.934 | 0.739 | 0.551 | 0.943 | 0.757 | 0.573 |  |
+| `ℝ` `R` | 0.250 | 0.448 | 0.307 | 0.216 | 0.428 | 0.302 | 0.214 | double-struck |
+| `ℕ` `N` | 0.250 | 0.416 | 0.309 | 0.225 | 0.415 | 0.317 | 0.227 | double-struck |
+| `ℤ` `Z` | 0.250 | 0.419 | **0.225** | 0.140 | 0.419 | **0.224** | 0.130 | double-struck |
+| `ℂ` `C` | 0.250 | 0.381 | 0.265 | 0.221 | 0.377 | 0.264 | 0.217 | double-struck |
+| `ℚ` `Q` | 0.250 | 0.307 | **0.239** | 0.191 | 0.288 | **0.220** | 0.172 | double-struck |
+| `⊂` `⊆` | 0.250 | 0.547 | 0.425 | 0.396 | 0.559 | 0.424 | 0.391 |  |
+| `⊆` `⊊` | 0.250 | 0.234 | **0.202** | 0.176 | 0.233 | **0.201** | 0.175 |  |
 | `≤` `<` | 0.250 | 0.616 | 0.517 | 0.394 | 0.625 | 0.530 | 0.405 |  |
 | `≤` `≦` | 0.250 | 0.378 | **0.210** | 0.120 | 0.382 | **0.209** | 0.117 |  |
 | `≡` `=` | 0.250 | 0.590 | 0.374 | 0.349 | 0.602 | 0.380 | 0.349 |  |
 | `≈` `≅` | 0.250 | 0.658 | 0.470 | 0.341 | 0.660 | 0.477 | 0.346 |  |
 | `≈` `~` | 0.250 | 0.628 | 0.498 | 0.494 | 0.648 | 0.506 | 0.497 |  |
-| `→` `⟶` | 0.250 | 0.605 | 0.493 | 0.397 | 0.619 | 0.508 | 0.411 | arrow and long arrow |
-| `→` `⇒` | 0.250 | 0.626 | 0.391 | 0.269 | 0.643 | 0.405 | 0.277 |  |
-| `⇒` `⇔` | 0.250 | 0.461 | 0.362 | 0.272 | 0.444 | 0.353 | 0.265 |  |
-| `↦` `→` | 0.250 | 0.456 | 0.379 | 0.311 | 0.455 | 0.383 | 0.315 |  |
-| `⊢` `⊨` | 0.250 | 0.629 | 0.424 | 0.335 | 0.633 | 0.434 | 0.339 |  |
-| `⊥` `⟂` |  | 0.169 | 0.137 | 0.115 | 0.164 | 0.133 | 0.111 | up tack and perpendicular: the same sign by convention |
-| `∧` `⋀` | 0.250 | 0.428 | 0.374 | 0.334 | 0.427 | 0.373 | 0.333 | binary and n-ary |
-| `∨` `⋁` | 0.250 | 0.428 | 0.373 | 0.334 | 0.427 | 0.373 | 0.333 | binary and n-ary |
-| `∩` `⋂` | 0.250 | 0.566 | 0.477 | 0.408 | 0.551 | 0.462 | 0.393 | binary and n-ary |
-| `∪` `⋃` | 0.250 | 0.566 | 0.476 | 0.408 | 0.552 | 0.463 | 0.394 | binary and n-ary |
-| `⊕` `⨁` | 0.250 | 0.617 | 0.444 | 0.352 | 0.622 | 0.448 | 0.350 | binary and n-ary |
+| `→` `⟶` | 0.250 | 0.871 | 0.810 | 0.711 | 0.865 | 0.812 | 0.720 | arrow and long arrow |
+| `→` `⇒` | 0.250 | 0.736 | 0.513 | 0.409 | 0.745 | 0.527 | 0.416 |  |
+| `⇒` `⇔` | 0.250 | 0.361 | 0.296 | 0.234 | 0.350 | 0.288 | 0.227 |  |
+| `↦` `→` | 0.250 | 0.391 | 0.351 | 0.312 | 0.388 | 0.348 | 0.309 |  |
+| `⊢` `⊨` | 0.250 | 0.621 | 0.457 | 0.365 | 0.632 | 0.471 | 0.373 |  |
+| `⊥` `⟂` |  | 0.155 | 0.126 | 0.104 | 0.149 | 0.121 | 0.0999 | up tack and perpendicular: the same sign by convention |
+| `∧` `⋀` | 0.250 | 0.475 | 0.426 | 0.370 | 0.476 | 0.427 | 0.371 | binary and n-ary |
+| `∨` `⋁` | 0.250 | 0.475 | 0.426 | 0.370 | 0.476 | 0.427 | 0.371 | binary and n-ary |
+| `∩` `⋂` | 0.250 | 0.826 | 0.642 | 0.510 | 0.827 | 0.647 | 0.517 | binary and n-ary |
+| `∪` `⋃` | 0.250 | 0.826 | 0.642 | 0.510 | 0.827 | 0.648 | 0.517 | binary and n-ary |
+| `⊕` `⨁` | 0.250 | 0.763 | 0.556 | 0.405 | 0.772 | 0.567 | 0.412 | binary and n-ary |
 | `rn` `m` | 0.250 | 0.341 | **0.231** | 0.158 | 0.386 | 0.265 | 0.182 | two letters against one: proportional family |
 | `cl` `d` | 0.250 | 0.758 | 0.588 | 0.431 | 0.786 | 0.637 | 0.473 | two letters against one: proportional family |
 | `vv` `w` | 0.250 | 0.770 | 0.549 | 0.403 | 0.787 | 0.576 | 0.421 | two letters against one: proportional family |
@@ -629,31 +617,31 @@ All 1891 pairs of the letters and figures: 1 under 0.200, median 0.674. The ten 
 
 |  | letters and figures | D | signs | D | Greek | D |
 |---|---|---|---|---|---|---|
-| 1 | `S` `5` | 0.200 | `⊕` `⊗` | 0.0393 | `ε` `ϵ` | 0.115 |
-| 2 | `O` `Q` | 0.208 | `⊗` `⊛` | 0.0582 | `p` `ρ` | 0.122 |
-| 3 | `6` `8` | 0.219 | `⊕` `⊛` | 0.0614 | `u` `υ` | 0.138 |
-| 4 | `B` `8` | 0.223 | `⇴` `⇸` | 0.0618 | `8` `θ` | 0.154 |
-| 5 | `D` `O` | 0.246 | `⇝` `⇴` | 0.0670 | `y` `γ` | 0.161 |
-| 6 | `I` `1` | 0.257 | `↠` `↞` | 0.0737 | `Ω` `Ώ` | 0.174 |
-| 7 | `i` `l` | 0.259 | `↟` `↡` | 0.0746 | `A` `Ά` | 0.180 |
-| 8 | `a` `e` | 0.263 | `➡` `➔` | 0.0752 | `O` `Ό` | 0.185 |
-| 9 | `b` `h` | 0.270 | `↔` `↭` | 0.0769 | `ϋ` `ΰ` | 0.192 |
-| 10 | `f` `t` | 0.280 | `→` `↝` | 0.0771 | `E` `Έ` | 0.194 |
+| 1 | `S` `5` | 0.200 | `⇴` `⇸` | 0.0540 | `ε` `ϵ` | 0.115 |
+| 2 | `O` `Q` | 0.208 | `➡` `➔` | 0.0823 | `u` `υ` | 0.138 |
+| 3 | `6` `8` | 0.227 | `←` `⇜` | 0.0924 | `y` `γ` | 0.161 |
+| 4 | `D` `O` | 0.246 | `→` `⇝` | 0.0924 | `Ω` `Ώ` | 0.174 |
+| 5 | `I` `1` | 0.257 | `⊗` `⊛` | 0.115 | `A` `Ά` | 0.180 |
+| 6 | `i` `l` | 0.259 | `⇹` `⇼` | 0.116 | `p` `ρ` | 0.182 |
+| 7 | `a` `e` | 0.263 | `⟺` `⟾` | 0.119 | `8` `θ` | 0.183 |
+| 8 | `b` `h` | 0.270 | `⟺` `⟽` | 0.120 | `O` `Ό` | 0.185 |
+| 9 | `f` `t` | 0.280 | `⊕` `⊛` | 0.120 | `ϋ` `ΰ` | 0.192 |
+| 10 | `B` `8` | 0.285 | `↢` `↤` | 0.120 | `E` `Έ` | 0.194 |
 
 ### Closest pairs in Small Regular (14 px, blur 1.0 px)
 
-All 1891 pairs of the letters and figures: 0 under 0.200, median 0.681. The ten closest of them, of the mathematical signs (the glyph modules operators and arrows: 30876 pairs) and of Greek letters against Latin letters, figures and each other (8840 pairs). Pairs drawn identically (D = 0: a Greek capital that is the Latin one, a sign that is another's glyph) are listed once, by the first of them: ~∼ ↺⟲ ↻⟳ and AΑ BΒ EΕ HΗ IΙ KΚ MΜ NΝ OΟ PΡ TΤ XΧ YΥ ZΖ oο ΩΩ μµ.
+All 1891 pairs of the letters and figures: 0 under 0.200, median 0.682. The ten closest of them, of the mathematical signs (the glyph modules operators and arrows: 30876 pairs) and of Greek letters against Latin letters, figures and each other (8840 pairs). Pairs drawn identically (D = 0: a Greek capital that is the Latin one, a sign that is another's glyph) are listed once, by the first of them: ~∼ ↺⟲ ↻⟳ and AΑ BΒ EΕ HΗ IΙ KΚ MΜ NΝ OΟ PΡ TΤ XΧ YΥ ZΖ oο ΩΩ μµ.
 
 |  | letters and figures | D | signs | D | Greek | D |
 |---|---|---|---|---|---|---|
-| 1 | `O` `Q` | 0.207 | `⊕` `⊗` | 0.0448 | `p` `ρ` | 0.125 |
-| 2 | `6` `8` | 0.212 | `⊗` `⊛` | 0.0559 | `ε` `ϵ` | 0.127 |
-| 3 | `S` `5` | 0.213 | `⊕` `⊛` | 0.0632 | `u` `υ` | 0.142 |
-| 4 | `D` `O` | 0.251 | `⇝` `⇴` | 0.0668 | `8` `θ` | 0.155 |
-| 5 | `a` `e` | 0.254 | `⇴` `⇸` | 0.0680 | `y` `γ` | 0.166 |
-| 6 | `I` `1` | 0.258 | `➡` `➔` | 0.0717 | `Ω` `Ώ` | 0.184 |
-| 7 | `i` `l` | 0.260 | `⊚` `⊛` | 0.0805 | `A` `Ά` | 0.192 |
-| 8 | `B` `8` | 0.264 | `↔` `↭` | 0.0809 | `O` `Ό` | 0.194 |
-| 9 | `8` `9` | 0.273 | `←` `↜` | 0.0811 | `ϋ` `ΰ` | 0.198 |
-| 10 | `h` `n` | 0.273 | `→` `↝` | 0.0812 | `E` `Έ` | 0.204 |
+| 1 | `O` `Q` | 0.207 | `⇴` `⇸` | 0.0591 | `ε` `ϵ` | 0.127 |
+| 2 | `S` `5` | 0.213 | `➡` `➔` | 0.0859 | `u` `υ` | 0.142 |
+| 3 | `6` `8` | 0.219 | `→` `⇝` | 0.0956 | `y` `γ` | 0.166 |
+| 4 | `D` `O` | 0.251 | `←` `⇜` | 0.0957 | `Ω` `Ώ` | 0.184 |
+| 5 | `a` `e` | 0.254 | `⇹` `⇼` | 0.107 | `p` `ρ` | 0.185 |
+| 6 | `I` `1` | 0.258 | `⟺` `⟾` | 0.119 | `A` `Ά` | 0.192 |
+| 7 | `i` `l` | 0.260 | `⟺` `⟽` | 0.119 | `8` `θ` | 0.192 |
+| 8 | `h` `n` | 0.273 | `⊗` `⊛` | 0.121 | `O` `Ό` | 0.194 |
+| 9 | `b` `h` | 0.284 | `↣` `↦` | 0.124 | `ϋ` `ΰ` | 0.198 |
+| 10 | `f` `t` | 0.293 | `↢` `↤` | 0.124 | `E` `Έ` | 0.204 |
 
