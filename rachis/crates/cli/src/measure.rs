@@ -1089,7 +1089,9 @@ fn command_line(opts: &Opts) -> String {
         let _ = write!(cmd, " --master '{m}'");
     }
     if let Some(r) = &opts.refs {
-        let _ = write!(cmd, " --refs {}", r.display());
+        // the directory is the reader's own: its place on this machine says nothing
+        let _ = r;
+        let _ = write!(cmd, " --refs <directory of reference fonts>");
     }
     if opts.distance_refs != DISTANCE_REFS.map(String::from).to_vec() {
         let _ = write!(cmd, " --distance-refs {}", opts.distance_refs.join(" "));
