@@ -158,6 +158,12 @@ fn family(registry: &Registry, face: &Face, small: bool) -> Family {
     }
 }
 
+/// The number of glyphs of a compiled font.
+fn glyph_count(font: &[u8]) -> usize {
+    use skrifa::raw::TableProvider as _;
+    skrifa::FontRef::new(font).ok().and_then(|f| f.maxp().ok()).map_or(0, |maxp| usize::from(maxp.num_glyphs()))
+}
+
 /// The face the mathematics font is built on: the upright proportional one.
 fn math_face() -> Result<Face, String> {
     faces().into_iter().find(|f| !f.italic && !f.default_master().mono).ok_or_else(|| "no proportional face".into())
@@ -267,6 +273,8 @@ fn build(registry: &Registry, o: &Options) -> Result<(), String> {
     }
     let mut files: Vec<(String, Vec<u8>)> = Vec::new();
     let mut kept: Vec<String> = Vec::new();
+    // how many glyphs the static fonts hold in all: what the number that keep their overlaps is out of
+    let mut instances = 0usize;
     for face in faces() {
         let fam = family(registry, &face, false);
         let axes: Vec<&str> = fam.axes.iter().map(|a| a.tag.as_str()).collect();
@@ -288,6 +296,7 @@ fn build(registry: &Registry, o: &Options) -> Result<(), String> {
                 for (glyph, why) in &s.kept_overlaps {
                     kept.push(format!("{file}: {glyph}: {why}"));
                 }
+                instances += glyph_count(&s.bytes);
                 files.push((file, s.bytes));
             }
         }
@@ -300,6 +309,7 @@ fn build(registry: &Registry, o: &Options) -> Result<(), String> {
         for (glyph, why) in &s.kept_overlaps {
             kept.push(format!("{file}: {glyph}: {why}"));
         }
+        instances += glyph_count(&s.bytes);
         // for the web as it is, before the static font is hinted
         webfonts.push((
             "webfonts/RachisMath-Regular.woff2".to_string(),
@@ -334,7 +344,7 @@ fn build(registry: &Registry, o: &Options) -> Result<(), String> {
     if kept.is_empty() {
         println!("overlaps removed from every glyph of every static font");
     } else {
-        println!("{} glyphs keep their overlapping contours:", kept.len());
+        println!("{} of the {instances} glyphs of the static fonts keep their overlapping contours:", kept.len());
         for k in &kept {
             println!("  {k}");
         }

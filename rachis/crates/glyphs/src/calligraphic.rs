@@ -9,27 +9,31 @@
 //!
 //! - a letter that begins with a downstroke begins in a hook that hangs from the cap height to its left;
 //! - a letter that begins with an upstroke begins in a hook that stands on the baseline to its left;
-//! - a bowl begins in a flag: a curl left of its stem, from which it runs over the stem's top;
+//! - a bowl begins in a flag: a curl left of its stem, from which it runs over the stem's top (the bowl of 𝒟
+//!   begins under the stem's foot and ends in the flag);
 //! - a round letter begins in a hook inside its own top;
 //! - a last downstroke ends in a hook to the right on the baseline, a stem that stands alone in one to the
 //!   left, and a last upstroke in one that hangs from the cap height to the right;
 //! - the bar over a letter hangs from a hook at its left, sags and ends lifted.
 //!
-//! Every hook is a turn of one radius, [`Hand::r`]: the pen's half breadth and a white that stays open at 13
-//! pixels. They lean the same in the upright and the italic faces, as ℓ does.
+//! A hook is a turn whose radius is half the pen and half a white (`Hand::radius`). In the proportional
+//! family the white is a pixel across at 13 pixels per em, and 0.8 to 1.4 of that in seven hooks. In the fixed
+//! pitch the cell has no room for it: the white is smaller by the square of what the pen is lighter, and a hook
+//! is a knob. A hook of another size has another white and the same pen, so its inner side never closes to a
+//! point. The letters lean the same in the upright and the italic faces, as ℓ does.
 //!
 //! A letter is drawn in a box `w` wide whose left edge is `x0`: a point of it is given in fractions of `w` and
 //! of the cap height. In the proportional family the box is the letter's own and the fit measures the ink
 //! ([`fit`]); in the fixed pitch every box is what the cell leaves once the lean is taken off.
 //!
-//! A stroke's level run is written as a straight segment ([`straight`], `line()`), never as a curve between two
+//! A stroke's level run is written as a straight segment (`straight`, `line()`), never as a curve between two
 //! knots that travel the same way on one line: such a curve has all its points on that line, and where a stem
 //! crosses it the union that removes the overlaps of a static font goes wrong.
 
 use rachis_kernel::geom::flatten;
 use rachis_kernel::params::SLANT;
 use rachis_kernel::pen::{expand, sheared};
-use rachis_kernel::{Draw, Fit, Knot, Params, Registry, Spec, knot, pt};
+use rachis_kernel::{Draw, Fit, Glyph, Knot, Params, Registry, Spec, knot, pt};
 
 use crate::latin::ink_mid;
 use crate::parts::cut_pen;
@@ -49,7 +53,7 @@ fn slope(p: &Params) -> f64 {
     (if p.mono { MONO_LEAN } else { LEAN }).to_radians().tan()
 }
 
-/// The box a letter is written in, its two pens and the radius of its hooks.
+/// The box a letter is written in, its two pens and the white inside its hooks.
 struct Hand<'a> {
     p: &'a Params,
     x0: f64,
@@ -58,8 +62,9 @@ struct Hand<'a> {
     s: f64,
     /// The breadth of an upstroke, a bar or a hook.
     h: f64,
-    /// The radius of a hook, on the pen's centre line.
-    r: f64,
+    /// Half the white inside a hook: what the radius of its turn, on the pen's centre line, has over half the
+    /// pen's breadth.
+    white: f64,
 }
 
 impl<'a> Hand<'a> {
@@ -74,7 +79,13 @@ impl<'a> Hand<'a> {
         let x0 = (p.width - w) / 2.0 - slope(p) * (p.cap / 2.0 - p.slant_origin());
         let light = (w / own).min(1.0).powf(0.6);
         let h = 0.88 * light * p.cap_hair;
-        Hand { p, x0, w, s: 0.92 * light * p.cap_stem, h, r: 0.5 * h + 38.0 * light * light }
+        Hand { p, x0, w, s: 0.92 * light * p.cap_stem, h, white: 38.0 * light * light }
+    }
+
+    /// The radius of a hook `k` times as open as the common one, on the pen's centre line: half the pen and `k`
+    /// half whites. A smaller hook has less white and the same pen, so its inner side never closes to a point.
+    fn radius(&self, k: f64) -> f64 {
+        0.5 * self.h + k * self.white
     }
 
     fn x(&self, fx: f64) -> f64 {
@@ -136,12 +147,12 @@ impl<'a> Hand<'a> {
         (self.y(to.1) - self.y(from.1)).atan2(self.x(to.0) - self.x(from.0)).to_degrees()
     }
 
-    /// Knots of the thin pen on the circle of `k` hook radii about (`cx`, `cy`), in font units, from the angle
+    /// Knots of the thin pen on the circle of a hook `k` times as open about (`cx`, `cy`), in font units, from the angle
     /// `from` to the angle `to`: one at each end and one at every quarter turn that is not next to an end. The
     /// pen travels counter-clockwise when `to` is the greater.
     fn arc(&self, cx: f64, cy: f64, k: f64, from: f64, to: f64) -> Vec<Knot> {
         const APART: f64 = 28.0;
-        let (r, ccw) = (k * self.r, to > from);
+        let (r, ccw) = (self.radius(k), to > from);
         let quarter = if ccw { 90.0 } else { -90.0 };
         let mut angles = vec![from];
         let mut q = if ccw { (from / 90.0).floor() * 90.0 + 90.0 } else { (from / 90.0).ceil() * 90.0 - 90.0 };
@@ -166,14 +177,14 @@ impl<'a> Hand<'a> {
     fn turn(&self, x: f64, y: f64, k: f64, from: f64, to: f64) -> Vec<Knot> {
         let side = if to > from { 90.0 } else { -90.0 };
         let (sin, cos) = (from + side).to_radians().sin_cos();
-        self.arc(x + k * self.r * cos, y + k * self.r * sin, k, from - side, to - side)
+        self.arc(x + self.radius(k) * cos, y + self.radius(k) * sin, k, from - side, to - side)
     }
 
     /// The knots of a turn that ends at (`x`, `y`) travelling along `to`, having begun travelling along `from`.
     fn turn_into(&self, x: f64, y: f64, k: f64, from: f64, to: f64) -> Vec<Knot> {
         let side = if to > from { 90.0 } else { -90.0 };
         let (sin, cos) = (to + side).to_radians().sin_cos();
-        self.arc(x + k * self.r * cos, y + k * self.r * sin, k, from - side, to - side)
+        self.arc(x + self.radius(k) * cos, y + self.radius(k) * sin, k, from - side, to - side)
     }
 
     /// How far above the lowest point of a turn its end is where the pen travels along `dir`, in hook radii:
@@ -185,13 +196,13 @@ impl<'a> Hand<'a> {
     /// The height at which a pen travelling along `dir` begins or ends a turn of `k` radii that stands on the
     /// line `fy`.
     fn stands(&self, fy: f64, k: f64, dir: f64, ccw: bool) -> f64 {
-        self.y(fy) + self.h / 2.0 + k * self.r * Hand::rise(dir, ccw)
+        self.y(fy) + self.h / 2.0 + self.radius(k) * Hand::rise(dir, ccw)
     }
 
     /// The height at which a pen travelling along `dir` begins or ends a turn of `k` radii that hangs from the
     /// line `fy`.
     fn hangs(&self, fy: f64, k: f64, dir: f64, ccw: bool) -> f64 {
-        self.y(fy) - self.h / 2.0 - k * self.r * (2.0 - Hand::rise(dir, ccw))
+        self.y(fy) - self.h / 2.0 - self.radius(k) * (2.0 - Hand::rise(dir, ccw))
     }
 
     /// The hook a letter begins in when it begins with a downstroke at `fx` that travels along `dir`: it hangs
@@ -207,7 +218,7 @@ impl<'a> Hand<'a> {
     /// The hook a letter begins in when it begins with an upstroke: it stands on the baseline, its centre at
     /// `fx`, and the pen leaves it to the right.
     fn spring(&self, fx: f64) -> Vec<Knot> {
-        self.arc(self.x(fx), self.y(0.0) + self.h / 2.0 + self.r, 1.0, 95.0, 285.0)
+        self.arc(self.x(fx), self.y(0.0) + self.h / 2.0 + self.radius(1.0), 1.0, 95.0, 285.0)
     }
 
     /// The end of a downstroke at `fx` that travels along `dir`: a hook to the right that stands on the line
@@ -234,7 +245,7 @@ impl<'a> Hand<'a> {
     /// What a bowl begins in: a curl left of the stem at `fx`, from which the pen turns up and runs over the
     /// stem's top.
     fn flag(&self, fx: f64) -> Vec<Knot> {
-        let (x, top, r, h) = (self.x(fx), self.y(1.0), self.r, self.h);
+        let (x, top, r, h) = (self.x(fx), self.y(1.0), self.radius(1.0), self.h);
         vec![
             knot(x - 1.6 * r, top - 4.3 * r, h).dir(150.0),
             knot(x - 3.0 * r, top - 2.9 * r, h).dir(90.0),
@@ -325,7 +336,7 @@ fn diagonal(g: &mut Draw, d: &Hand, from: (f64, f64), to: (f64, f64), breadth: f
 /// The bar over ℱ ℐ 𝒥 𝒯 𝒵: it hangs from a hook of `k` radii at its left, sags and ends lifted.
 fn wave(g: &mut Draw, d: &Hand, from: f64, to: f64, k: f64) {
     let top = d.y(d.top());
-    let mut ks = d.turn_into(d.x(from) + k * d.r, top, k, 140.0, 0.0);
+    let mut ks = d.turn_into(d.x(from) + d.radius(k), top, k, 140.0, 0.0);
     let run = to - from;
     ks.extend([d.thin(from + 0.64 * run, d.top() - 0.05).dir(-2.0), d.end(to, d.top() + 0.012, 30.0)]);
     write(g, &ks);
@@ -384,7 +395,8 @@ fn cal_b(g: &mut Draw) {
         d.thick(0.99, 0.28).dir(-90.0),
         d.thin(0.68, d.base()).dir(180.0).line(),
     ];
-    lower.extend(d.arc(d.x(0.44) - 1.5 * d.r, d.y(d.base()) + d.r, 1.0, -90.0, -235.0));
+    let r = d.radius(1.0);
+    lower.extend(d.arc(d.x(0.44) - 1.5 * r, d.y(d.base()) + r, 1.0, -90.0, -235.0));
     write(g, &lower);
 }
 
@@ -399,7 +411,8 @@ fn cal_d(g: &mut Draw) {
     let d = Hand::new(g.p, 660.0);
     stem(g, &d, 0.42);
     // one stroke round the stem: out of a hook under its foot, up the bowl and over its top into a curl
-    let mut ks = straight(d.arc(d.x(0.42) - 1.5 * d.r, d.y(d.base()) + d.r, 1.0, 125.0, 270.0));
+    let r = d.radius(1.0);
+    let mut ks = straight(d.arc(d.x(0.42) - 1.5 * r, d.y(d.base()) + r, 1.0, 125.0, 270.0));
     ks.extend([d.thin(0.60, d.base()).dir(0.0), d.thick(0.975, 0.50).dir(90.0), d.thin(0.62, d.top()).dir(180.0)]);
     let mut flag = d.flag(0.42);
     flag.reverse();
@@ -436,7 +449,12 @@ fn cal_e(g: &mut Draw) {
 fn cal_f(g: &mut Draw) {
     let d = Hand::new(g.p, 580.0);
     wave(g, &d, 0.08, 1.0, 1.0);
-    stem_foot(g, &d, 0.42, 0.93, 0.0, 1.0);
+    if g.p.mono {
+        // in the fixed pitch the stem ends without a hook: with the bar, that is what tells the letter from 𝒯
+        write(g, &[d.flat(0.42, 0.93, -90.0).line(), d.flat(0.42, 0.0, -90.0)]);
+    } else {
+        stem_foot(g, &d, 0.42, 0.93, 0.0, 1.0);
+    }
     bar(g, &d, 0.20, 0.80, 0.49);
 }
 
@@ -452,9 +470,20 @@ fn cal_g(g: &mut Draw) {
 
 fn cal_h(g: &mut Draw) {
     let d = Hand::new(g.p, 660.0);
-    stem_in(g, &d, 0.30);
-    stem_out(g, &d, 0.78);
-    bar(g, &d, 0.30, 0.78, 0.50);
+    if g.p.mono {
+        // in the fixed pitch the first stem begins without a hook, which gives the two stems the room of the
+        // roman letter's and tells the letter from 𝒰, whose first stroke begins in one
+        write(g, &[d.flat(0.16, 1.0, -90.0).line(), d.flat(0.16, 0.0, -90.0)]);
+        stem_out(g, &d, 0.72);
+        bar(g, &d, 0.16, 0.72, 0.50);
+    } else {
+        // the first stem begins in a hook and ends in one: the roman letter's two stems are two plain strokes
+        let mut ks = straight(d.entry(0.34, -90.0, 1.0));
+        ks.extend(d.foot(0.34, 0.0, 1.0));
+        write(g, &ks);
+        stem_out(g, &d, 0.80);
+        bar(g, &d, 0.34, 0.80, 0.50);
+    }
 }
 
 fn cal_i(g: &mut Draw) {
@@ -471,16 +500,19 @@ fn cal_i(g: &mut Draw) {
 fn cal_j(g: &mut Draw) {
     let d = Hand::new(g.p, 480.0);
     wave(g, &d, 0.06, 1.0, 1.0);
-    stem_foot(g, &d, 0.64, 0.93, -0.27, 1.1);
+    stem_foot(g, &d, 0.64, 0.93, -0.27, 1.2);
 }
 
 fn cal_k(g: &mut Draw) {
     let d = Hand::new(g.p, 620.0);
-    // in the fixed pitch the stem stands further left, behind a smaller hook: the arm and the leg need the room
-    let (at, k) = if g.p.mono { (0.22, 0.7) } else { (0.31, 1.0) };
-    let mut ks = straight(d.entry(at, -90.0, k));
-    ks.push(d.flat(at, 0.0, -90.0));
-    write(g, &ks);
+    // in the fixed pitch the stem stands at the left of the box and begins without a hook: the arm and the leg
+    // need the room, and a plain stem is what tells the letter from 𝒳 there
+    let at = if g.p.mono { 0.12 } else { 0.31 };
+    if g.p.mono {
+        write(g, &[d.flat(at, 1.0, -90.0).line(), d.flat(at, 0.0, -90.0)]);
+    } else {
+        stem_in(g, &d, at);
+    }
     // the arm falls from a hook at the top right to the stem
     write(
         g,
@@ -513,7 +545,8 @@ fn cal_l(g: &mut Draw) {
         ],
     );
     // and a loop to the left of the corner, which is what makes it a written L
-    let mut tail = straight(d.arc(d.x(0.39) - 1.25 * d.r, d.y(d.base()) + d.r, 1.0, 95.0, 270.0));
+    let r = d.radius(1.0);
+    let mut tail = straight(d.arc(d.x(0.39) - 1.25 * r, d.y(d.base()) + r, 1.0, 95.0, 270.0));
     tail.push(d.thin(0.60, d.base()).dir(0.0));
     write(g, &tail);
 }
@@ -634,8 +667,8 @@ fn cal_s(g: &mut Draw) {
 
 fn cal_t(g: &mut Draw) {
     let d = Hand::new(g.p, 600.0);
-    wave(g, &d, 0.0, 1.0, 1.2);
-    stem_foot(g, &d, 0.54, 0.93, 0.0, 1.2);
+    wave(g, &d, 0.0, 1.0, 1.4);
+    stem_foot(g, &d, 0.54, 0.93, 0.0, 1.4);
 }
 
 fn cal_u(g: &mut Draw) {
@@ -689,9 +722,9 @@ fn cal_x(g: &mut Draw) {
     write(g, &ks);
     // and the thin one from a hook at the top right into one at the bottom left
     let back = 218.0;
-    let mut thin = d.turn_into(d.x(0.53 + reach), d.hangs(1.0, 0.9 * k, back, true), 0.9 * k, back - 150.0, back);
+    let mut thin = d.turn_into(d.x(0.53 + reach), d.hangs(1.0, 0.8 * k, back, true), 0.8 * k, back - 150.0, back);
     thin.push(d.thin(0.50, 0.50).dir(238.0));
-    thin.extend(d.turn(d.x(0.49 - reach), d.stands(0.0, 0.9 * k, back, false), 0.9 * k, back, back - 150.0));
+    thin.extend(d.turn(d.x(0.49 - reach), d.stands(0.0, 0.8 * k, back, false), 0.8 * k, back, back - 150.0));
     write(g, &thin);
 }
 
@@ -706,22 +739,22 @@ fn cal_y(g: &mut Draw) {
         d.flat_thin(0.76, 1.0, 90.0),
     ]);
     write(g, &ks);
-    stem_foot(g, &d, 0.77, 1.0, -0.27, 1.1);
+    stem_foot(g, &d, 0.77, 1.0, -0.27, 1.2);
 }
 
 fn cal_z(g: &mut Draw) {
     let d = Hand::new(g.p, 600.0);
-    wave(g, &d, 0.04, 0.96, 1.15);
+    wave(g, &d, 0.04, 0.96, 1.3);
     diagonal(g, &d, (0.86, 0.93), (0.16, 0.06), d.s);
     ground(g, &d, 0.04, 1.0);
     bar(g, &d, 0.32, 0.74, 0.50);
 }
 
-/// The program of a letter.
-pub type Write = fn(&mut Draw);
+/// The program that writes a letter.
+pub type Letter = fn(&mut Draw);
 
 /// The script capitals in the order of the alphabet, each with the code point it has.
-pub const CAPITALS: [(char, Write); 26] = [
+pub const CAPITALS: [(char, Letter); 26] = [
     ('𝒜', cal_a),
     ('ℬ', cal_b),
     ('𝒞', cal_c),
@@ -754,7 +787,7 @@ pub const CAPITALS: [(char, Write); 26] = [
 const OVERHANG_FROM: f64 = 0.6;
 
 /// The fit of a script capital in the proportional family: the white at its sides. On the left the ink is
-/// what its strokes reach. On the right, ink above [`OVERHANG_FROM`] counts for less by what the lean carries
+/// what its strokes reach. On the right, ink above `OVERHANG_FROM` counts for less by what the lean carries
 /// it to the right from there: the top of a leaning letter stands past its advance, as an italic letter's
 /// does, so that what follows it on the baseline and a subscript stand by its foot and not by its top. The
 /// mathematics font states what stands past the advance as the letter's italic correction, which a
@@ -764,16 +797,23 @@ pub fn fit(spec: &Spec, p: &Params) -> Option<Fit> {
     let (_, program) = CAPITALS.iter().find(|(c, _)| *c as u32 == code)?;
     let mut g = Draw::new(p, &spec.name, p.width, true);
     program(&mut g);
+    let (left, right) = ends(&g.glyph, p)?;
+    let white = 0.62 * p.cap_sb;
+    Some(Fit { width: p.width, left: white - left, right: white - (p.width - right), grown: 1.0 })
+}
+
+/// The two ends the fit measures a written letter between: the leftmost ink, and the rightmost once ink above
+/// [`OVERHANG_FROM`] is taken back by what the lean carries it to the right from there.
+fn ends(g: &Glyph, p: &Params) -> Option<(f64, f64)> {
     let (slope, from) = (slope(p), OVERHANG_FROM * p.cap);
     let (mut left, mut right) = (f64::INFINITY, f64::NEG_INFINITY);
-    for contour in &g.glyph.contours {
+    for contour in &g.contours {
         for z in contour.segs.iter().flat_map(|seg| flatten(seg, 1.0)) {
             left = left.min(z.x);
             right = right.max(z.x - slope * (z.y - from).max(0.0));
         }
     }
-    let white = 0.62 * p.cap_sb;
-    left.is_finite().then_some(Fit { width: p.width, left: white - left, right: white - (p.width - right), grown: 1.0 })
+    left.is_finite().then_some((left, right))
 }
 
 /// In the fixed pitch, move what was written so that its ink stands in the middle of the cell: a letter that
@@ -787,7 +827,9 @@ fn centre(g: &mut Draw) {
 }
 
 /// Where an accent stands over a script capital: over the middle of its ink just under the cap height, which
-/// the lean has carried to the right of the middle of its advance.
+/// the lean has carried to the right of the middle of its advance. (A rule over or under it and a stroke
+/// through it attach where they do on every letter, at the middle of the cell it was written in: the registry
+/// places that anchor.)
 fn accent(g: &mut Draw) {
     let (cap, hair) = (g.p.cap, g.p.cap_hair);
     if let Some(x) = ink_mid(&g.glyph, cap - 0.5 * hair) {
@@ -810,8 +852,8 @@ pub fn register(reg: &mut Registry) {
 
 #[cfg(test)]
 mod tests {
+    use rachis_kernel::name_of;
     use rachis_kernel::params::faces;
-    use rachis_kernel::{Glyph, name_of};
 
     use super::*;
 
@@ -844,6 +886,42 @@ mod tests {
     }
 
     #[test]
+    fn no_stroke_turns_tighter_than_its_pen_is_broad() {
+        // where a turn's radius is no more than half the pen, the inner side of the stroke closes to a point
+        // and its outline has curves of no length there
+        each(|c, p, g| {
+            for contour in &g.contours {
+                for seg in contour.segs.iter().filter(|seg| !seg.is_line()) {
+                    let mut points = vec![seg.start()];
+                    points.extend(flatten(seg, 0.05));
+                    let length: f64 = points.windows(2).map(|w| (w[1] - w[0]).abs()).sum();
+                    assert!(length > 1.0, "{c} in {}: a segment {length:.3} long: {seg:?}", p.name);
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn the_white_inside_a_hook_stays_open_in_every_master() {
+        // the smallest hook is 0.56 times as open as the common one (the thin stroke of 𝒳 in the fixed pitch),
+        // and where a hook meets a downstroke the pen is the downstroke's
+        for face in faces() {
+            for p in &face.masters {
+                for natural in [460.0, 640.0, 860.0] {
+                    let d = Hand::new(p, natural);
+                    assert!(d.radius(0.56) > 0.5 * d.h + 5.0, "{}: {} against {}", p.name, d.radius(0.56), d.h);
+                    assert!(d.radius(0.7) > 0.5 * d.s, "{}: {} against {}", p.name, d.radius(0.7), d.s);
+                }
+                if !p.mono {
+                    // in the proportional family the white of the common hook is a pixel at 13 px per em
+                    let d = Hand::new(p, 600.0);
+                    assert!((2.0 * (d.radius(1.0) - 0.5 * d.h) - 76.0).abs() < 1e-9);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn in_the_fixed_pitch_a_script_capital_stays_in_its_cell() {
         each(|c, p, g| {
             if !p.mono {
@@ -869,6 +947,7 @@ mod tests {
             // two script capitals side by side do not touch
             assert!(x1 - g.advance < white, "{c} in {}: {x1} of {}", p.name, g.advance);
             // and nothing below the height from which a letter may overhang stands in the white at its right
+            // (the fit puts the advance there by construction: this holds the fit to it)
             let low = g
                 .contours
                 .iter()
@@ -883,23 +962,42 @@ mod tests {
     fn an_accent_stands_over_the_ink_a_script_capital_has_under_the_cap_height() {
         each(|c, p, g| {
             let top = g.anchors.get("top").unwrap_or_else(|| panic!("{c} in {} has no place for an accent", p.name));
-            let (x0, _, x1, _) = g.bounds().expect("ink");
             assert_eq!(top.y, p.cap);
-            assert!(top.x > x0 && top.x < x1, "{c} in {}: {} outside {x0} to {x1}", p.name, top.x);
+            // the middle of the ink half a hairline under the cap height
+            let middle = ink_mid(g, p.cap - 0.5 * p.cap_hair).expect("ink under the cap height");
+            assert!((top.x - middle).abs() < 1e-6, "{c} in {}: {} for {middle}", p.name, top.x);
+            // which the lean has carried to the right of the middle of the advance, in the proportional family
+            if !p.mono {
+                assert!(top.x > g.advance / 2.0, "{c} in {}: {} of {}", p.name, top.x, g.advance);
+            }
         });
     }
 
     #[test]
-    fn every_script_capital_of_unicode_is_written_once() {
-        let codes: Vec<u32> = CAPITALS.iter().map(|(c, _)| *c as u32).collect();
-        let mut sorted = codes.clone();
-        sorted.sort_unstable();
-        sorted.dedup();
-        assert_eq!(sorted.len(), 26);
-        // the block's holes are the letters that the Letterlike Symbols had already
-        for (i, code) in codes.iter().enumerate() {
-            let in_block = 0x1D49C + i as u32;
-            assert!(*code == in_block || (0x2100..0x2150).contains(code), "letter {i} is U+{code:04X}");
+    fn a_script_capital_takes_a_rule_where_the_letters_of_its_face_do() {
+        let registry = crate::registry();
+        each(|c, p, g| {
+            let rule = g.anchors.get("rule").unwrap_or_else(|| panic!("{c} in {} takes no rule", p.name));
+            let plain = registry.flat("H", p).expect("H");
+            let of_h = plain.anchors.get("rule").expect("H takes a rule");
+            assert_eq!(rule.y, of_h.y);
+            if p.mono {
+                // in a cell of the fixed pitch a rule lies where it lies over any letter
+                assert_eq!(rule.x, of_h.x, "{c} in {}", p.name);
+            }
+        });
+    }
+
+    #[test]
+    fn every_script_capital_has_the_code_point_unicode_gave_it() {
+        // the block of the Mathematical Alphanumeric Symbols has holes where the Letterlike Symbols had the
+        // letter already: ℬ ℰ ℱ ℋ ℐ ℒ ℳ ℛ
+        let letterlike =
+            [(1, 0x212C), (4, 0x2130), (5, 0x2131), (7, 0x210B), (8, 0x2110), (11, 0x2112), (12, 0x2133), (17, 0x211B)];
+        assert_eq!(CAPITALS.len(), 26);
+        for (i, (c, _)) in CAPITALS.iter().enumerate() {
+            let expected = letterlike.iter().find(|(at, _)| *at == i).map_or(0x1D49C + i as u32, |(_, code)| *code);
+            assert_eq!(*c as u32, expected, "letter {i} is U+{:04X}", *c as u32);
         }
     }
 }

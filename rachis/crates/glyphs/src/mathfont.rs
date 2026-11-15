@@ -1097,13 +1097,14 @@ mod tests {
             assert_eq!((heavy.advance, heavy.bounds()), (drawn.advance, drawn.bounds()), "{target} is not a bold {c}");
             let forms = &font.scripts.iter().find(|s| s.0 == name).unwrap_or_else(|| panic!("{c}: no script forms")).1;
             assert_eq!(forms, &[format!("{name}.s1"), format!("{name}.s2")]);
-            // an accent stands over the letter's top, which the lean has carried to the right of its foot
-            let (x0, _, x1, _) = glyph(&name).bounds().unwrap();
-            for of in [&name, &name_of(target), &forms[0]] {
-                assert!(font.top_accents.iter().any(|a| a.0 == *of), "{of} has no place for an accent");
+            // the table states where an accent stands over each form: where the text's marks attach, which is
+            // right of the middle of the advance of a letter that leans
+            for of in [&name, &name_of(target), &forms[0], &forms[1]] {
+                let at = font.top_accents.iter().find(|a| a.0 == *of).unwrap_or_else(|| panic!("{of}: no accent")).1;
+                let form = glyph(of);
+                assert_eq!(Some(at), form.anchors.get("top").map(|z| z.x), "{of}");
+                assert!(at > form.advance / 2.0, "{of}: an accent at {at} of {}", form.advance);
             }
-            let at = font.top_accents.iter().find(|a| a.0 == name).unwrap().1;
-            assert!(at > x0 && at < x1, "{c}: an accent at {at}, ink from {x0} to {x1}");
         }
         // what leans past the advance is stated: a superscript clears the bar of 𝒯
         let correction = |c: char| font.italic_corrections.iter().find(|i| i.0 == name_of(c)).map_or(0.0, |i| i.1);

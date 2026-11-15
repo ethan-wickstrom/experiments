@@ -148,13 +148,42 @@ fn oriented(contours: &linesweeper::topology::Contours) -> Vec<Path> {
     let beziers: Vec<BezPath> = raw.iter().map(Path::to_bezpath).collect();
     let mut out = Vec::with_capacity(raw.len());
     for (i, path) in raw.iter().enumerate() {
-        let probe = path.point_on();
+        let probe = probe(i, &beziers);
         let depth = beziers.iter().enumerate().filter(|&(j, b)| j != i && kurbo::Shape::winding(b, probe) != 0).count();
         let outer = depth % 2 == 0;
         let ccw = path.area() > 0.0;
         out.push(if outer == ccw { path.clone() } else { path.reversed() });
     }
     out
+}
+
+/// A point of the contour `own` from which to ask which of the other contours enclose it: of the points a
+/// third, a half and two thirds along each of its pieces, the one whose height is furthest from the height
+/// of every point of the other contours.
+///
+/// The winding number is counted along a level ray. Two contours of a union often have level edges on one
+/// line (the top of a bar on either side of a stem, the squares of a boxed plus), which the sweep returns a
+/// few billionths of a unit apart. A ray from the middle of such an edge runs along the other contour's edge,
+/// crosses it or not by that noise, and a counter was then taken for an outer contour and filled.
+fn probe(own: usize, contours: &[BezPath]) -> Point {
+    let heights: Vec<f64> = contours
+        .iter()
+        .enumerate()
+        .filter(|&(j, _)| j != own)
+        .flat_map(|(_, b)| b.elements())
+        .flat_map(|el| match *el {
+            PathEl::MoveTo(p) | PathEl::LineTo(p) => vec![p.y],
+            PathEl::QuadTo(c, p) => vec![c.y, p.y],
+            PathEl::CurveTo(c1, c2, p) => vec![c1.y, c2.y, p.y],
+            PathEl::ClosePath => vec![],
+        })
+        .collect();
+    let clear = |p: &Point| heights.iter().map(|y| (y - p.y).abs()).fold(f64::INFINITY, f64::min);
+    contours[own]
+        .segments()
+        .flat_map(|seg| [1.0 / 3.0, 0.5, 2.0 / 3.0].map(|t| kurbo::ParamCurve::eval(&seg, t)))
+        .max_by(|a, b| clear(a).total_cmp(&clear(b)))
+        .unwrap_or(Point::ZERO)
 }
 
 /// Remove the overlaps of `paths` and check the result against the input by rasterising both. The sweep that
@@ -378,6 +407,30 @@ mod tests {
         let mut areas: Vec<f64> = merged.iter().map(Path::area).collect();
         areas.sort_by(f64::total_cmp);
         assert!(areas[0] < 0.0 && areas[1] > 0.0);
+    }
+
+    #[test]
+    fn a_counter_is_asked_for_away_from_the_level_edges_it_shares_a_line_with() {
+        // a box with a spur: the top of its lower bar is the counter's lower edge to the right of the first
+        // stem and the outline's edge to the left of it, on one line but for the noise a sweep leaves
+        let outer = polygon(&[
+            pt(0.0, 0.0),
+            pt(600.0, 0.0),
+            pt(600.0, 700.0),
+            pt(200.0, 700.0),
+            pt(200.0, 100.0 + 1e-9),
+            pt(0.0, 100.0 - 1e-9),
+        ]);
+        let counter = polygon(&[pt(300.0, 100.0), pt(500.0, 100.0), pt(500.0, 600.0), pt(300.0, 600.0)]);
+        let beziers: Vec<BezPath> = [&outer, &counter].map(|c| Path::from_contour(c).to_bezpath()).to_vec();
+        // the middle of the counter's first piece is on that line, and a level ray from it is what went wrong
+        let first = kurbo::ParamCurve::eval(&beziers[1].segments().next().unwrap(), 0.5);
+        assert_eq!(first.y, 100.0);
+        let chosen = probe(1, &beziers);
+        assert!((chosen.y - 100.0).abs() > 50.0 && (chosen.y - 700.0).abs() > 50.0, "{chosen:?}");
+        assert_ne!(kurbo::Shape::winding(&beziers[0], chosen), 0, "the counter lies inside the outline");
+        // and the outline is enclosed by nothing
+        assert_eq!(kurbo::Shape::winding(&beziers[1], probe(0, &beziers)), 0);
     }
 
     #[test]
