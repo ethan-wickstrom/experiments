@@ -16,6 +16,7 @@ Every open item of the typeface (a gap, an idea, a deferral, a question, a reque
 - **G8 · fontbakery's findings on the final fonts** (`check-universal`, version 1.1.0, on the two upright variable fonts, 2026-11-15: 181 PASS, 13 WARN, 6 FAIL, no ERROR). Four FAILs come from checking two families in one run (family names and axes differ between Rachis and Rachis Mono, as they should). The fonts' own: `usWinAscent` 1000 and `usWinDescent` 250 are less than the 1100 and 350 that box-drawing lines and bracket pieces reach, because those overshoot the line box so that neighbouring lines join (T13, T22); where a renderer clips at the win metrics it clips only the overshoot. Warnings to look at: the start points of one contour of `⇳` and of `⦾` differ between the Light and the Bold; `uni0312.case` is not reachable; `numberOfHMetrics` is 1983 in the fixed pitch because zero-advance marks are not first in the glyph order; no `avar` (the axes are linear); the carons of `ď ľ ť Ľ` want a look by eye. The italics and the static fonts have not been run.
 - **G14 · Tests of the compiler cover the proportional face only through `build.rs`** (axes, advances, GPOS features, the kerning's behaviour). No test reads a kerning value back from a compiled font, or compiles the italics or a static font of Rachis.
 - **G15 · Kerning of punctuation against letters is crude**: a colon before o is closed by 30 units because only the rows of its two dots count.
+- **G16 · The combining overline, low line and long solidus attach only to letters and figures** (the `rule` anchor of the modules lower, upper, digits, greek, latin, letterlike). After a sign or an arrow they are still set over the following character in shaped text.
 - **G9 · The proportional family's details.** The ellipsis keeps the cell; parentheses, brackets and braces are the fixed pitch's shapes, wide for a text face; `ď ľ ť` are loose; the Greek letters' widths are stated as cells (`Fit::letter`), not as sidebearings and ink; the three-per-em and other spaces are not kerned against.
 - **G10 · Proofing coverage.** The Small masters and the Text Light and Bold were looked at as lines of text, not glyph by glyph; many glyphs drawn on 2026-11-15 were proofed in the Regular and the Bold of the fixed pitch only (each module's author listed what was not proofed).
 - **G11 · The proof tool draws a zero-advance mark in the cell after its base**, so bare combining marks cannot be proofed in place.
@@ -34,7 +35,7 @@ Every open item of the typeface (a gap, an idea, a deferral, a question, a reque
 
 ### Requests to the owner
 
-None.
+- **REQ-1 · Devin's review of pull request 58.** Its commit status on the pull request was red ("Completed analysis in 2s") and it posted nothing; the details page opens only in the owner's Devin account. If it lists findings, paste them into a session and they will be verified as the other reviews' were. It costs nothing and unblocks nothing that is waiting.
 
 ## Closed
 
