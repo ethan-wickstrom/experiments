@@ -290,15 +290,6 @@ impl Path {
         p
     }
 
-    /// A point on the contour: the middle of its first piece.
-    pub(crate) fn point_on(&self) -> Point {
-        match self.pieces.first() {
-            None => self.start,
-            Some(Piece::Line(b)) => self.start.midpoint(*b),
-            Some(Piece::Cubic(c1, c2, b)) => kurbo::ParamCurve::eval(&CubicBez::new(self.start, *c1, *c2, *b), 0.5),
-        }
-    }
-
     /// The signed area: positive when the contour runs counter-clockwise (y up).
     pub(crate) fn area(&self) -> f64 {
         kurbo::Shape::area(&self.to_bezpath())

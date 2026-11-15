@@ -118,6 +118,8 @@ math { font-family: "Rachis Math", math; }
 .eq { overflow-x: auto; padding-block: 0.6rem; font-size: 1.25rem; }
 .eq + .eq { border-top: 1px solid var(--rule); }
 .eq math { margin: 0; }
+/* a formula keeps the comma or the full stop that follows it: a line does not begin with one */
+.nb { white-space: nowrap; }
 .inline { font-size: 1.0625rem; line-height: 1.75; max-width: 44em; margin: 0; }
 @supports not (font-size-adjust: from-font) {
   /* a stand-in mathematics font keeps its own x-height here: give the lines the room a taller one needs */
@@ -173,7 +175,7 @@ th { font-weight: 600; white-space: nowrap; }
       <span>Rachis Math · for formulas</span>
       <span>weight 300–700</span>
       <span>optical size 8–16</span>
-      <span>2,113 glyphs</span>
+      <span>2,139 glyphs</span>
       <span>0 ligatures</span>
     </div>
   </header>
@@ -282,7 +284,7 @@ th { font-weight: 600; white-space: nowrap; }
     </div>
     <div class="plate">
       <p class="cap">In a paragraph</p>
-      <p class="inline">Let <math><mo>(</mo><mi>X</mi><mo>,</mo><mi>d</mi><mo>)</mo></math> be a compact metric space and <math><mi>f</mi><mo>:</mo><mi>X</mi><mo>→</mo><mi>ℝ</mi></math> continuous. For every <math><mi>ε</mi><mo>&gt;</mo><mn>0</mn></math> there is <math><mi>δ</mi><mo>&gt;</mo><mn>0</mn></math> such that <math><mi>d</mi><mrow><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow><mo>&lt;</mo><mi>δ</mi></math> implies <math><mrow><mo>|</mo><mi>f</mi><mrow><mo>(</mo><mi>x</mi><mo>)</mo></mrow><mo>−</mo><mi>f</mi><mrow><mo>(</mo><mi>y</mi><mo>)</mo></mrow><mo>|</mo></mrow><mo>&lt;</mo><mi>ε</mi></math>. The eigenvalues <math><msub><mi>λ</mi><mn>1</mn></msub><mo>≥</mo><mo>⋯</mo><mo>≥</mo><msub><mi>λ</mi><mi>n</mi></msub></math> of <math><msup><mi>A</mi><mo>⊤</mo></msup><mi>A</mi></math> are the squares <math><msubsup><mi>σ</mi><mi>i</mi><mn>2</mn></msubsup></math> of the singular values, so <math><msub><mrow><mo>‖</mo><mi>A</mi><mo>‖</mo></mrow><mn>2</mn></msub><mo>=</mo><msub><mi>σ</mi><mn>1</mn></msub></math> and <math><msqrt><mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup></mrow></msqrt><mo>≤</mo><mrow><mo>|</mo><mi>a</mi><mo>|</mo></mrow><mo>+</mo><mrow><mo>|</mo><mi>b</mi><mo>|</mo></mrow></math>.</p>
+      <p class="inline">Let <math><mo>(</mo><mi>X</mi><mo>,</mo><mi>d</mi><mo>)</mo></math> be a compact metric space and <math><mi>f</mi><mo>:</mo><mi>X</mi><mo>→</mo><mi>ℝ</mi></math> continuous. For every <math><mi>ε</mi><mo>&gt;</mo><mn>0</mn></math> there is <math><mi>δ</mi><mo>&gt;</mo><mn>0</mn></math> such that <math><mi>d</mi><mrow><mo>(</mo><mi>x</mi><mo>,</mo><mi>y</mi><mo>)</mo></mrow><mo>&lt;</mo><mi>δ</mi></math> implies <span class="nb"><math><mrow><mo>|</mo><mi>f</mi><mrow><mo>(</mo><mi>x</mi><mo>)</mo></mrow><mo>−</mo><mi>f</mi><mrow><mo>(</mo><mi>y</mi><mo>)</mo></mrow><mo>|</mo></mrow><mo>&lt;</mo><mi>ε</mi></math>.</span> The eigenvalues <math><msub><mi>λ</mi><mn>1</mn></msub><mo>≥</mo><mo>⋯</mo><mo>≥</mo><msub><mi>λ</mi><mi>n</mi></msub></math> of <math><msup><mi>A</mi><mo>⊤</mo></msup><mi>A</mi></math> are the squares <math><msubsup><mi>σ</mi><mi>i</mi><mn>2</mn></msubsup></math> of the singular values, so <math><msub><mrow><mo>‖</mo><mi>A</mi><mo>‖</mo></mrow><mn>2</mn></msub><mo>=</mo><msub><mi>σ</mi><mn>1</mn></msub></math> and <span class="nb"><math><msqrt><mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup></mrow></msqrt><mo>≤</mo><mrow><mo>|</mo><mi>a</mi><mo>|</mo></mrow><mo>+</mo><mrow><mo>|</mo><mi>b</mi><mo>|</mo></mrow></math>.</span></p>
     </div>
     <div class="two">
       <div class="plate">
@@ -312,7 +314,13 @@ th { font-weight: 600; white-space: nowrap; }
         <div class="eq"><math display="block"><mi>α</mi><mi>β</mi><mi>γ</mi><mi>δ</mi><mi>ε</mi><mi>θ</mi><mi>λ</mi><mi>μ</mi><mi>π</mi><mi>ρ</mi><mi>σ</mi><mi>φ</mi><mi>ω</mi></math></div>
       </div>
     </div>
-    <p class="note col">Rachis Math has 3,354 glyphs, fourteen sizes of each delimiter up to 6 em tall, and 47 arrows, bars and braces that are assembled to any length. It was set in Typst, in LuaLaTeX and from MathML until each set it right; they read a font differently, and the repository’s <code>proofs/</code> has the sheets. It has one weight, and no script or Fraktur alphabet yet.</p>
+    <div class="plate">
+      <p class="cap">Script capitals, beside the italic capitals they must be told from</p>
+      <p class="inline">Let <math><mi>ℱ</mi><mo>⊆</mo><mi>𝒫</mi><mrow><mo>(</mo><mi mathvariant="normal">Ω</mi><mo>)</mo></mrow></math> be a <math><mi>σ</mi></math>-algebra with <span class="nb"><math><mi>A</mi><mo>∈</mo><mi>𝒜</mi></math>,</span> <span class="nb"><math><mi>B</mi><mo>∈</mo><mi>ℬ</mi></math>,</span> <math><mi>C</mi><mo>∈</mo><mi>𝒞</mi></math> and <span class="nb"><math><mi>P</mi><mo>∈</mo><mi>𝒫</mi></math>.</span> Then <span class="nb"><math><mi>T</mi><mrow><mo>(</mo><mi>n</mi><mo>)</mo></mrow><mo>=</mo><mi>𝒪</mi><mrow><mo>(</mo><mi>n</mi><mspace width="0.17em"/><mi>log</mi><mspace width="0.17em"/><mi>n</mi><mo>)</mo></mrow></math>,</span> the Lagrangian is <span class="nb"><math><mi>ℒ</mi><mrow><mo>(</mo><mi>q</mi><mo>,</mo><mover><mi>q</mi><mo>˙</mo></mover><mo>)</mo></mrow></math>,</span> the Hilbert space <span class="nb"><math><mi>ℋ</mi><mo>=</mo><msup><mi>L</mi><mn>2</mn></msup><mrow><mo>(</mo><mi>ℝ</mi><mo>)</mo></mrow></math>,</span> and <span class="nb"><math><mi>f</mi><mo>∈</mo><msup><mi>𝒞</mi><mi>∞</mi></msup><mrow><mo>(</mo><mi>M</mi><mo>)</mo></mrow></math>,</span> <span class="nb"><math><mi>X</mi><mo>∼</mo><mi>𝒩</mi><mrow><mo>(</mo><mi>μ</mi><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>)</mo></mrow></math>,</span> <span class="nb"><math><mi>v</mi><mo>∈</mo><msub><mi>𝒯</mi><mi>x</mi></msub><mi>ℳ</mi></math>,</span> <span class="nb"><math><msubsup><mi>ℋ</mi><mn>0</mn><mn>1</mn></msubsup></math>,</span> <span class="nb"><math><msub><mi>ℱ</mi><mi>t</mi></msub></math>.</span></p>
+      <div class="eq"><math display="block"><mrow><mi>𝒜</mi><mi>ℬ</mi><mi>𝒞</mi><mi>𝒟</mi><mi>ℰ</mi><mi>ℱ</mi><mi>𝒢</mi><mi>ℋ</mi><mi>ℐ</mi><mi>𝒥</mi><mi>𝒦</mi><mi>ℒ</mi><mi>ℳ</mi></mrow></math></div>
+      <div class="eq"><math display="block"><mrow><mi>𝒩</mi><mi>𝒪</mi><mi>𝒫</mi><mi>𝒬</mi><mi>ℛ</mi><mi>𝒮</mi><mi>𝒯</mi><mi>𝒰</mi><mi>𝒱</mi><mi>𝒲</mi><mi>𝒳</mi><mi>𝒴</mi><mi>𝒵</mi></mrow></math></div>
+    </div>
+    <p class="note col">Rachis Math has 3,458 glyphs, fourteen sizes of each delimiter up to 6 em tall, and 47 arrows, bars and braces that are assembled to any length. It was set in Typst, in LuaLaTeX and from MathML until each set it right; they read a font differently, and the repository’s <code>proofs/</code> has the sheets. A script capital is the capital written by hand with the capitals’ own pen: it leans 16 degrees where the italic leans 10 and has a hook wherever a stroke begins or ends, each large enough to be seen at 13 pixels, and a test holds every one of them, regular and bold, apart from its italic, its upright and every other script capital. The font has one weight, and no script small letters and no Fraktur alphabet yet.</p>
   </section>
 
   <section aria-labelledby="h-term">
@@ -325,13 +333,13 @@ th { font-weight: 600; white-space: nowrap; }
 $ cargo run --release -p rachis -- build
    {{size:variable/Rachis[opsz,wght].ttf}}  fonts/variable/Rachis[opsz,wght].ttf
    {{size:variable/RachisMono[wght].ttf}}  fonts/variable/RachisMono[wght].ttf
-<span class="a">40 files in 19.15 s</span> <span class="d">(statics hinted)</span>
+<span class="a">40 files in 18.70 s</span> <span class="d">(statics hinted)</span>
 
 ┌──────────────┬────────┬────────┐   ╭─ glyphs ─────────────╮
 │ face         │ glyphs │  bytes │   │ ▁▂▃▄▅▆▇█ ░▒▓ ▖▗▘▝▚▞  │
 ├──────────────┼────────┼────────┤   │ ●○◆◇■□▲△ ✓✗ ← ↑ → ↓  │
-│ Rachis Mono  │   2113 │ {{size:variable/RachisMono[wght].ttf}} │   ╰──────────────────────╯
-│ Rachis       │   1533 │ {{size:variable/Rachis[opsz,wght].ttf}} │   <span class="d">fn kern(a: &amp;Sides, b: &amp;Sides) -&gt; f64 {</span>
+│ Rachis Mono  │   2139 │ {{size:variable/RachisMono[wght].ttf}} │   ╰──────────────────────╯
+│ Rachis       │   1559 │ {{size:variable/Rachis[opsz,wght].ttf}} │   <span class="d">fn kern(a: &amp;Sides, b: &amp;Sides) -&gt; f64 {</span>
 └──────────────┴────────┴────────┘   <span class="d">    if a.rows.1 &lt; b.rows.0 { return 0.0; }</span>
 <span class="a">*</span> 1aff9c9 <span class="d">the fonts, the documents, the measurements</span>
 <span class="a">│╲</span>

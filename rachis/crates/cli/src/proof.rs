@@ -734,7 +734,11 @@ pub(crate) struct RefFace {
 
 impl RefFace {
     pub(crate) fn load(path: &std::path::Path, family: String) -> Result<RefFace, String> {
-        let data = std::fs::read(path).map_err(|e| e.to_string())?;
+        RefFace::from_bytes(std::fs::read(path).map_err(|e| e.to_string())?, family)
+    }
+
+    /// A font that is in memory: one this program compiled is read as the references are.
+    pub(crate) fn from_bytes(data: Vec<u8>, family: String) -> Result<RefFace, String> {
         let font = FontRef::new(&data).map_err(|e| e.to_string())?;
         let location = font.axes().location([("wght", 400.0)]);
         let upm = f64::from(font.metrics(Size::unscaled(), &location).units_per_em);

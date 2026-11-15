@@ -6,11 +6,17 @@
 //! their median, the display integral, where the braces over and under a group stand, how a wide accent is
 //! measured, the prime's form for a script, and the boxes a line and a glyph's clipping are taken from. These are the numbers decision T30
 //! quotes.
+//!
+//! With `--script` it measures how far each script capital of the compiled font stands from the italic capital
+//! and the upright capital it could be read as, and from the nearest other script capital, with the distance of
+//! `rachis measure`; with `--refs DIR` beside the same distances in every font of `DIR` that has the three
+//! alphabets. These are the numbers decision T31 quotes, and a test holds the font to the target.
 
 use std::fmt::Write as _;
 use std::path::Path;
 use std::process::ExitCode;
 
+use rachis_glyphs::calligraphic;
 use rachis_glyphs::mathfont::{MathFont, Stretch};
 use rachis_kernel::Registry;
 use skrifa::GlyphId;
@@ -21,9 +27,10 @@ use skrifa::raw::tables::math::MathGlyphConstruction;
 use tiny_skia::PathBuilder;
 
 use crate::build;
-use crate::proof::SkiaPen;
+use crate::measure::{Align, Glyphs, TARGET_VIEW, VIEWS, pair_distance};
+use crate::proof::{RefFace, SkiaPen};
 
-const USAGE: &str = "usage: rachis math [--refs DIR]";
+const USAGE: &str = "usage: rachis math [--refs DIR]\n       rachis math --script [--refs DIR]";
 
 /// Add a line to the report.
 macro_rules! say {
@@ -32,20 +39,25 @@ macro_rules! say {
     }};
 }
 
-/// Run `rachis math [--refs DIR]`.
+/// Run `rachis math [--refs DIR]` or `rachis math --script [--refs DIR]`.
 pub fn run(registry: &Registry, args: &[String]) -> ExitCode {
-    let refs = match args {
+    let (script, rest) = match args {
+        [flag, rest @ ..] if flag == "--script" => (true, rest),
+        _ => (false, args),
+    };
+    let refs = match rest {
         [] => None,
-        [flag, dir] if flag == "--refs" => Some(dir),
+        [flag, dir] if flag == "--refs" => Some(Path::new(dir)),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::FAILURE;
         }
     };
     let mut out = String::new();
-    let result = match refs {
-        None => summary(registry, &mut out),
-        Some(dir) => compare(registry, Path::new(dir), &mut out),
+    let result = match (script, refs) {
+        (true, dir) => scripts(registry, dir, &mut out),
+        (false, None) => summary(registry, &mut out),
+        (false, Some(dir)) => compare(registry, dir, &mut out),
     };
     // written in one piece, and a reader that stops early (`| head`) is not an error
     let _ = std::io::Write::write_all(&mut std::io::stdout().lock(), out.as_bytes());
@@ -438,4 +450,212 @@ fn compare(registry: &Registry, dir: &Path, out: &mut String) -> Result<(), Stri
         say!(out, "  {:<28} {}", f.name, row.unwrap_or_else(|| "-".into()));
     }
     Ok(())
+}
+
+/// A script capital of a font beside the capitals it could be read as.
+struct Near {
+    script: char,
+    /// Its distance from the italic capital of the same letter.
+    italic: f64,
+    /// From the upright capital.
+    upright: f64,
+    /// The script capital it is nearest to, and how near.
+    other: char,
+    nearest: f64,
+}
+
+/// The script capitals of one font.
+struct Script {
+    name: String,
+    rows: Vec<Near>,
+}
+
+/// The first code points of the bold capitals of the Mathematical Alphanumeric Symbols: upright, italic, script.
+const BOLD: [u32; 3] = [0x1D400, 0x1D468, 0x1D4D0];
+
+impl Script {
+    /// The script capitals of `face`, or its bold script capitals beside its bold italic and bold upright
+    /// capitals. `None` when the font lacks a script capital, or the italic or upright capital it is measured
+    /// against.
+    fn of(face: &mut RefFace, bold: bool) -> Option<Script> {
+        let letters: Vec<(char, char, char)> = ('A'..='Z')
+            .zip(calligraphic::CAPITALS)
+            .zip(0u32..)
+            .filter_map(|((upright, (script, _)), i)| {
+                Some(if bold {
+                    (char::from_u32(BOLD[0] + i)?, char::from_u32(BOLD[1] + i)?, char::from_u32(BOLD[2] + i)?)
+                } else {
+                    (upright, char::from_u32(0x1D434 + i)?, script)
+                })
+            })
+            .collect();
+        let glyphs = Glyphs::load(face, Align::Centre, letters.iter().flat_map(|&(a, b, c)| [a, b, c]));
+        let image = |c: char| glyphs.image(&c.to_string(), VIEWS[TARGET_VIEW]);
+        let mut images = Vec::new();
+        for &(upright, italic, script) in &letters {
+            images.push((image(upright)?, image(italic)?, image(script)?));
+        }
+        let rows = (0..letters.len())
+            .map(|i| {
+                let own = &images[i].2;
+                let (other, nearest) = (0..letters.len())
+                    .filter(|&j| j != i)
+                    .map(|j| (letters[j].2, pair_distance(own, &images[j].2, Align::Centre)))
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                    .expect("there are 26 letters");
+                Near {
+                    script: letters[i].2,
+                    italic: pair_distance(own, &images[i].1, Align::Centre),
+                    upright: pair_distance(own, &images[i].0, Align::Centre),
+                    other,
+                    nearest,
+                }
+            })
+            .collect();
+        Some(Script { name: face.family.clone(), rows })
+    }
+
+    /// The median of a distance over the letters, and the letter that has the least of it.
+    fn column(&self, pick: impl Fn(&Near) -> f64) -> (f64, char, f64) {
+        let least = self.rows.iter().min_by(|a, b| pick(a).total_cmp(&pick(b))).expect("26 rows");
+        (median(self.rows.iter().map(&pick).collect()).unwrap_or(f64::NAN), least.script, pick(least))
+    }
+}
+
+/// `rachis math --script`: how far the script capitals stand from the capitals they could be read as.
+fn scripts(registry: &Registry, dir: Option<&Path>, out: &mut String) -> Result<(), String> {
+    let family = build::math_family(registry)?;
+    let bytes = rachis_font::static_ttf(&family, &family.instances[0]).map_err(|e| e.to_string())?;
+    let x_height = f64::from(family.metrics.x_height);
+    let mut sides = vec![("Rachis Math".to_string(), Face::new("Rachis Math".into(), bytes.clone(), x_height))];
+    let mut face = RefFace::from_bytes(bytes, "Rachis Math".into())?;
+    let own = Script::of(&mut face, false).ok_or("the mathematics font lacks a script capital")?;
+    let mut heavy: Vec<Script> = Script::of(&mut face, true).into_iter().collect();
+    let mut refs = Vec::new();
+    if let Some(dir) = dir {
+        let mut files: Vec<_> = std::fs::read_dir(dir)
+            .map_err(|e| format!("{}: {e}", dir.display()))?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x.eq_ignore_ascii_case("ttf") || x.eq_ignore_ascii_case("otf")))
+            .collect();
+        files.sort();
+        for path in files {
+            let name = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let Ok(mut face) = RefFace::load(&path, name.clone()) else { continue };
+            match Script::of(&mut face, false) {
+                Some(s) => {
+                    refs.push(s);
+                    heavy.extend(Script::of(&mut face, true));
+                    sides.push((name.clone(), std::fs::read(&path).ok().and_then(|d| Face::new(name, d, x_height))));
+                }
+                None => say!(out, "{name}: no script capitals beside italic and upright ones"),
+            }
+        }
+    }
+    let view = VIEWS[TARGET_VIEW];
+    say!(
+        out,
+        "the script capitals at {} px per em under a blur of {} px: the distance of each from the italic capital, \
+         from the upright capital and from the nearest other script capital",
+        view.px,
+        view.sigma
+    );
+    let picks: [fn(&Near) -> f64; 3] = [|r| r.italic, |r| r.upright, |r| r.nearest];
+    say!(out, "\n{:<28} {:<16} {:<16} {:<16}", "", "from the italic", "from the upright", "from the nearest");
+    say!(out, "{:<28} {:<16} {:<16} {:<16}", "font", "median  least", "median  least", "median  least");
+    let summary = |out: &mut String, s: &Script| {
+        let cells = picks.map(|pick| {
+            let (middle, letter, least) = s.column(pick);
+            format!("{middle:.3}   {least:.3} {letter}")
+        });
+        say!(out, "{:<28} {:<16} {:<16} {:<16}", s.name, cells[0], cells[1], cells[2]);
+    };
+    for s in std::iter::once(&own).chain(&refs) {
+        summary(out, s);
+    }
+    say!(
+        out,
+        "\nthe bold script capitals, from the bold italic, the bold upright and the nearest other bold script capital"
+    );
+    for s in &heavy {
+        summary(out, s);
+    }
+    say!(out, "\n{:<8} {:<26} {:<26} {:<26}", "", "from the italic", "from the upright", "from the nearest");
+    let others = if refs.is_empty() { String::new() } else { format!("median of {}", refs.len()) };
+    let head = format!("{:<12} {:<13}", "Rachis", others);
+    say!(out, "{:<8} {head} {head} {head}", "letter");
+    for (i, row) in own.rows.iter().enumerate() {
+        let theirs = picks.map(|pick| {
+            median(refs.iter().map(|s| pick(&s.rows[i])).collect()).map_or(String::new(), |v| format!("{v:.3}"))
+        });
+        say!(
+            out,
+            "{:<8} {:<12} {:<13} {:<12} {:<13} {:<12} {:<13}",
+            row.script,
+            format!("{:.3}", row.italic),
+            theirs[0],
+            format!("{:.3}", row.upright),
+            theirs[1],
+            format!("{:.3} {}", row.nearest, row.other),
+            theirs[2]
+        );
+    }
+    say!(
+        out,
+        "\nthe white at the sides of a script capital (less than none where its ink stands past its advance) and \
+         its italic correction: medians of the 26, at an x-height of {x_height:.0}"
+    );
+    say!(out, "{:<28} {:>6} {:>6} {:>11}", "font", "left", "right", "correction");
+    for (name, face) in &sides {
+        let Some(face) = face else { continue };
+        let of = |pick: &dyn Fn(GlyphId, (f64, f64, f64, f64)) -> f64| {
+            let values = calligraphic::CAPITALS
+                .iter()
+                .filter_map(|(c, _)| face.glyph(*c).and_then(|g| Some(pick(g, face.bounds(g)?) * face.scale)))
+                .collect();
+            median(values).unwrap_or(f64::NAN)
+        };
+        let (left, right) = (of(&|_, b| b.0), of(&|g, b| face.advance(g) - b.2));
+        let correction = of(&|g, _| face.italic_correction(g).unwrap_or(0.0));
+        say!(out, "{name:<28} {left:>6.0} {right:>6.0} {correction:>11.0}");
+    }
+    if !refs.is_empty() {
+        say!(out, "\neach letter from its italic capital, font by font");
+        let all: Vec<&Script> = std::iter::once(&own).chain(&refs).collect();
+        let short = |name: &str| name.chars().filter(|c| c.is_alphanumeric()).take(9).collect::<String>();
+        let heads: Vec<String> = all.iter().map(|s| format!("{:<9}", short(&s.name))).collect();
+        say!(out, "{:<8} {}", "letter", heads.join(" "));
+        for i in 0..own.rows.len() {
+            let cells: Vec<String> = all.iter().map(|s| format!("{:<9.3}", s.rows[i].italic)).collect();
+            say!(out, "{:<8} {}", own.rows[i].script, cells.join(" "));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A reader has to tell a script capital from the italic and the upright capital of the same letter, which
+    /// mean other things in the same formula, and from every other script capital: none comes nearer than the
+    /// target `rachis measure` sets for a pair of notation.
+    #[test]
+    fn no_script_capital_of_the_mathematics_font_is_near_a_capital_it_could_be_read_as() {
+        let registry = rachis_glyphs::registry();
+        let family = build::math_family(&registry).expect("the mathematics font");
+        let bytes = rachis_font::static_ttf(&family, &family.instances[0]).expect("it compiles");
+        let mut face = RefFace::from_bytes(bytes, "Rachis Math".into()).expect("a font");
+        let target = crate::measure::MATH.expect("a target");
+        // the regular ones beside the italic and the upright capitals, the bold ones beside the bold ones
+        for bold in [false, true] {
+            let script = Script::of(&mut face, bold).expect("its script capitals");
+            assert_eq!(script.rows.len(), 26);
+            for Near { script, italic, upright, other, nearest } in &script.rows {
+                assert!(*italic >= target, "{script} is {italic:.3} from its italic capital");
+                assert!(*upright >= target, "{script} is {upright:.3} from its upright capital");
+                assert!(*nearest >= target, "{script} is {nearest:.3} from {other}");
+            }
+        }
+    }
 }
