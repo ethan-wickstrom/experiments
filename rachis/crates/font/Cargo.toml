@@ -7,7 +7,12 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+kurbo = "0.13"
+linesweeper = "0.5"
 rachis-kernel = { path = "../kernel" }
+sha2 = "0.11"
+ttf2woff2 = "0.14"
+write-fonts = "0.56"
 
 [lints]
 workspace = true

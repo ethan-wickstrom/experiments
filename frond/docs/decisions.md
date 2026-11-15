@@ -110,7 +110,7 @@ Every decision frond rests on: what was chosen, what was rejected and why, and w
 - Decision: branch, push, open a PR, run the local checks, merge. A PR is a record, not a review gate.
 - Rejected: waiting on Codex or Devin bot reviews. Nobody acts on them, and the local test suite is the gate.
 
-## D18 · State lives in the repository (2026-11-03, active)
+## D18 · State lives in the repository (2026-11-03, active; what the root `CLAUDE.md` holds is amended by D62)
 - Decision:
   - `CLAUDE.md` at the repository root states the mission, the autonomy and how to resume, and imports only `frond/docs/now.md`;
   - `frond/docs/ledger.md` is the one ledger of everything open and closed;
@@ -524,3 +524,9 @@ Each stays closed unless new evidence reopens it:
 - Why: the rule weighed pass rate and cost per trial and left refusals out, and that was a flaw. A refused trial is unscored, so refusals are missing data, and if an arm's refusal rate depends on what it does (D60), that missing data can bias the comparisons E1–E5 make, not just cut their power. Medium was refused in 6 of 16 trials, against high's 3 of 16 in E0b, and lost both trials of `hof-topology-interpenetration`, which high passed twice. Medium's 25% saving per trial ($1.13 against $1.51) is gone per scored trial ($1.80 against $1.86), and its pass-rate edge (5 of 10 against 3 of 10 on the 5 tasks scored at both) rests on 10 trials each. The trials ran a day apart, so the refusal difference may be the day's rather than effort's; that leaves the evidence for medium weak, not strong.
 - Rejected: medium, as the rule picked (the refusal risk outweighs a saving that disappears per scored trial); a same-day high control of 8 trials, as first proposed on #56 (Codex: at E0b's rate, 2 or more refusals in 8 come about 46% of the time, so either reading would be unsupported; a control large enough to tell is beyond the $40 approved); deciding later (E1's specs need an effort now).
 - Consequence: E0c's lesson is recorded for the next pre-registered rule: a rule that compares arms states how it counts trials that cannot be scored. E1's analysis reports refused trials per arm (D60), and a refusal rate above E0b's 3 in 16 in any arm is flagged in its report.
+
+## D62 · The repository holds any project; each project carries its own instructions (2026-11-15, active, amends D18)
+- Decision: at the owner's instruction, the repository is for any experiment or project built with coding agents, not for frond alone. The root `CLAUDE.md` states what holds for every project (the autonomy, the PR and merge rules, the ledger and decision discipline) and lists the projects. `frond/CLAUDE.md` states frond's mission, how to resume it and its checks, and imports `docs/now.md`. The Stop hook's message names the project's ledger, not frond's.
+- Why: the owner said so on 2026-11-15, after a second project, the Rachis typeface (`rachis/`), was added. A root file that states frond's mission and imports frond's `now.md` loads frond's state into every session of every project.
+- Rejected: keeping frond's sections in the root file beside the general ones (every project's sessions would carry them); a decisions document and a ledger for the repository itself (two decisions so far concern the repository and not a project, D18 and this one; they stay in this file until there are enough to move).
+- Consequence: D18 rejected `frond/CLAUDE.md` because a nested `CLAUDE.md` loads only once a file under `frond/` has been read. That is still true, so the first step of resuming in the root file is to read the project's `CLAUDE.md`.
