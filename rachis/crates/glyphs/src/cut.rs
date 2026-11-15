@@ -113,23 +113,25 @@ fn crossings(seg: &Seg, c: f64) -> Vec<f64> {
             if xs.iter().all(|&x| x > c) || xs.iter().all(|&x| x < c) {
                 return Vec::new();
             }
-            // between two stationary points of x the curve crosses the line at most once
+            // Between two stationary points the curve crosses the line at most once. A point on the line counts
+            // as left of it, so a crossing that falls exactly on a stationary point is found in one of the two
+            // stretches that meet there, and not in both or in neither.
             let mut stops = vec![0.0];
             stops.extend(seg.extrema());
             stops.push(1.0);
-            let f = |t: f64| seg.at(t).x - c;
+            let right = |t: f64| seg.at(t).x > c;
             let mut found = Vec::new();
             for pair in stops.windows(2) {
                 let (mut lo, mut hi) = (pair[0], pair[1]);
-                if f(lo) * f(hi) >= 0.0 {
+                if right(lo) == right(hi) {
                     continue;
                 }
                 for _ in 0..60 {
                     let mid = (lo + hi) / 2.0;
-                    if f(lo) * f(mid) <= 0.0 {
-                        hi = mid;
-                    } else {
+                    if right(lo) == right(mid) {
                         lo = mid;
+                    } else {
+                        hi = mid;
                     }
                 }
                 let t = (lo + hi) / 2.0;
@@ -245,6 +247,18 @@ fn with_end(seg: &Seg, z: V) -> Seg {
         Seg::Line(a, _) => Seg::Line(a, z),
         Seg::Cubic(p0, c1, c2, _) => Seg::Cubic(p0, c1, c2, z),
     }
+}
+
+/// The stretches of the plumb line at `x` that are inside the outlines, bottom to top.
+pub fn up(contours: &[Contour], x: f64) -> Vec<(f64, f64)> {
+    cross_section(&polygons(contours), x)
+}
+
+/// The stretches of the level line at `y` that are inside the outlines, left to right.
+pub fn along(contours: &[Contour], y: f64) -> Vec<(f64, f64)> {
+    let turned: Vec<Vec<V>> =
+        polygons(contours).iter().map(|poly| poly.iter().map(|z| pt(z.y, z.x)).collect()).collect();
+    cross_section(&turned, y)
 }
 
 /// What of the outlines lies between the plumb lines at `x0` and `x1`, moved so that `x0` is the origin.
@@ -450,6 +464,23 @@ mod tests {
         // a line that misses it leaves it whole or leaves nothing
         assert_eq!(half(&disc, 150.0, false), Some(vec![disc.clone()]));
         assert_eq!(half(&disc, 150.0, true), Some(Vec::new()));
+    }
+
+    #[test]
+    fn a_curve_that_crosses_exactly_where_it_is_highest_is_still_cut() {
+        // an arch from (0, 0) to (2, 0): x runs steadily, and the arch is highest at t = 1/2, where x is 1
+        let arch = Seg::Cubic(pt(0.0, 0.0), pt(0.5, 1.0), pt(1.5, 1.0), pt(2.0, 0.0));
+        assert_eq!(arch.at(0.5).x, 1.0);
+        assert!(arch.extrema().contains(&0.5), "{:?}", arch.extrema());
+        let found = crossings(&arch, 1.0);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!((found[0] - 0.5).abs() < 1e-9);
+        // and so is the closed shape under it: its two halves are the whole
+        let shape = Contour::new(vec![arch, Seg::Line(pt(2.0, 0.0), pt(0.0, 0.0))]);
+        let (left, right) = (half(&shape, 1.0, false).unwrap(), half(&shape, 1.0, true).unwrap());
+        assert_eq!((left.len(), right.len()), (1, 1));
+        assert!((area(&left) + area(&right) - shape.area().abs()).abs() < 1e-9);
+        assert!((area(&left) - area(&right)).abs() < 1e-9);
     }
 
     #[test]

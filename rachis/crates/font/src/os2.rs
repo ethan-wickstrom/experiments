@@ -233,9 +233,9 @@ pub(crate) fn os2(family: &Family, built: &Built, style: &Style, max_context: u1
     let first = cps.first().map_or(0, |&c| c.min(0xFFFF) as u16);
     let last = cps.last().map_or(0, |&c| c.min(0xFFFF) as u16);
     // Software that clips a glyph at the win metrics must not clip the delimiters of a mathematics font, which
-    // are several lines tall: there the win metrics are the font's bounding box, as in seven of the nine
-    // mathematics fonts `rachis math --refs` was run on (the other two fall short of theirs). The line is still
-    // the typo metrics' (USE_TYPO_METRICS is set).
+    // are several lines tall: there the win metrics are the font's bounding box, as in six of the nine
+    // mathematics fonts `rachis math --refs` was run on (the other three fall short of theirs, one of them by
+    // 17 units). The line is still the typo metrics' (USE_TYPO_METRICS is set).
     let (mut win_ascent, mut win_descent) = (m.ascender.max(0) as u16, m.descender.unsigned_abs());
     if family.math.is_some() {
         for b in built.glyf.bboxes.iter().flatten() {

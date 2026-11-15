@@ -4,7 +4,7 @@
 //! what stretches, with its sizes and its pieces. With `--refs DIR` it compiles the font and reads it back as
 //! it reads every font in `DIR` that has a `MATH` table, scaled to Rachis's x-height: the constants beside
 //! their median, the display integral, where the braces over and under a group stand, how a wide accent is
-//! measured, and the boxes a line and a glyph's clipping are taken from. These are the numbers decision T30
+//! measured, the prime's form for a script, and the boxes a line and a glyph's clipping are taken from. These are the numbers decision T30
 //! quotes.
 
 use std::fmt::Write as _;
@@ -234,6 +234,56 @@ impl Face {
         Some((sizes, pieces))
     }
 
+    /// The first form `glyph` has for a script: its first alternate, or its substitute, under `ssty`.
+    fn script_form(&self, glyph: GlyphId) -> Option<GlyphId> {
+        use skrifa::raw::tables::gsub::{AlternateSubst, SingleSubst, SubstitutionSubtables};
+        let font = self.font();
+        let gsub = font.gsub().ok()?;
+        let features = gsub.feature_list().ok()?;
+        let lookups = gsub.lookup_list().ok()?;
+        for record in features.feature_records().iter().filter(|r| r.feature_tag() == skrifa::Tag::new(b"ssty")) {
+            let feature = record.feature(features.offset_data()).ok()?;
+            for index in feature.lookup_list_indices() {
+                let lookup = lookups.lookups().get(usize::from(index.get())).ok()?;
+                match lookup.subtables().ok()? {
+                    SubstitutionSubtables::Alternate(tables) => {
+                        for table in tables.iter().flatten() {
+                            // the formats with 16-bit glyph ids are the ones these fonts use
+                            let AlternateSubst::Format1(table) = table else { continue };
+                            if let Some(at) = table.coverage().ok().and_then(|c| c.get(glyph)) {
+                                let set = table.alternate_sets().get(at as usize).ok()?;
+                                return set.alternate_glyph_ids().first().map(|g| GlyphId::from(g.get()));
+                            }
+                        }
+                    }
+                    SubstitutionSubtables::Single(tables) => {
+                        for table in tables.iter().flatten() {
+                            match table {
+                                SingleSubst::Format1(t) => {
+                                    if t.coverage().ok().and_then(|c| c.get(glyph)).is_some() {
+                                        let to = glyph.to_u32() as i32 + i32::from(t.delta_glyph_id());
+                                        return Some(GlyphId::new(to as u32 & 0xFFFF));
+                                    }
+                                }
+                                SingleSubst::Format2(t) => {
+                                    if let Some(at) = t.coverage().ok().and_then(|c| c.get(glyph)) {
+                                        return t
+                                            .substitute_glyph_ids()
+                                            .get(at as usize)
+                                            .map(|g| GlyphId::from(g.get()));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+
     fn italic_correction(&self, glyph: GlyphId) -> Option<f64> {
         let font = self.font();
         let info = font.math().ok()?.math_glyph_info().ok()?.math_italics_correction_info()?.ok()?;
@@ -351,6 +401,21 @@ fn compare(registry: &Registry, dir: &Path, out: &mut String) -> Result<(), Stri
             Some(format!("{:>5.0}   {:>5.0} to {:>5.0}", f.advance(glyph) * f.scale, b.0 * f.scale, b.2 * f.scale))
         })();
         say!(out, "  {:<28} {}", f.name, row.unwrap_or_else(|| "no wider size".into()));
+    }
+
+    say!(out, "\nthe prime and its first form for a script: how many times as tall the form is, and how far its");
+    say!(out, "foot stands below the prime's");
+    for f in std::iter::once(&own).chain(&refs) {
+        let row = (|| {
+            let prime = f.glyph('′')?;
+            let (own_box, form_box) = (f.bounds(prime)?, f.bounds(f.script_form(prime)?)?);
+            Some(format!(
+                "{:>5.2} {:>5.0}",
+                (form_box.3 - form_box.1) / (own_box.3 - own_box.1),
+                (own_box.1 - form_box.1) * f.scale
+            ))
+        })();
+        say!(out, "  {:<28} {}", f.name, row.unwrap_or_else(|| "no form".into()));
     }
 
     say!(out, "\nthe line (typo ascender and descender) and where a glyph is clipped (win ascent and descent), in");
