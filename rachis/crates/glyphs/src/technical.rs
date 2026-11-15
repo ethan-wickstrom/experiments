@@ -366,9 +366,17 @@ fn bracket_piece(g: &mut Draw, part: i32, right: bool) {
     strokes(g, &list, right);
 }
 
+/// How far the pieces of a brace are moved from where { has them, so that their spine stands in the middle of
+/// the cell. Unicode has one extension for both braces (⎪), and the pieces of the closing brace are the opening
+/// one's mirrored in the middle of the cell: only a spine in the middle is continued by the same extension on
+/// both sides.
+fn brace_shift(p: &Params) -> f64 {
+    p.mid() - brace(p).xs
+}
+
 /// ⎧: the arm and shoulder of {, its spine running to the bottom of the line.
 fn brace_hook(p: &Params) -> Vec<Knot> {
-    let mut k = brace_half(p, &brace(p), p.hair, bracket_stem(p), 0.0);
+    let mut k = brace_half(p, &brace(p), p.hair, bracket_stem(p), brace_shift(p));
     k.truncate(3);
     k[2] = k[2].line();
     k.push(knot(k[2].z.x, p.line_bot, bracket_stem(p)).pen(0.0));
@@ -377,7 +385,7 @@ fn brace_hook(p: &Params) -> Vec<Knot> {
 
 /// The upper half of ⎨: the spine from the top of the line and the turn into the cusp of {.
 fn brace_middle(p: &Params) -> Vec<Knot> {
-    let k = brace_half(p, &brace(p), p.hair, bracket_stem(p), 0.0);
+    let k = brace_half(p, &brace(p), p.hair, bracket_stem(p), brace_shift(p));
     let mut out = vec![knot(k[3].z.x, p.line_top, bracket_stem(p)).pen(0.0).line()];
     out.extend_from_slice(&k[3..]);
     out
@@ -395,7 +403,7 @@ fn brace_piece(g: &mut Draw, part: i32, right: bool) {
             down[0].z.y = p.line_bot;
             vec![up, down]
         }
-        _ => vec![vstem(brace(p).xs, p.line_bot, p.line_top, bracket_stem(p))],
+        _ => vec![vstem(p.mid(), p.line_bot, p.line_top, bracket_stem(p))],
     };
     strokes(g, &list, right);
 }
@@ -867,4 +875,49 @@ pub fn register(reg: &mut Registry) {
     // frown and smile
     reg.ch('⌢', |g: &mut Draw| arc_sign(g, true));
     reg.ch('⌣', |g: &mut Draw| arc_sign(g, false));
+}
+
+#[cfg(test)]
+mod tests {
+    use rachis_kernel::name_of;
+    use rachis_kernel::params::masters;
+
+    use crate::cut::along;
+
+    /// Whether two cross-sections are the same to a twentieth of a unit.
+    fn agree(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+        a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a.0 - b.0).abs() < 0.05 && (a.1 - b.1).abs() < 0.05)
+    }
+
+    #[test]
+    fn the_extension_of_a_bracket_continues_its_pieces_in_every_master() {
+        let registry = crate::registry();
+        // (the extension, the pieces whose stem it continues at the bottom of the line, and at the top)
+        let sets = [
+            ('⎜', "⎛", "⎝"),
+            ('⎟', "⎞", "⎠"),
+            ('⎢', "⎡", "⎣"),
+            ('⎥', "⎤", "⎦"),
+            // Unicode has one extension for both braces
+            ('⎪', "⎧⎨⎫⎬", "⎩⎨⎭⎬"),
+            ('⎮', "⌠", "⌡"),
+        ];
+        for p in masters() {
+            let flat = |c: char| registry.flat(&name_of(c), &p).unwrap_or_else(|| panic!("{c} is not drawn"));
+            for (extension, below, above) in sets {
+                let stem = along(&flat(extension).contours, (p.line_top + p.line_bot) / 2.0);
+                assert_eq!(stem.len(), 1, "{extension} in {} is not one stem", p.name);
+                // a piece that the extension follows downwards ends at the bottom of the line, and one that it
+                // follows upwards at the top: there both are the extension's stem
+                for c in below.chars() {
+                    let foot = along(&flat(c).contours, p.line_bot + 2.0);
+                    assert!(agree(&foot, &stem), "{c} over {extension} in {}: {foot:?}, {stem:?}", p.name);
+                }
+                for c in above.chars() {
+                    let head = along(&flat(c).contours, p.line_top - 2.0);
+                    assert!(agree(&head, &stem), "{c} under {extension} in {}: {head:?}, {stem:?}", p.name);
+                }
+            }
+        }
+    }
 }

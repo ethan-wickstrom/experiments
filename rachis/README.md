@@ -57,7 +57,7 @@ Formulas, with Rachis for the text around them:
 math { font-family: "Rachis Math", math; }
 ```
 
-Rachis Math has the letters of a formula in italic, bold, bold italic, sans-serif and monospaced, forms of their own for scripts, fourteen sizes of each delimiter up to 6 em and pieces for taller ones, a radical in twelve sizes, display sizes of sums and integrals, wide accents, and arrows and braces that stretch to any length. It has one weight, and no script or Fraktur alphabet yet; a typesetter takes those from another font (`docs/ledger.md`, G19 to G21).
+Rachis Math has the letters of a formula in italic, bold, bold italic, sans-serif and monospaced, forms of their own for scripts, fourteen sizes of each delimiter up to 6 em, pieces for taller parentheses, brackets, braces, bars, floors and ceilings, a radical in twelve sizes, display sizes of sums and integrals, wide accents, and arrows and braces that stretch to any length. It has one weight, and no script or Fraktur alphabet yet; a typesetter takes those from another font (`docs/ledger.md`, G19 to G21).
 
 Features: `zero` (slashed zero; the fixed pitch has it by default), `ss01` (dotted zero), `ss02` (plain zero), `sups`, `subs`, `sinf` (superior and inferior figures and letters), kerning in Rachis, mark positioning in both. Rachis Math adds `ssty` (the forms for scripts) and `dtls` (dotless `i` and `j` under an accent), which a formula typesetter applies itself.
 

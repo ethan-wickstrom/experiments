@@ -621,7 +621,8 @@ fn sideways(registry: &Registry, p: &Params, font: &mut MathFont) {
                 }
                 let mut g = renamed(moved(g, margin - x0, 0.0), format!("{name}.w{}", k + 1));
                 g.advance = x1 - x0 + 2.0 * margin;
-                stretch.variants.push((g.name.clone(), x1 - x0));
+                // a size is as long as its advance: that is what the table states and what LuaTeX measures
+                stretch.variants.push((g.name.clone(), g.advance));
                 font.glyphs.push(match over {
                     Some(over) => cleared(g, p, over),
                     None => g,
@@ -691,8 +692,9 @@ const SCRIPT_SIGNS: &str = "+−=<>≤≥≠×·∗/|()[]{},.:;!?∞∈∂∇→
 /// form for a script is the prime of the text made larger by what a script is made smaller, and standing lower
 /// by what a superscript is raised: reduced and raised, it is the prime of the text again. Its form for a
 /// script of a script is larger by what that is made smaller, on the same foot, so that the prime of an
-/// exponent is no smaller than the text's. All nine reference fonts do this: the first form of their prime is
-/// 1.3 to 1.7 times as tall as the prime itself and stands 400 units lower.
+/// exponent is no smaller than the text's. All nine reference fonts have such forms: the first is 1.25 to 1.67
+/// times as tall as the prime, and in eight of them its foot stands 353 to 449 units below the prime's at this
+/// x-height (`rachis math --refs`). This one is 1.43 times as tall and 366 lower.
 const PRIMES: &str = "′″‴⁗‵‶‷";
 
 /// The forms of the primes for scripts.
@@ -1163,11 +1165,19 @@ mod tests {
     fn an_arrow_of_any_length_is_assembled_from_the_arrows_own_ends_and_shaft() {
         let (registry, _, font) = built();
         let p = text();
+        // a size states its advance as its length, whatever white it has at its ends
+        for s in &font.horizontal {
+            for (name, length) in &s.variants {
+                assert!((glyph(name).advance - length).abs() < 1e-6, "{name} states {length}");
+            }
+        }
         for c in ARROWS.chars() {
             let s = stretch(&font.horizontal, c);
             if c == '⇝' {
-                // its shaft is a wave: it has sizes and no pieces
+                // its shaft is a wave: it has sizes and no pieces, and each size keeps the arrow's white
                 assert!(s.parts.is_empty() && s.variants.len() >= 3, "{c}");
+                let (x0, _, x1, _) = glyph(&s.variants[0].0).bounds().unwrap();
+                assert!((x0 - p.op_l).abs() < 1e-6 && (s.variants[0].1 - x1 - p.op_l).abs() < 1e-6);
                 continue;
             }
             assert!(s.variants.is_empty(), "{c} has sizes beside its pieces");
@@ -1220,7 +1230,8 @@ mod tests {
                     assert!(*length > before, "{name} is {length} after {before}");
                     before = *length;
                 }
-                // all pieces of one sign stand at one height: where they join, their cross-sections agree
+                // laid out, the pieces stand clear of the group as every size does (that each joint is level
+                // and the same on both sides is `where_two_pieces_join_they_have_one_cross_section`)
                 let (contours, _) = laid(s, 1, crate::cut::JOINT);
                 let whole = Glyph { contours, ..Glyph::default() };
                 let (_, y0, _, y1) = whole.bounds().unwrap();
@@ -1238,6 +1249,69 @@ mod tests {
         let (cusp, y_cusp) = (&brace.parts[2], glyph(&brace.parts[2].glyph).bounds().unwrap().3);
         assert_eq!((cusp.start, cusp.end), (crate::cut::JOINT, crate::cut::JOINT));
         assert!(y_cusp > glyph(&brace.parts[0].glyph).bounds().unwrap().3 + 50.0);
+    }
+
+    /// The cross-section of the piece `g` at `at` from where it starts, across the direction it is laid in. A
+    /// piece laid sideways starts at its origin and ends at its advance; one stacked upwards starts at the
+    /// bottom of its ink.
+    fn section(g: &Glyph, upwards: bool, at: f64) -> Vec<(f64, f64)> {
+        if upwards {
+            let (_, y0, _, _) = g.bounds().unwrap();
+            crate::cut::along(&g.contours, y0 + at)
+        } else {
+            crate::cut::up(&g.contours, at)
+        }
+    }
+
+    fn agree(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+        a.len() == b.len() && a.iter().zip(b).all(|(a, b)| (a.0 - b.0).abs() < 0.05 && (a.1 - b.1).abs() < 0.05)
+    }
+
+    #[test]
+    fn where_two_pieces_join_they_have_one_cross_section() {
+        let (_, _, font) = built();
+        let mut joints = 0;
+        for (list, upwards) in [(&font.vertical, true), (&font.horizontal, false)] {
+            for s in list.iter().filter(|s| !s.parts.is_empty()) {
+                // a piece that is repeated joins itself, so the list is walked with every extender doubled
+                let mut laid: Vec<&Piece> = Vec::new();
+                for part in &s.parts {
+                    laid.push(part);
+                    if part.extender {
+                        laid.push(part);
+                    }
+                }
+                for pair in laid.windows(2) {
+                    let (below, above) = (pair[0], pair[1]);
+                    let (a, b) = (glyph(&below.glyph), glyph(&above.glyph));
+                    assert!(below.end >= 20.0 && above.start >= 20.0, "{}: a joint without a connector", s.glyph);
+                    // through the whole of both connectors the two pieces are the same level stroke, so
+                    // whatever overlap a typesetter chooses, one continues the other
+                    let first = section(a, upwards, below.advance - 1.0);
+                    assert!(!first.is_empty(), "{} ends in nothing", below.glyph);
+                    for d in [below.end / 2.0, below.end - 1.0] {
+                        let here = section(a, upwards, below.advance - d);
+                        assert!(
+                            agree(&first, &here),
+                            "{} is not level {d} from its end: {here:?}, {first:?}",
+                            below.glyph
+                        );
+                    }
+                    for d in [1.0, above.start / 2.0, above.start - 1.0] {
+                        let here = section(b, upwards, d);
+                        assert!(
+                            agree(&first, &here),
+                            "{} does not continue {} ({d} from its start): {here:?}, {first:?}",
+                            above.glyph,
+                            below.glyph
+                        );
+                    }
+                    joints += 1;
+                }
+            }
+        }
+        // 13 signs are assembled upwards and 47 sideways
+        assert!(joints > 150, "{joints} joints were looked at");
     }
 
     #[test]
