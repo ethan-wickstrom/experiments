@@ -798,25 +798,29 @@ impl OutlinePen for SkiaPen {
     }
 }
 
-/// The reference fonts found in `$RACHIS_REFS`, in `REFERENCES` order.
+/// The reference fonts in `$RACHIS_REFS`: all of them when the directory holds a handful, else the ones named in
+/// `REFERENCES`, in that order.
 fn reference_faces() -> Vec<RefFace> {
     let Some(dir) = std::env::var_os("RACHIS_REFS") else {
         eprintln!("note: --compare needs RACHIS_REFS, a directory of reference fonts");
         return Vec::new();
     };
+    let file_name = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
         .map(|entries| entries.filter_map(|e| e.ok().map(|e| e.path())).collect())
         .unwrap_or_default();
+    files.retain(|p| {
+        let name = file_name(p);
+        name.ends_with(".ttf") || name.ends_with(".otf")
+    });
     files.sort();
-    let file_name = |p: &PathBuf| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let chosen: Vec<&PathBuf> = if files.len() <= 8 {
+        files.iter().collect()
+    } else {
+        REFERENCES.iter().filter_map(|prefix| files.iter().find(|p| file_name(p).starts_with(prefix))).collect()
+    };
     let mut faces = Vec::new();
-    for prefix in REFERENCES {
-        let Some(path) = files.iter().find(|p| {
-            let name = file_name(p);
-            name.starts_with(prefix) && (name.ends_with(".ttf") || name.ends_with(".otf"))
-        }) else {
-            continue;
-        };
+    for path in chosen {
         let name = file_name(path);
         let family = name.split(['[', '-', '.']).next().unwrap_or(&name).to_string();
         match RefFace::load(path, family) {

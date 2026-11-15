@@ -4,9 +4,10 @@
 //! ones (`i j l t f r`) are a stem with a slab, a bar or a rounded elbow that fills the cell; the diagonal ones
 //! are straight strokes cut flat. Measurements that only this group needs are the helpers at the top.
 
-use rachis_kernel::{Draw, Fit, Knot, Params, Registry, V, knot, pt};
+use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
 
 use crate::parts::{Arch, Bowl, arch, bowl, cut, elbow, hbar, lean, mirror, ring, shifted, turn, vee, vstem};
+use crate::text::{Ask, around, beside, ink, word_space};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Measurements of this group, each derived from the parameters.
@@ -74,9 +75,10 @@ pub fn slab(p: &Params) -> f64 {
     0.25 * p.width - 0.25 * p.stem
 }
 
-/// Centre of the stem of j.
+/// Centre of the stem of j: right of the middle of a cell; at the right of a letter of its own width, whose hook
+/// hangs to the left.
 pub fn j_x(p: &Params) -> f64 {
-    p.mid() + 86.0
+    if p.mono { p.mid() + 86.0 } else { p.xr() }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -109,6 +111,16 @@ fn u(g: &mut Draw) {
 
 fn m(g: &mut Draw) {
     let p = g.p;
+    if !p.mono {
+        // room for three full stems: two arches of n, each a little narrower than n's
+        let (x0, x2) = (p.xl(), p.xr());
+        let x1 = (x0 + x2) / 2.0;
+        let top = p.xh + p.over;
+        g.stroke(&vstem(x0, 0.0, p.xh, p.stem));
+        g.stroke(&arch(p, x0, x1, top, 0.0, Arch::default()));
+        g.stroke(&arch(p, x1, x2, top, 0.0, Arch::default()));
+        return;
+    }
     // the middle stem is the thinnest
     let (s, s_mid) = (p.stem * crowd(p, 0.70), p.stem * crowd(p, 1.05));
     let h = p.hair * crowd(p, 0.70);
@@ -155,7 +167,10 @@ fn q(g: &mut Draw) {
     g.stroke(&vstem(p.xr() + dx, p.desc, p.xh, p.stem));
     let round = mirror(&bowl(p, p.xl(), p.width - p.sb_round, -p.over, p.xh + p.over, Bowl::default()), p.mid());
     g.stroke(&shifted(&round, dx));
-    g.stroke(&hbar(p.xr() + dx, p.width - 0.2 * p.sb_round, p.desc + p.hair / 2.0, p.hair));
+    if p.mono {
+        // a foot, which a letter standing alone in a cell needs to be told from g and 9
+        g.stroke(&hbar(p.xr() + dx, p.width - 0.2 * p.sb_round, p.desc + p.hair / 2.0, p.hair));
+    }
 }
 
 fn g_(g: &mut Draw) {
@@ -254,58 +269,107 @@ fn s(g: &mut Draw) {
 // ---------------------------------------------------------------------------------------------------------------
 // the narrow letters: a stem, and a slab, a bar or an elbow to fill the cell
 
+/// Centre of the stem of i: right of the middle of a cell, where the slab balances it; the middle of a letter of
+/// its own width.
+fn i_x(p: &Params) -> f64 {
+    if p.mono { p.mid() + 12.0 } else { p.mid() }
+}
+
+/// Radius, on the centre line, of the elbow of the proportional l, t and f: tighter than the cell-filling one.
+fn text_r(p: &Params) -> f64 {
+    0.10 * p.xh + p.stem / 2.0
+}
+
+/// How far the bar of the proportional t and f reaches left of the stem's edge.
+fn bar_left(p: &Params) -> f64 {
+    0.34 * p.stem + 24.0
+}
+
 fn dotlessi(g: &mut Draw) {
     let p = g.p;
-    let x = p.mid() + 12.0;
-    let half = 0.33 * p.width + 0.22 * p.stem; // half the length of the bar it stands on
+    let x = i_x(p);
     g.stroke(&vstem(x, 0.0, p.xh, p.stem));
-    g.stroke(&hbar(x - p.stem / 2.0 - slab(p), x, p.xh - p.hair / 2.0, p.hair));
-    g.stroke(&hbar(x - half, x + half, p.hair / 2.0, p.hair));
+    if p.mono {
+        let half = 0.33 * p.width + 0.22 * p.stem; // half the length of the bar it stands on
+        g.stroke(&hbar(x - p.stem / 2.0 - slab(p), x, p.xh - p.hair / 2.0, p.hair));
+        g.stroke(&hbar(x - half, x + half, p.hair / 2.0, p.hair));
+    }
 }
 
 fn i(g: &mut Draw) {
     let p = g.p;
-    g.use_char('ı', 0.0, 0.0);
-    g.dot(p.mid() + 12.0 - 2.0, dot_y(p), p.dot);
+    dotlessi(g);
+    g.dot(i_x(p) - if p.mono { 2.0 } else { 0.0 }, dot_y(p), p.dot);
 }
 
 fn dotlessj(g: &mut Draw) {
     let p = g.p;
     let x = j_x(p);
-    g.stroke(&elbow(x, p.xh, p.desc, p.sb_round + 18.0, p.stem, p.hair, p.sq, tail_r(p)));
-    g.stroke(&hbar(x - p.stem / 2.0 - slab(p) - 0.14 * p.width, x, p.xh - p.hair / 2.0, p.hair));
+    if p.mono {
+        g.stroke(&elbow(x, p.xh, p.desc, p.sb_round + 18.0, p.stem, p.hair, p.sq, tail_r(p)));
+        g.stroke(&hbar(x - p.stem / 2.0 - slab(p) - 0.14 * p.width, x, p.xh - p.hair / 2.0, p.hair));
+    } else {
+        // the hook reaches under the letter before it
+        let r = 0.72 * tail_r(p);
+        g.stroke(&elbow(x, p.xh, p.desc, x - r - 0.30 * p.stem, p.stem, p.hair, p.sq, r));
+    }
 }
 
 fn j(g: &mut Draw) {
     let p = g.p;
-    g.use_char('ȷ', 0.0, 0.0);
-    g.dot(j_x(p) - 2.0, dot_y(p), p.dot);
+    dotlessj(g);
+    g.dot(j_x(p) - if p.mono { 2.0 } else { 0.0 }, dot_y(p), p.dot);
 }
 
 fn l(g: &mut Draw) {
     let p = g.p;
-    let x = p.mid() - 24.0;
-    g.stroke(&elbow(x, p.asc, 0.0, p.width - p.sb_round, p.stem, p.hair, p.sq, corner_r(p)));
-    g.stroke(&hbar(x - p.stem / 2.0 - slab(p), x, p.asc - p.hair / 2.0, p.hair));
+    if p.mono {
+        let x = p.mid() - 24.0;
+        g.stroke(&elbow(x, p.asc, 0.0, p.width - p.sb_round, p.stem, p.hair, p.sq, corner_r(p)));
+        g.stroke(&hbar(x - p.stem / 2.0 - slab(p), x, p.asc - p.hair / 2.0, p.hair));
+    } else {
+        // the tail alone tells it from I, 1 and the bar
+        let x = p.xl();
+        let r = text_r(p);
+        g.stroke(&elbow(x, p.asc, 0.0, x + r + 0.34 * p.stem, p.stem, p.hair, p.sq, r));
+    }
 }
 
 fn t(g: &mut Draw) {
     let p = g.p;
-    let x = p.mid() - 50.0;
-    g.stroke(&elbow(x, p.xh + 0.74 * (p.asc - p.xh), 0.0, p.width - p.sb_round, p.stem, p.hair, p.sq, corner_r(p)));
-    g.stroke(&hbar(p.sb_round + 6.0, p.width - p.sb_round - 16.0, p.xh - p.hair / 2.0, p.hair));
+    let top = p.xh + 0.74 * (p.asc - p.xh);
+    if p.mono {
+        let x = p.mid() - 50.0;
+        g.stroke(&elbow(x, top, 0.0, p.width - p.sb_round, p.stem, p.hair, p.sq, corner_r(p)));
+        g.stroke(&hbar(p.sb_round + 6.0, p.width - p.sb_round - 16.0, p.xh - p.hair / 2.0, p.hair));
+    } else {
+        let x = p.xl();
+        let r = text_r(p);
+        let end = x + r + 0.62 * p.stem + 0.12 * p.counter;
+        g.stroke(&elbow(x, top, 0.0, end, p.stem, p.hair, p.sq, r));
+        g.stroke(&hbar(x - p.stem / 2.0 - bar_left(p), end - 0.04 * p.counter, p.xh - p.hair / 2.0, p.hair));
+    }
 }
 
 fn f(g: &mut Draw) {
     let p = g.p;
-    let x = p.mid() - 30.0;
-    g.stroke(&elbow(x, 0.0, p.asc + p.over, p.width - p.sb_round, p.stem, p.hair, p.sq, corner_r(p)));
-    g.stroke(&hbar(p.sb_round + 6.0, p.width - p.sb_round - 30.0, p.xh - p.hair / 2.0, p.hair));
+    if p.mono {
+        let x = p.mid() - 30.0;
+        g.stroke(&elbow(x, 0.0, p.asc + p.over, p.width - p.sb_round, p.stem, p.hair, p.sq, corner_r(p)));
+        g.stroke(&hbar(p.sb_round + 6.0, p.width - p.sb_round - 30.0, p.xh - p.hair / 2.0, p.hair));
+    } else {
+        // the hook is short, so that it clears the dot of an i and the top of an l without a ligature
+        let x = p.xl();
+        let r = text_r(p) + 0.03 * p.xh;
+        let end = x + r + 0.50 * p.stem + 0.07 * p.counter;
+        g.stroke(&elbow(x, 0.0, p.asc + p.over, end, p.stem, p.hair, p.sq, r));
+        g.stroke(&hbar(x - p.stem / 2.0 - bar_left(p), end - 0.07 * p.counter, p.xh - p.hair / 2.0, p.hair));
+    }
 }
 
 fn r(g: &mut Draw) {
     let p = g.p;
-    let x = p.xl() + 20.0;
+    let x = if p.mono { p.xl() + 20.0 } else { p.xl() };
     let end = p.width - p.sb_round;
     g.stroke(&vstem(x, 0.0, p.xh, p.stem));
     let a = arch(p, x, end - 30.0, p.xh + p.over, 0.0, Arch { lean: 0.60, ..Arch::default() });
@@ -336,7 +400,9 @@ fn v(g: &mut Draw) {
 
 fn w(g: &mut Draw) {
     let p = g.p;
-    let (t_out, t_in) = (p.stem * crowd(p, 1.0), p.stem * crowd(p, 2.1));
+    // four strokes in one cell are thinned; in a letter of its own width only the inner pair is, a little
+    let (t_out, t_in) =
+        if p.mono { (p.stem * crowd(p, 1.0), p.stem * crowd(p, 2.1)) } else { (diag_t(p), 0.93 * diag_t(p)) };
     let side = p.sb / 2.0 - 15.0;
     let dx = nudge(p, &[], &[(p.width - side, p.xh)]);
     let (x0, x1) = (side + dx, p.width - side + dx);
@@ -410,7 +476,36 @@ pub fn register(reg: &mut Registry) {
     reg.ch('z', z);
 }
 
-/// The proportional family's cells for this module's glyphs.
-pub fn fit(_name: &str, _p: &Params) -> Option<Fit> {
-    None
+/// What this module's glyphs ask of the proportional family: for each letter its two sidebearings and the breadth
+/// of its ink. A straight stem stands `p.sb` from the edge and a round side `p.sb_round`; an arch, an open side or
+/// a diagonal stands closer, by the share written here. The ink is so many stems and so many counters of n.
+pub fn ask(name: &str, p: &Params) -> Option<Ask> {
+    let (sb, round) = (p.sb, p.sb_round);
+    let dot_side = sb - (p.dot - p.stem / 2.0); // the dot is broader than the stem under it
+    match name {
+        "space" => beside(0.0, word_space(p)),
+        "n" | "h" => around(sb, ink(p, 2.0, 1.0), 0.95 * sb),
+        "u" => around(0.95 * sb, ink(p, 2.0, 1.0), sb),
+        "m" => around(sb, ink(p, 3.0, 1.90), 0.95 * sb),
+        "o" => around(round, ink(p, 2.0, 1.222), round),
+        "b" | "p" => around(sb, ink(p, 2.0, 1.119), round),
+        "d" | "q" => around(round, ink(p, 2.0, 1.119), sb),
+        "g" => around(round, ink(p, 2.0, 1.119), 0.95 * sb),
+        "c" => around(round, ink(p, 2.0, 0.98), 0.68 * round),
+        "e" => around(round, ink(p, 2.0, 1.135), 0.90 * round),
+        "s" => around(0.82 * round, ink(p, 2.0, 0.897), 0.82 * round),
+        "a" => around(0.90 * round, ink(p, 2.0, 1.03), 0.90 * sb),
+        "dotlessi" | "i" => beside(dot_side, dot_side),
+        "dotlessj" | "j" => beside(-0.50 * sb, dot_side),
+        "l" => beside(sb, 0.45 * sb),
+        "t" => beside(0.25 * sb, 0.27 * sb),
+        "f" => beside(0.25 * sb, 0.06 * sb),
+        "r" => around(sb, ink(p, 1.0, 0.77), 0.17 * sb),
+        "k" => around(sb, ink(p, 2.0, 1.08), 0.10 * sb),
+        "v" | "y" => around(0.15 * sb, ink(p, 2.0, 1.22), 0.15 * sb),
+        "w" => around(0.22 * sb, ink(p, 3.4, 1.735), 0.22 * sb),
+        "x" => around(0.22 * sb, ink(p, 2.0, 1.206), 0.22 * sb),
+        "z" => around(0.49 * sb, ink(p, 2.0, 0.937), 0.44 * sb),
+        _ => None,
+    }
 }

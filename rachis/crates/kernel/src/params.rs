@@ -240,12 +240,13 @@ pub fn bold() -> Params {
 /// of a text face. The letters n, o and their kin keep their widths; what changes is in the widths table of the
 /// glyph programs.
 fn text_of(p: Params) -> Params {
-    let (name, sb, sb_round, cap_sb, counter) = match p.name {
-        "Mono Light" => ("Text Light", 88.0, 66.0, 96.0, 276.0),
-        "Mono Bold" => ("Text Bold", 66.0, 46.0, 68.0, 204.0),
-        _ => ("Text Regular", 82.0, 60.0, 88.0, 252.0),
+    let (name, sb, sb_round, cap_sb, fig_sb, counter) = match p.name {
+        "Mono Light" => ("Text Light", 88.0, 62.0, 98.0, 72.0, 276.0),
+        "Mono Bold" => ("Text Bold", 66.0, 44.0, 70.0, 52.0, 204.0),
+        _ => ("Text Regular", 82.0, 56.0, 90.0, 64.0, 252.0),
     };
-    Params { name, mono: false, sb, sb_round, cap_sb, counter, ..p }
+    // figures and signs stand in a cell a little narrower than the fixed pitch's, close to the letters' rhythm
+    Params { name, mono: false, width: 580.0, sb, sb_round, cap_sb, fig_sb, counter, punct: 0.92 * p.punct, ..p }
 }
 
 /// The proportional family's master for small sizes, from its master for text: a larger x-height, heavier

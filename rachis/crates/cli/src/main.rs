@@ -16,6 +16,7 @@ fn main() -> ExitCode {
         Some("dump") => dump(&registry, &args[1..]),
         Some("check") => check(&registry, &args[1..]),
         Some("proof") => proof::run(&registry, &args[1..]),
+        Some("widths") => widths(&registry, &args[1..]),
         Some("list") => {
             for s in &registry.specs {
                 let cps: Vec<String> = s.unicodes.iter().map(|c| format!("U+{c:04X}")).collect();
@@ -25,7 +26,9 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("usage: rachis <proof ... | check [NAMES...] | dump [--module NAME] | list>");
+            eprintln!(
+                "usage: rachis <proof ... | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] TEXT>"
+            );
             ExitCode::FAILURE
         }
     }
@@ -45,6 +48,30 @@ fn dump(registry: &Registry, args: &[String]) -> ExitCode {
         }
     }
     print!("{out}");
+    ExitCode::SUCCESS
+}
+
+/// Print the advance, the sidebearings and the breadth of the ink of each character of the arguments.
+fn widths(registry: &Registry, args: &[String]) -> ExitCode {
+    let name = args.iter().position(|a| a == "--master").and_then(|i| args.get(i + 1));
+    let Some(p) = master(name.map_or("Text Regular", String::as_str)) else {
+        eprintln!("no such master");
+        return ExitCode::FAILURE;
+    };
+    let text: String = args.iter().filter(|a| !a.starts_with("--") && Some(*a) != name).cloned().collect();
+    println!("{:>4} {:>8} {:>6} {:>6} {:>6}   {}", "", "advance", "left", "ink", "right", p.name);
+    for c in text.chars() {
+        let Some(g) = registry.for_char(c).and_then(|spec| registry.flat(&spec.name, &p)) else {
+            println!("{c:>4} missing");
+            continue;
+        };
+        match g.bounds() {
+            Some((x0, _, x1, _)) => {
+                println!("{c:>4} {:>8.0} {:>6.0} {:>6.0} {:>6.0}", g.advance, x0, x1 - x0, g.advance - x1)
+            }
+            None => println!("{c:>4} {:>8.0}", g.advance),
+        }
+    }
     ExitCode::SUCCESS
 }
 

@@ -4,9 +4,10 @@
 //! tail, the quotes are straight bars while the backtick is a heavy diagonal, and the three kinds of bracket differ in
 //! width as well as in shape. Brackets share one span (`p.br_bot` to `p.br_top`) and one stroke.
 
-use rachis_kernel::{Draw, Fit, Knot, Params, Registry, V, knot, pt};
+use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
 
 use crate::parts::{Bowl, bowl, cut, cut_pen, dbowl, diag, flip, hbar, mirror, ring, turn, vee, vstem};
+use crate::text::{Ask, around, beside, word_space};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Measurements this group derives from the parameters. Each is a candidate for params.py.
@@ -969,7 +970,32 @@ pub fn register(reg: &mut Registry) {
     reg.ch('€', euro);
 }
 
-/// The proportional family's cells for this module's glyphs.
-pub fn fit(_name: &str, _p: &Params) -> Option<Fit> {
-    None
+/// What this module's glyphs ask of the proportional family. Marks of a size of their own (points, quotes,
+/// brackets) say only how much room they want at each side; dashes say how long they are. What is not listed
+/// keeps the figures' cell: the signs for money and commerce stand in columns with figures.
+pub fn ask(name: &str, p: &Params) -> Option<Ask> {
+    let sb = p.sb;
+    match name {
+        "period" | "comma" | "colon" | "semicolon" | "periodcentered" => beside(0.86 * sb, 0.86 * sb),
+        "uni2022" | "uni2023" => beside(0.7 * sb, 0.7 * sb),
+        "exclam" | "exclamdown" | "brokenbar" => beside(sb, sb),
+        "question" | "questiondown" => around(0.45 * sb, 2.0 * p.stem + 0.74 * p.counter, 0.50 * sb),
+        "quotesingle" | "quotedbl" => beside(0.8 * sb, 0.8 * sb),
+        "grave" => beside(0.7 * sb, 0.7 * sb),
+        "uni2018" | "uni2019" | "uni201A" | "uni201B" | "uni201C" | "uni201D" | "uni201E" => beside(0.6 * sb, 0.6 * sb),
+        "uni2032" | "uni2033" => beside(0.4 * sb, 0.4 * sb),
+        "parenleft" => beside(0.75 * sb, 0.36 * sb),
+        "parenright" => beside(0.36 * sb, 0.75 * sb),
+        "bracketleft" => beside(0.98 * sb, 0.45 * sb),
+        "bracketright" => beside(0.45 * sb, 0.98 * sb),
+        "braceleft" | "braceright" => beside(0.42 * sb, 0.42 * sb),
+        "underscore" => around(0.0, 1.98 * p.counter, 0.0),
+        "uni2010" | "uni2011" | "softhyphen" => around(0.5 * sb, 0.95 * p.counter, 0.5 * sb),
+        "uni2013" => around(0.36 * sb, 1.75 * p.counter, 0.36 * sb),
+        "uni2014" | "uni2015" => around(0.3 * sb, 3.77 * p.counter, 0.3 * sb),
+        "nbspace" => beside(0.0, word_space(p)),
+        "uni2039" | "uni203A" | "guillemotleft" | "guillemotright" => beside(0.5 * sb, 0.5 * sb),
+        "uni2020" | "uni2021" | "degree" | "ordmasculine" | "ordfeminine" => beside(0.5 * sb, 0.5 * sb),
+        _ => None,
+    }
 }

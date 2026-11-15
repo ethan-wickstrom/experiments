@@ -243,7 +243,7 @@ impl Fit {
 pub type AnchorFn = Box<dyn Fn(&Spec, &Params, &dyn Fn() -> Glyph) -> Vec<(&'static str, f64, f64)> + Send + Sync>;
 
 /// The fit of a glyph in a master. `None` leaves the master's own cell.
-pub type FitFn = Box<dyn Fn(&Spec, &Params) -> Option<Fit> + Send + Sync>;
+pub type FitFn = Box<dyn Fn(&Registry, &Spec, &Params) -> Option<Fit> + Send + Sync>;
 
 #[derive(Default)]
 pub struct Registry {
@@ -330,7 +330,7 @@ impl Registry {
     pub fn build(&self, spec: &Spec, p: &Params) -> Glyph {
         let fit = match spec.opt.advance {
             Some(_) => None,
-            None => self.fit.as_ref().and_then(|f| f(spec, p)),
+            None => self.fit.as_ref().and_then(|f| f(self, spec, p)),
         };
         let width = spec.opt.advance.or(fit.map(|f| f.width)).unwrap_or(p.width);
         let local = Params { width, ..p.clone() };
@@ -370,6 +370,25 @@ impl Registry {
             }
         }
         glyph
+    }
+
+    /// The left and right ends of the ink of the glyph `spec` when its program draws upright into a cell `width`
+    /// wide, with nothing fitted afterwards. For deciding a fit: what a program leaves at its sides depends on
+    /// how it is written, and this measures it. `None` for a glyph without ink.
+    pub fn measure(&self, spec: &Spec, p: &Params, width: f64) -> Option<(f64, f64)> {
+        let local = Params { width, slant: 0.0, ..p.clone() };
+        let mut g = Draw::new(&local, &spec.name, width, spec.opt.upright);
+        g.registry = Some(self);
+        (spec.program)(&mut g);
+        let mut ends: Option<(f64, f64)> = g.glyph.bounds().map(|(x0, _, x1, _)| (x0, x1));
+        for (base, offset) in &g.glyph.components {
+            let upright = Params { slant: 0.0, ..p.clone() };
+            if let Some((x0, _, x1, _)) = self.flat(base, &upright).and_then(|part| part.bounds()) {
+                let (x0, x1) = (x0 + offset.x, x1 + offset.x);
+                ends = Some(ends.map_or((x0, x1), |(a, b)| (a.min(x0), b.max(x1))));
+            }
+        }
+        ends
     }
 
     /// The glyph called `name` in the master `p` with its components resolved into contours.

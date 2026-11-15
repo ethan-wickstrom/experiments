@@ -164,6 +164,10 @@ fn draw_zero_ring(g: &mut Draw, f: Frame) {
 /// edge. Its breadth follows the counter as well as the pen, so that a bold counter stays open beside it.
 fn draw_zero(g: &mut Draw, f: Frame) {
     draw_zero_ring(g, f);
+    if !g.p.mono {
+        // beside letters of their own widths a zero is told from O by its narrowness; a formula's zero is plain
+        return;
+    }
     let counter = f.w() - 2.0 * f.stem;
     let t = 0.50 * f.hair + 0.11 * counter;
     let m = 0.5 + 0.375 * (f.sq + ZERO_SQ); // where a superelliptic corner crosses the diagonal of its box

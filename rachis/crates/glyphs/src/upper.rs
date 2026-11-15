@@ -12,9 +12,10 @@
 #![allow(non_snake_case)]
 
 use rachis_kernel::geom::intersect;
-use rachis_kernel::{Draw, Fit, Knot, Params, Registry, V, knot, pt};
+use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
 
 use crate::parts::{cut, dbowl, hbar, ring, vstem};
+use crate::text::{Ask, around, beside, cap_ink};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Measurements this group derives from the parameters.
@@ -115,10 +116,12 @@ fn H(g: &mut Draw) {
 
 fn I(g: &mut Draw) {
     let p = g.p;
-    // the serifs are as long as the foot of the figure one
+    // in a cell the serifs are as long as the foot of the figure one; in a letter of its own width they are
+    // short, and there to tell it from l, 1 and the bar
+    let half = if p.mono { 196.0 } else { p.cap_stem / 2.0 + 0.32 * p.counter };
     g.stroke(&vstem(p.mid(), 0.0, p.cap, p.cap_stem));
-    g.stroke(&hbar(p.mid() - 196.0, p.mid() + 196.0, p.cap - p.cap_hair / 2.0, p.cap_hair));
-    g.stroke(&hbar(p.mid() - 196.0, p.mid() + 196.0, p.cap_hair / 2.0, p.cap_hair));
+    g.stroke(&hbar(p.mid() - half, p.mid() + half, p.cap - p.cap_hair / 2.0, p.cap_hair));
+    g.stroke(&hbar(p.mid() - half, p.mid() + half, p.cap_hair / 2.0, p.cap_hair));
 }
 
 fn T(g: &mut Draw) {
@@ -254,7 +257,10 @@ fn J(g: &mut Draw) {
         knot(x - rx, yc, p.cap_hair).pen(90.0).dir(180.0).line(),
         knot(x_end, yc, p.cap_hair).pen(90.0),
     ]);
-    g.stroke(&hbar(x - 0.60 * (x - x_end), x, p.cap - p.cap_hair / 2.0, p.cap_hair));
+    if p.mono {
+        // a bar to the left, which fills the cell and tells it from a bracket
+        g.stroke(&hbar(x - 0.60 * (x - x_end), x, p.cap - p.cap_hair / 2.0, p.cap_hair));
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -378,6 +384,16 @@ fn N(g: &mut Draw) {
 
 fn M(g: &mut Draw) {
     let p = g.p;
+    if !p.mono {
+        // room for full stems, and for diagonals that go down to the baseline
+        let s = p.cap_stem * 0.97;
+        let (x0, x1) = (p.cap_sb, p.width - p.cap_sb);
+        g.stroke(&vstem(x0 + s / 2.0, 0.0, p.cap, s));
+        g.stroke(&vstem(x1 - s / 2.0, 0.0, p.cap, s));
+        let t = p.cap_stem * 0.84;
+        g.poly(&vee(p, x0 + 0.2 * s, x1 - 0.2 * s, p.cap, 0.0, t, 0.8 * t));
+        return;
+    }
     let s = p.cap_stem * 0.90;
     let x0 = p.cap_sb - 20.0;
     let x1 = p.width - x0;
@@ -389,12 +405,14 @@ fn M(g: &mut Draw) {
 
 fn W(g: &mut Draw) {
     let p = g.p;
-    let (to, ti) = (p.cap_stem * 0.84, p.cap_stem * 0.72); // outer and inner strokes
+    // outer and inner strokes: thinned to fit a cell, nearly full in a letter of its own width
+    let (to, ti) = if p.mono { (p.cap_stem * 0.84, p.cap_stem * 0.72) } else { (p.cap_stem * 0.95, p.cap_stem * 0.88) };
     let (x0, x1) = (21.0, p.width - 21.0);
     let a = 0.5 * ti; // the flat of each vertex
     let v0 = x0 + 0.25 * (x1 - x0); // the middle of the left vertex
     let v1 = p.width - v0;
-    let top = p.cap * 0.80; // the height of the middle vertex
+    // the height of the middle vertex: lowered in a cell, where it would close the counters
+    let top = if p.mono { p.cap * 0.80 } else { p.cap };
     let wo_l = cut_len(p, v0 - a / 2.0 - x0, -p.cap, to, 0.0);
     let wo_r = cut_len(p, v1 + a / 2.0 - x1, -p.cap, to, 0.0);
     let wi_l = cut_len(p, p.mid() - v0 - a, top, ti, -1.0);
@@ -453,7 +471,37 @@ pub fn register(reg: &mut Registry) {
     reg.ch('W', W);
 }
 
-/// The proportional family's cells for this module's glyphs.
-pub fn fit(_name: &str, _p: &Params) -> Option<Fit> {
-    None
+/// What this module's glyphs ask of the proportional family: sidebearings and ink, as in the lowercase. A
+/// capital's stem stands `p.cap_sb` from the edge and a round side a little more than `p.sb_round`; open sides
+/// and diagonals stand closer.
+pub fn ask(name: &str, p: &Params) -> Option<Ask> {
+    let (sb, round) = (p.cap_sb, 1.04 * p.sb_round);
+    match name {
+        "H" => around(sb, cap_ink(p, 2.0, 1.43), sb),
+        "N" => around(sb, cap_ink(p, 2.0, 1.476), sb),
+        "U" => around(0.96 * sb, cap_ink(p, 2.0, 1.437), 0.96 * sb),
+        "M" => around(sb, cap_ink(p, 2.6, 1.83), sb),
+        "B" => around(sb, cap_ink(p, 2.0, 1.246), 0.90 * round),
+        "D" => around(sb, cap_ink(p, 2.0, 1.492), round),
+        "E" => around(sb, cap_ink(p, 1.0, 1.365), 0.96 * round),
+        "F" => around(sb, cap_ink(p, 1.0, 1.286), 0.58 * round),
+        "L" => around(sb, cap_ink(p, 1.0, 1.246), 0.44 * round),
+        "P" => around(sb, cap_ink(p, 2.0, 1.16), 0.72 * round),
+        "R" => around(sb, cap_ink(p, 2.0, 1.286), 0.48 * round),
+        "K" => around(sb, cap_ink(p, 2.0, 1.397), 0.07 * round),
+        "O" | "Q" => around(round, cap_ink(p, 2.0, 1.778), round),
+        "C" => around(round, cap_ink(p, 2.0, 1.413), 0.68 * round),
+        "G" => around(round, cap_ink(p, 2.0, 1.595), 0.80 * sb),
+        "S" => around(0.83 * round, cap_ink(p, 2.0, 1.246), 0.83 * round),
+        "A" => around(0.14 * round, cap_ink(p, 2.0, 1.786), 0.14 * round),
+        "V" => around(0.14 * round, cap_ink(p, 2.0, 1.65), 0.14 * round),
+        "X" => around(0.24 * round, cap_ink(p, 2.0, 1.587), 0.24 * round),
+        "Y" => around(0.07 * round, cap_ink(p, 2.0, 1.595), 0.07 * round),
+        "T" => around(0.24 * round, cap_ink(p, 1.0, 1.762), 0.24 * round),
+        "Z" => around(0.68 * round, cap_ink(p, 2.0, 1.246), 0.76 * round),
+        "J" => around(0.24 * round, cap_ink(p, 1.0, 1.19), 0.96 * sb),
+        "I" => beside(0.67 * sb, 0.67 * sb),
+        "W" => around(0.41 * round, cap_ink(p, 3.4, 2.267), 0.41 * round),
+        _ => None,
+    }
 }
