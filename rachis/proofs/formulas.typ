@@ -24,3 +24,11 @@ $ alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi pi rh
 $ a b c d e f g h i j k l m n o p q r s t u v w x y z quad A B C D E F G H I J K L M N O P Q R S T U V W X Y Z quad 0 1 2 3 4 5 6 7 8 9 $
 $ bold(a b c x y z A B C) quad upright(a b c x y z) quad bb(A B C N Z Q R C) quad cal(A B C L) quad frak(g h A) quad sans(a b A B) quad mono(a b A B) quad bold(alpha beta Gamma) $
 $ e^(x^(y^z)), quad a_(i_(j_k)), quad x^2_i + y^3_j, quad f^((n))(x), quad integral.double_D, quad integral.cont_gamma, quad sum_(i < j), quad lim_(n -> infinity) sup_(k >= n) a_k, quad partial^2 / (partial x partial y) $
+
+// The script capitals: beside the italic capitals they must be told from, with accents and as scripts.
+Let $cal(F) subset.eq cal(P)(Omega)$ be a $sigma$-algebra and $A in cal(A)$, $B in cal(B)$, $C in cal(C)$, $U in cal(U)$, $X in cal(X)$, $P in cal(P)$, $V in cal(V)$. Then $T(n) = cal(O)(n log n)$, the Lagrangian is $cal(L)(q, dot(q))$, the Hilbert space $cal(H) = L^2(RR)$, and $f in cal(C)^infinity (M)$, $X tilde cal(N)(mu, sigma^2)$, $u in cal(D)'(RR^n)$, $phi in cal(S)$, $v in cal(T)_x cal(M)$, $cal(I) subset cal(R)$, $cal(E)$, $cal(G)$, $cal(K)$, $cal(V) ⊕ cal(W)$, $cal(Q)$, $cal(J)$, $cal(Y)$, $cal(Z)$.
+
+$ cal(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) $
+$ A B C D E F G H I J K L M N O P Q R S T U V W X Y Z $
+$ bold(cal(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z)) $
+$ hat(cal(F)), tilde(cal(O)), macron(cal(A)), dot(cal(L)), hat(cal(H)), cal(H)_0^1, cal(C)^k_c, e^(cal(L) t), x_(cal(F)_t), cal(F)_(t^+), integral_(cal(M)) omega, quad sum_(S in cal(S)) mu(S), quad cal(A) times cal(B) -> cal(C), quad cal(F)^(cal(G)^(cal(H))) $

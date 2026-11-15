@@ -173,7 +173,7 @@ th { font-weight: 600; white-space: nowrap; }
       <span>Rachis Math · for formulas</span>
       <span>weight 300–700</span>
       <span>optical size 8–16</span>
-      <span>2,113 glyphs</span>
+      <span>2,139 glyphs</span>
       <span>0 ligatures</span>
     </div>
   </header>
@@ -312,7 +312,13 @@ th { font-weight: 600; white-space: nowrap; }
         <div class="eq"><math display="block"><mi>α</mi><mi>β</mi><mi>γ</mi><mi>δ</mi><mi>ε</mi><mi>θ</mi><mi>λ</mi><mi>μ</mi><mi>π</mi><mi>ρ</mi><mi>σ</mi><mi>φ</mi><mi>ω</mi></math></div>
       </div>
     </div>
-    <p class="note col">Rachis Math has 3,354 glyphs, fourteen sizes of each delimiter up to 6 em tall, and 47 arrows, bars and braces that are assembled to any length. It was set in Typst, in LuaLaTeX and from MathML until each set it right; they read a font differently, and the repository’s <code>proofs/</code> has the sheets. It has one weight, and no script or Fraktur alphabet yet.</p>
+    <div class="plate">
+      <p class="cap">Script capitals, beside the italic capitals they must be told from</p>
+      <p class="inline">Let <math><mi>ℱ</mi><mo>⊆</mo><mi>𝒫</mi><mrow><mo>(</mo><mi mathvariant="normal">Ω</mi><mo>)</mo></mrow></math> be a <math><mi>σ</mi></math>-algebra with <math><mi>A</mi><mo>∈</mo><mi>𝒜</mi></math>, <math><mi>B</mi><mo>∈</mo><mi>ℬ</mi></math>, <math><mi>C</mi><mo>∈</mo><mi>𝒞</mi></math> and <math><mi>P</mi><mo>∈</mo><mi>𝒫</mi></math>. Then <math><mi>T</mi><mrow><mo>(</mo><mi>n</mi><mo>)</mo></mrow><mo>=</mo><mi>𝒪</mi><mrow><mo>(</mo><mi>n</mi><mspace width="0.17em"/><mi>log</mi><mspace width="0.17em"/><mi>n</mi><mo>)</mo></mrow></math>, the Lagrangian is <math><mi>ℒ</mi><mrow><mo>(</mo><mi>q</mi><mo>,</mo><mover><mi>q</mi><mo>˙</mo></mover><mo>)</mo></mrow></math>, the Hilbert space <math><mi>ℋ</mi><mo>=</mo><msup><mi>L</mi><mn>2</mn></msup><mrow><mo>(</mo><mi>ℝ</mi><mo>)</mo></mrow></math>, and <math><mi>f</mi><mo>∈</mo><msup><mi>𝒞</mi><mi>∞</mi></msup><mrow><mo>(</mo><mi>M</mi><mo>)</mo></mrow></math>, <math><mi>X</mi><mo>∼</mo><mi>𝒩</mi><mrow><mo>(</mo><mi>μ</mi><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>)</mo></mrow></math>, <math><mi>v</mi><mo>∈</mo><msub><mi>𝒯</mi><mi>x</mi></msub><mi>ℳ</mi></math>, <math><msubsup><mi>ℋ</mi><mn>0</mn><mn>1</mn></msubsup></math>, <math><msub><mi>ℱ</mi><mi>t</mi></msub></math>.</p>
+      <div class="eq"><math display="block"><mrow><mi>𝒜</mi><mi>ℬ</mi><mi>𝒞</mi><mi>𝒟</mi><mi>ℰ</mi><mi>ℱ</mi><mi>𝒢</mi><mi>ℋ</mi><mi>ℐ</mi><mi>𝒥</mi><mi>𝒦</mi><mi>ℒ</mi><mi>ℳ</mi></mrow></math></div>
+      <div class="eq"><math display="block"><mrow><mi>𝒩</mi><mi>𝒪</mi><mi>𝒫</mi><mi>𝒬</mi><mi>ℛ</mi><mi>𝒮</mi><mi>𝒯</mi><mi>𝒰</mi><mi>𝒱</mi><mi>𝒲</mi><mi>𝒳</mi><mi>𝒴</mi><mi>𝒵</mi></mrow></math></div>
+    </div>
+    <p class="note col">Rachis Math has 3,458 glyphs, fourteen sizes of each delimiter up to 6 em tall, and 47 arrows, bars and braces that are assembled to any length. It was set in Typst, in LuaLaTeX and from MathML until each set it right; they read a font differently, and the repository’s <code>proofs/</code> has the sheets. A script capital is the capital written by hand with the capitals’ own pen: it leans 16 degrees where the italic leans 10 and has a hook wherever a stroke begins or ends, each large enough to be seen at 13 pixels, and a test holds every one of them apart from its italic, its upright and every other script capital. The font has one weight, and no Fraktur alphabet yet.</p>
   </section>
 
   <section aria-labelledby="h-term">
@@ -325,13 +331,13 @@ th { font-weight: 600; white-space: nowrap; }
 $ cargo run --release -p rachis -- build
    {{size:variable/Rachis[opsz,wght].ttf}}  fonts/variable/Rachis[opsz,wght].ttf
    {{size:variable/RachisMono[wght].ttf}}  fonts/variable/RachisMono[wght].ttf
-<span class="a">40 files in 19.15 s</span> <span class="d">(statics hinted)</span>
+<span class="a">40 files in 19.11 s</span> <span class="d">(statics hinted)</span>
 
 ┌──────────────┬────────┬────────┐   ╭─ glyphs ─────────────╮
 │ face         │ glyphs │  bytes │   │ ▁▂▃▄▅▆▇█ ░▒▓ ▖▗▘▝▚▞  │
 ├──────────────┼────────┼────────┤   │ ●○◆◇■□▲△ ✓✗ ← ↑ → ↓  │
-│ Rachis Mono  │   2113 │ {{size:variable/RachisMono[wght].ttf}} │   ╰──────────────────────╯
-│ Rachis       │   1533 │ {{size:variable/Rachis[opsz,wght].ttf}} │   <span class="d">fn kern(a: &amp;Sides, b: &amp;Sides) -&gt; f64 {</span>
+│ Rachis Mono  │   2139 │ {{size:variable/RachisMono[wght].ttf}} │   ╰──────────────────────╯
+│ Rachis       │   1559 │ {{size:variable/Rachis[opsz,wght].ttf}} │   <span class="d">fn kern(a: &amp;Sides, b: &amp;Sides) -&gt; f64 {</span>
 └──────────────┴────────┴────────┘   <span class="d">    if a.rows.1 &lt; b.rows.0 { return 0.0; }</span>
 <span class="a">*</span> 1aff9c9 <span class="d">the fonts, the documents, the measurements</span>
 <span class="a">│╲</span>

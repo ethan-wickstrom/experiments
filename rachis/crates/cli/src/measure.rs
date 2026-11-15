@@ -39,7 +39,7 @@ const fn pair(a: &'static str, b: &'static str, target: Option<f64>, note: &'sta
 /// classic confusable pairs ([`CLASSIC`]) in the eight reference faces, which is 0.233. A notation pair under it
 /// is more alike than a classic confusable pair usually is. The document states the median of the references it
 /// was generated with.
-const MATH: Option<f64> = Some(0.25);
+pub(crate) const MATH: Option<f64> = Some(0.25);
 
 /// Every watched pair. The first block is `_WATCHED` and `_WATCHED_SIGNS` of the prototype's `measure.py`, with
 /// the targets of `report.py` (decision T07) and of `docs/research/legibility-science.md` ("What this means for
@@ -171,6 +171,47 @@ pub(crate) const PAIRS: &[Pair] = &[
     pair("rn", "m", MATH, "two letters against one: proportional family"),
     pair("cl", "d", MATH, "two letters against one: proportional family"),
     pair("vv", "w", MATH, "two letters against one: proportional family"),
+    // the script capitals of mathematics, each against the capital it could be read as in the same face (the
+    // mathematics font's italic capitals are another master's: `rachis math --script` measures against those),
+    // and the script capitals that come nearest to one another
+    pair("𝒜", "A", MATH, "script"),
+    pair("ℬ", "B", MATH, "script"),
+    pair("𝒞", "C", MATH, "script"),
+    pair("𝒟", "D", MATH, "script"),
+    pair("ℰ", "E", MATH, "script"),
+    pair("ℱ", "F", MATH, "script"),
+    pair("𝒢", "G", MATH, "script"),
+    pair("ℋ", "H", MATH, "script"),
+    pair("ℐ", "I", MATH, "script"),
+    pair("𝒥", "J", MATH, "script"),
+    pair("𝒦", "K", MATH, "script"),
+    pair("ℒ", "L", MATH, "script"),
+    pair("ℳ", "M", MATH, "script"),
+    pair("𝒩", "N", MATH, "script"),
+    pair("𝒪", "O", MATH, "script"),
+    pair("𝒫", "P", MATH, "script"),
+    pair("𝒬", "Q", MATH, "script"),
+    pair("ℛ", "R", MATH, "script"),
+    pair("𝒮", "S", MATH, "script"),
+    pair("𝒯", "T", MATH, "script"),
+    pair("𝒰", "U", MATH, "script"),
+    pair("𝒱", "V", MATH, "script"),
+    pair("𝒲", "W", MATH, "script"),
+    pair("𝒳", "X", MATH, "script"),
+    pair("𝒴", "Y", MATH, "script"),
+    pair("𝒵", "Z", MATH, "script"),
+    pair("ℐ", "𝒯", MATH, "two script capitals"),
+    pair("ℐ", "𝒥", MATH, "two script capitals"),
+    pair("ℱ", "𝒯", MATH, "two script capitals"),
+    pair("𝒪", "𝒬", MATH, "two script capitals"),
+    pair("𝒦", "𝒳", MATH, "two script capitals"),
+    pair("ℬ", "ℛ", MATH, "two script capitals"),
+    pair("ℬ", "𝒟", MATH, "two script capitals"),
+    pair("𝒞", "𝒢", MATH, "two script capitals"),
+    pair("𝒞", "ℰ", MATH, "two script capitals"),
+    pair("𝒰", "𝒱", MATH, "two script capitals"),
+    pair("ℋ", "𝒰", MATH, "two script capitals"),
+    pair("𝒫", "ℛ", MATH, "two script capitals"),
 ];
 
 /// The classic confusable pairs of letters and figures: what the default target of a notation pair is set against.

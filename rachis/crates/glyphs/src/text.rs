@@ -11,7 +11,7 @@
 
 use rachis_kernel::{Fit, Params, Registry, Spec};
 
-use crate::{greek, latin, lower, punct, signs, typography, upper};
+use crate::{calligraphic, greek, latin, lower, punct, signs, typography, upper};
 
 /// What a letter asks of the proportional family: its sidebearings, and the breadth of its ink.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -104,6 +104,7 @@ pub fn fit(registry: &Registry, spec: &Spec, p: &Params) -> Option<Fit> {
         "greek" => return greek::fit(&spec.name, p),
         "typography" => return typography::fit(registry, &spec.name, p).or_else(|| signs::fit(registry, spec, p)),
         "latin" => latin::ask(&spec.name, p),
+        "calligraphic" => return calligraphic::fit(spec, p),
         _ => None,
     };
     let Some(want) = want else {

@@ -98,19 +98,26 @@ pub(crate) fn interpolate(shapes: &[Shape], weights: &[f64]) -> InstanceShape {
 pub enum UnionFailure {
     /// The boolean operation failed.
     Failed(String),
-    /// The union does not look like the glyph: (largest pixel difference, total difference in pixels).
-    Differs(u8, f64),
+    /// The union does not look like the glyph: the largest pixel difference, the total difference in pixels,
+    /// and the box that holds the pixels that differ, in font units (x0, y0, x1, y1).
+    Differs(u8, f64, Option<[f64; 4]>),
 }
 
 impl std::fmt::Display for UnionFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             UnionFailure::Failed(e) => write!(f, "the union failed: {e}"),
-            UnionFailure::Differs(max, total) => write!(
-                f,
-                "the union differs from the glyph at {CHECK_PPEM} px/em: {max}/255 in one pixel, \
-                 {total:.2} px in all"
-            ),
+            UnionFailure::Differs(max, total, place) => {
+                write!(
+                    f,
+                    "the union differs from the glyph at {CHECK_PPEM} px/em: {max}/255 in one pixel, \
+                     {total:.2} px in all"
+                )?;
+                match place {
+                    Some([x0, y0, x1, y1]) => write!(f, ", between ({x0:.0}, {y0:.0}) and ({x1:.0}, {y1:.0})"),
+                    None => Ok(()),
+                }
+            }
         }
     }
 }
@@ -158,7 +165,7 @@ pub(crate) fn remove_overlaps(paths: &[Path], upm: f64) -> Result<Vec<Path>, Uni
     let out = union(paths)?;
     let (max, total) = compare(paths, &out, upm);
     if max > CHECK_MAX_PIXEL || total > CHECK_MAX_TOTAL {
-        return Err(UnionFailure::Differs(max, total));
+        return Err(UnionFailure::Differs(max, total, difference_box(paths, &out, upm)));
     }
     Ok(out)
 }
@@ -208,9 +215,11 @@ pub(crate) fn compare(a: &[Path], b: &[Path], upm: f64) -> (u8, f64) {
     best.unwrap_or((0, 0.0))
 }
 
-/// Both outlines rasterised in the same frame, shifted by `offset` samples: (width, coverage of `a`, coverage
-/// of `b`), row by row; `None` when both are empty, two empty images when the rasteriser could not make them.
-pub(crate) fn rasters_at(a: &[Path], b: &[Path], upm: f64, offset: (f64, f64)) -> Option<(u32, Vec<u8>, Vec<u8>)> {
+/// The pixels of the raster check's frame around the outlines, at each side.
+const RASTER_MARGIN: f64 = 2.0;
+
+/// The box that holds the points of both outlines: (x0, y0, x1, y1). `None` when both are empty.
+fn frame(a: &[Path], b: &[Path]) -> Option<(f64, f64, f64, f64)> {
     let bounds = |ps: &[Path]| {
         ps.iter().flat_map(Path::coordinates).fold(None, |acc: Option<(f64, f64, f64, f64)>, p| {
             Some(match acc {
@@ -219,13 +228,41 @@ pub(crate) fn rasters_at(a: &[Path], b: &[Path], upm: f64, offset: (f64, f64)) -
             })
         })
     };
-    let (x0, y0, x1, y1) = match (bounds(a), bounds(b)) {
-        (None, None) => return None,
-        (Some(r), None) | (None, Some(r)) => r,
-        (Some(r), Some(s)) => (r.0.min(s.0), r.1.min(s.1), r.2.max(s.2), r.3.max(s.3)),
-    };
+    match (bounds(a), bounds(b)) {
+        (None, None) => None,
+        (Some(r), None) | (None, Some(r)) => Some(r),
+        (Some(r), Some(s)) => Some((r.0.min(s.0), r.1.min(s.1), r.2.max(s.2), r.3.max(s.3))),
+    }
+}
+
+/// The box that holds the pixels in which the two outlines differ by more than [`CHECK_MAX_PIXEL`], in font
+/// units: where to look when a union is refused.
+fn difference_box(a: &[Path], b: &[Path], upm: f64) -> Option<[f64; 4]> {
+    let (x0, _, _, y1) = frame(a, b)?;
+    let (w, ra, rb) = rasters_at(a, b, upm, RASTER_OFFSETS[0])?;
     let scale = CHECK_PPEM / upm;
-    let margin = 2.0;
+    let mut found: Option<[f64; 4]> = None;
+    for (i, (p, q)) in ra.iter().zip(&rb).enumerate() {
+        if p.abs_diff(*q) <= CHECK_MAX_PIXEL {
+            continue;
+        }
+        let (col, row) = ((i as u32 % w) as f64, (i as u32 / w) as f64);
+        let (x, y) = (x0 + (col - RASTER_MARGIN) / scale, y1 - (row - RASTER_MARGIN) / scale);
+        let (right, low) = (x + 1.0 / scale, y - 1.0 / scale);
+        found = Some(match found {
+            None => [x, low, right, y],
+            Some([a0, b0, a1, b1]) => [a0.min(x), b0.min(low), a1.max(right), b1.max(y)],
+        });
+    }
+    found
+}
+
+/// Both outlines rasterised in the same frame, shifted by `offset` samples: (width, coverage of `a`, coverage
+/// of `b`), row by row; `None` when both are empty, two empty images when the rasteriser could not make them.
+pub(crate) fn rasters_at(a: &[Path], b: &[Path], upm: f64, offset: (f64, f64)) -> Option<(u32, Vec<u8>, Vec<u8>)> {
+    let (x0, y0, x1, y1) = frame(a, b)?;
+    let scale = CHECK_PPEM / upm;
+    let margin = RASTER_MARGIN;
     let w = ((x1 - x0) * scale + 2.0 * margin).ceil().max(1.0) as u32;
     let h = ((y1 - y0) * scale + 2.0 * margin).ceil().max(1.0) as u32;
     // Each pixel is sampled SUPERSAMPLE × SUPERSAMPLE times without anti-aliasing (the non-zero rule at each

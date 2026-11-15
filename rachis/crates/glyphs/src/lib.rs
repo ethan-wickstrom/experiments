@@ -2,6 +2,7 @@
 
 pub mod arrows;
 pub mod boxes;
+pub mod calligraphic;
 pub mod cut;
 pub mod digits;
 pub mod greek;
@@ -39,6 +40,7 @@ pub fn registry() -> Registry {
     arrows::register(&mut r);
     greek::register(&mut r);
     letterlike::register(&mut r);
+    calligraphic::register(&mut r);
     latin::register(&mut r);
     symbols::register(&mut r);
     typography::register(&mut r);

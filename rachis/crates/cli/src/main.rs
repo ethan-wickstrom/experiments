@@ -38,7 +38,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | specimen -o FILE | measure ... | math [--refs DIR] | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] [--refs DIR] TEXT | kern [--master NAME] [--own] [PAIRS]>"
+                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | specimen -o FILE | measure ... | math [--script] [--refs DIR] | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] [--refs DIR] TEXT | kern [--master NAME] [--own] [PAIRS]>"
             );
             ExitCode::FAILURE
         }

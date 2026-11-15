@@ -65,11 +65,12 @@ lualatex "\def\fontdir{fonts/ttf/}\input{proofs/stretch.tex}"
 # and proofs/mathml.html in a browser
 cargo run -q -p rachis -- math                    # the glyphs the font adds, what stretches, its sizes and pieces
 cargo run -q -p rachis -- math --refs <directory of mathematics fonts>
+cargo run -q -p rachis -- math --script [--refs <directory>]   # each script capital against its italic and upright capital
 ```
 
 Set all three after a change to the font. They read it differently (T30): Typst places a brace over a group by where the glyph stands in the font and takes the smallest size that is long enough; LuaTeX measures a size by its advance and takes the largest that is not too long; a browser stretches every fence to what it holds. Give a sheet another font's name (`--input math="Fira Math"`, with `--font-path` its directory) to read the same formulas beside it.
 
-What to look for: a delimiter that is too light or too heavy for what it holds, or whose shape changes between two sizes; a limit that stands off its operator; a radical whose rule does not continue its bar; a brace or an arrow that is shorter or longer than its group; an accent that is off-centre or touches its letter; a script whose strokes are thinner than the text's hairlines.
+What to look for: a delimiter that is too light or too heavy for what it holds, or whose shape changes between two sizes; a limit that stands off its operator; a radical whose rule does not continue its bar; a brace or an arrow that is shorter or longer than its group; an accent that is off-centre or touches its letter; a script whose strokes are thinner than the text's hairlines; a script capital that reads as the italic capital beside it, a subscript that stands off its foot, or two script capitals that touch.
 
 What the font holds is in `crates/glyphs/src/mathfont.rs`: which programs are run with which parameters. A sign that should stretch sideways needs no program of its own: add it to `ARROWS` (or to the lists of what lies over and under a group) and `cut.rs` finds its ends and its level run in the outline of the sign drawn long; `rachis math` then lists its pieces, or "no pieces" if its run is not level.
 

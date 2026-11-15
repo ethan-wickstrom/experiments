@@ -182,7 +182,7 @@ fn crossings(g: &Glyph, axis: impl Fn(V) -> (f64, f64), v: f64) -> Vec<(f64, f64
 }
 
 /// The middle of all the ink of `g` at height `y`, from its leftmost to its rightmost edge.
-fn ink_mid(g: &Glyph, y: f64) -> Option<f64> {
+pub(crate) fn ink_mid(g: &Glyph, y: f64) -> Option<f64> {
     let s = spans(g, y);
     Some((s.first()?.0 + s.last()?.1) / 2.0)
 }
@@ -221,7 +221,7 @@ pub fn anchors(spec: &Spec, p: &Params, upright: &dyn Fn() -> Glyph) -> Vec<(&'s
 }
 
 /// The modules whose glyphs take a rule or a stroke over them.
-const RULED: [&str; 6] = ["lower", "upper", "digits", "greek", "latin", "letterlike"];
+const RULED: [&str; 7] = ["lower", "upper", "digits", "greek", "latin", "letterlike", "calligraphic"];
 
 /// The anchors of a letter that takes accents.
 fn letter_anchors(spec: &Spec, p: &Params, upright: &dyn Fn() -> Glyph) -> Vec<(&'static str, f64, f64)> {

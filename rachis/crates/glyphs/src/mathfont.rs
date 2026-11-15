@@ -95,9 +95,12 @@ const LATIN: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 /// forms.
 const GREEK: &str = "ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡϴΣΤΥΦΧΨΩ∇αβγδεζηθικλμνξοπρςστυφχψω∂ϵϑϰϕϱϖ";
 const DIGITS: &str = "0123456789";
+/// The script capitals, which the face has under the code points of its regular weight: the bold ones are their
+/// programs run with the Bold's parameters.
+const SCRIPT: &str = "𝒜ℬ𝒞𝒟ℰℱ𝒢ℋℐ𝒥𝒦ℒℳ𝒩𝒪𝒫𝒬ℛ𝒮𝒯𝒰𝒱𝒲𝒳𝒴𝒵";
 
 /// The blocks: the code point of the first character, the characters in order, the style.
-const BLOCKS: [(u32, &str, Style); 16] = [
+const BLOCKS: [(u32, &str, Style); 17] = [
     (0x1D400, LATIN, Style::Bold),
     (0x1D434, LATIN, Style::Italic),
     (0x1D468, LATIN, Style::BoldItalic),
@@ -106,6 +109,7 @@ const BLOCKS: [(u32, &str, Style); 16] = [
     (0x1D608, LATIN, Style::SansItalic),
     (0x1D63C, LATIN, Style::SansBoldItalic),
     (0x1D670, LATIN, Style::Mono),
+    (0x1D4D0, SCRIPT, Style::Bold),
     (0x1D6A8, GREEK, Style::Bold),
     (0x1D6E2, GREEK, Style::Italic),
     (0x1D71C, GREEK, Style::BoldItalic),
@@ -738,7 +742,11 @@ fn scripts(registry: &Registry, glyphs: &[Glyph], font: &mut MathFont) {
     // an italic alphanumeric is its plain letter's program: find the plain letter of each
     let mut sources: Vec<(String, String, bool)> = Vec::new();
     let plain = |c: char| -> bool {
-        c.is_ascii_alphanumeric() || ('Α'..='ω').contains(&c) || "ϵϑϰϕϱϖ".contains(c) || SCRIPT_SIGNS.contains(c)
+        c.is_ascii_alphanumeric()
+            || ('Α'..='ω').contains(&c)
+            || "ϵϑϰϕϱϖ".contains(c)
+            || SCRIPT_SIGNS.contains(c)
+            || SCRIPT.contains(c)
     };
     for g in glyphs {
         let Some(c) = g.unicodes.first().and_then(|&u| char::from_u32(u)) else { continue };
@@ -1074,6 +1082,33 @@ mod tests {
         }
         // a size of a delimiter has no script form
         assert!(!font.scripts.iter().any(|s| s.0.contains(".v")));
+    }
+
+    #[test]
+    fn a_script_capital_has_a_bold_form_forms_for_scripts_and_a_place_for_an_accent() {
+        let (registry, _, font) = built();
+        let bold = master("Text Bold").unwrap();
+        for (i, c) in SCRIPT.chars().enumerate() {
+            let name = name_of(c);
+            // the bold block has no holes: each of its letters is the regular one's program in the Bold
+            let target = char::from_u32(0x1D4D0 + i as u32).unwrap();
+            let (heavy, drawn) = (glyph(&name_of(target)), registry.flat(&name, &bold).unwrap());
+            assert_eq!(heavy.unicodes, [target as u32]);
+            assert_eq!((heavy.advance, heavy.bounds()), (drawn.advance, drawn.bounds()), "{target} is not a bold {c}");
+            let forms = &font.scripts.iter().find(|s| s.0 == name).unwrap_or_else(|| panic!("{c}: no script forms")).1;
+            assert_eq!(forms, &[format!("{name}.s1"), format!("{name}.s2")]);
+            // an accent stands over the letter's top, which the lean has carried to the right of its foot
+            let (x0, _, x1, _) = glyph(&name).bounds().unwrap();
+            for of in [&name, &name_of(target), &forms[0]] {
+                assert!(font.top_accents.iter().any(|a| a.0 == *of), "{of} has no place for an accent");
+            }
+            let at = font.top_accents.iter().find(|a| a.0 == name).unwrap().1;
+            assert!(at > x0 && at < x1, "{c}: an accent at {at}, ink from {x0} to {x1}");
+        }
+        // what leans past the advance is stated: a superscript clears the bar of 𝒯
+        let correction = |c: char| font.italic_corrections.iter().find(|i| i.0 == name_of(c)).map_or(0.0, |i| i.1);
+        assert!(correction('𝒯') > CORRECTION_PAD, "{}", correction('𝒯'));
+        assert_eq!(correction('𝒜'), 0.0, "the hook 𝒜 ends in stands inside its advance");
     }
 
     #[test]
