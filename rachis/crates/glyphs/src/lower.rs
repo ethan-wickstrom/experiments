@@ -4,7 +4,7 @@
 //! ones (`i j l t f r`) are a stem with a slab, a bar or a rounded elbow that fills the cell; the diagonal ones
 //! are straight strokes cut flat. Measurements that only this group needs are the helpers at the top.
 
-use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
+use rachis_kernel::{Draw, Fit, Knot, Params, Registry, V, knot, pt};
 
 use crate::parts::{Arch, Bowl, arch, bowl, cut, elbow, hbar, lean, mirror, ring, shifted, turn, vee, vstem};
 
@@ -408,4 +408,9 @@ pub fn register(reg: &mut Registry) {
     reg.ch('x', x);
     reg.ch('y', y);
     reg.ch('z', z);
+}
+
+/// The proportional family's cells for this module's glyphs.
+pub fn fit(_name: &str, _p: &Params) -> Option<Fit> {
+    None
 }

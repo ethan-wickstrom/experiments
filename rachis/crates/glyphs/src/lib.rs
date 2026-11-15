@@ -11,6 +11,7 @@ pub mod parts;
 pub mod punct;
 pub mod special;
 pub mod symbols;
+pub mod text;
 pub mod upper;
 
 use rachis_kernel::Registry;
@@ -29,5 +30,6 @@ pub fn registry() -> Registry {
     latin::register(&mut r);
     symbols::register(&mut r);
     boxes::register(&mut r);
+    r.fit = Some(Box::new(text::fit));
     r
 }

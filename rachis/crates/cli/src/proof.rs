@@ -637,8 +637,12 @@ fn chords(knots: &[Knot], closed: bool) -> Vec<V> {
 trait Face {
     fn name(&self) -> &str;
     fn upm(&self) -> f64;
-    /// The advance of every character, in font units.
+    /// The advance of the cell, in font units: of every character when the face has a fixed pitch.
     fn advance(&self) -> f64;
+    /// Whether every character has the same advance, so that text is set on a terminal's grid.
+    fn fixed(&self) -> bool;
+    /// The advance of `c`, in font units.
+    fn advance_of(&mut self, c: char) -> f64;
     fn has(&self, c: char) -> bool;
     /// The outline of `c` in font units, y up; `None` when it is blank or missing.
     fn outline(&mut self, c: char) -> Option<Path>;
@@ -669,6 +673,17 @@ impl Face for OurFace<'_> {
         self.built.params.width
     }
 
+    fn fixed(&self) -> bool {
+        self.built.params.mono
+    }
+
+    fn advance_of(&mut self, c: char) -> f64 {
+        let Some(name) = self.built.registry.for_char(c).map(|spec| spec.name.clone()) else {
+            return 0.0;
+        };
+        self.built.glyph(&name).map_or(0.0, |g| g.advance)
+    }
+
     fn has(&self, c: char) -> bool {
         self.built.registry.for_char(c).is_some()
     }
@@ -695,6 +710,7 @@ struct RefFace {
     location: Location,
     upm: f64,
     advance: f64,
+    fixed: bool,
 }
 
 impl RefFace {
@@ -710,7 +726,11 @@ impl RefFace {
                 font.glyph_metrics(Size::unscaled(), &location).advance_width(gid)
             })
             .ok_or("no advance for '0', 'M' or space")?;
-        Ok(RefFace { family, data, location, upm, advance: f64::from(advance) })
+        let width = |c: char| {
+            font.charmap().map(c).and_then(|gid| font.glyph_metrics(Size::unscaled(), &location).advance_width(gid))
+        };
+        let fixed = width('i') == width('M');
+        Ok(RefFace { family, data, location, upm, advance: f64::from(advance), fixed })
     }
 }
 
@@ -725,6 +745,18 @@ impl Face for RefFace {
 
     fn advance(&self) -> f64 {
         self.advance
+    }
+
+    fn fixed(&self) -> bool {
+        self.fixed
+    }
+
+    fn advance_of(&mut self, c: char) -> f64 {
+        let Ok(font) = FontRef::new(&self.data) else {
+            return 0.0;
+        };
+        let metrics = font.glyph_metrics(Size::unscaled(), &self.location);
+        font.charmap().map(c).and_then(|gid| metrics.advance_width(gid)).map_or(0.0, f64::from)
     }
 
     fn has(&self, c: char) -> bool {
@@ -860,22 +892,40 @@ fn first_baseline(size: u32) -> u32 {
     size / 4 + size
 }
 
-/// `lines` set in `face` at `size` pixels per em on a terminal grid: integer cells, integer baselines.
+/// `lines` set in `face` at `size` pixels per em. A fixed-pitch face is set on a terminal's grid: integer cells,
+/// integer baselines. A proportional face is set as a browser sets it: every glyph at the exact sum of the
+/// advances before it, integer baselines.
 fn set_lines(face: &mut dyn Face, lines: &[String], size: u32, ink: &Ink) -> Option<Pixmap> {
     let k = f64::from(size) / face.upm();
     let cell = (face.advance() * k).round().max(1.0);
+    let fixed = face.fixed();
     let pitch = (1.25 * f64::from(size)).round();
     let margin = f64::from(size / 2);
-    let columns = lines.iter().map(|l| l.chars().count()).max().unwrap_or(0);
-    let width = 2.0 * margin + columns as f64 * cell;
+    // every character with the x of its origin, and the x where the line ends
+    let placed: Vec<(Vec<(char, f64)>, f64)> = lines
+        .iter()
+        .map(|text| {
+            let mut x = 0.0;
+            let glyphs = text
+                .chars()
+                .map(|c| {
+                    let at = x;
+                    x += if fixed { cell } else { face.advance_of(c) * k };
+                    (c, at)
+                })
+                .collect();
+            (glyphs, x)
+        })
+        .collect();
+    let widest = placed.iter().map(|&(_, end)| end).fold(0.0, f64::max);
+    let width = 2.0 * margin + widest.ceil();
     let height = f64::from(size / 4) * 2.0 + pitch * lines.len() as f64;
     let mut pix = blank(width as u32, height as u32, ink.bg)?;
-    for (row, text) in lines.iter().enumerate() {
+    for (row, (glyphs, _)) in placed.iter().enumerate() {
         let baseline = f64::from(first_baseline(size)) + row as f64 * pitch;
-        for (col, c) in text.chars().enumerate() {
+        for &(c, at) in glyphs {
             if let Some(path) = face.outline(c) {
-                let x = margin + col as f64 * cell;
-                fill(&mut pix, &path, ink.fg, glyph_transform(k, x, baseline));
+                fill(&mut pix, &path, ink.fg, glyph_transform(k, margin + at, baseline));
             }
         }
     }

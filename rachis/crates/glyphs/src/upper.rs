@@ -12,7 +12,7 @@
 #![allow(non_snake_case)]
 
 use rachis_kernel::geom::intersect;
-use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
+use rachis_kernel::{Draw, Fit, Knot, Params, Registry, V, knot, pt};
 
 use crate::parts::{cut, dbowl, hbar, ring, vstem};
 
@@ -451,4 +451,9 @@ pub fn register(reg: &mut Registry) {
     reg.ch('N', N);
     reg.ch('M', M);
     reg.ch('W', W);
+}
+
+/// The proportional family's cells for this module's glyphs.
+pub fn fit(_name: &str, _p: &Params) -> Option<Fit> {
+    None
 }

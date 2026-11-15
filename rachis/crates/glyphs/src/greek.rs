@@ -7,7 +7,7 @@
 // The programs keep the Python names, and the Greek capitals and lowercase differ only in case (Gamma, gamma).
 #![allow(non_snake_case)]
 
-use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
+use rachis_kernel::{Draw, Fit, Knot, Params, Registry, V, knot, pt};
 
 use crate::parts::{Arch, Bowl, arch, bowl, cut, cut_pen, diag, elbow, hbar, mirror, ring, turn, vee, vstem};
 
@@ -163,14 +163,14 @@ fn Omega(g: &mut Draw) {
 }
 
 fn ohm(g: &mut Draw) {
-    g.use_char('\u{03a9}', 0.0, 0.0);
+    g.same_as_char('\u{03a9}');
 }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Lowercase
 
 fn omicron(g: &mut Draw) {
-    g.use_char('o', 0.0, 0.0);
+    g.same_as_char('o');
 }
 
 fn alpha(g: &mut Draw) {
@@ -358,13 +358,13 @@ fn mu(g: &mut Draw) {
 }
 
 fn micro(g: &mut Draw) {
-    g.use_char('μ', 0.0, 0.0);
+    g.same_as_char('μ');
 }
 
 pub fn register(reg: &mut Registry) {
     reg.module("greek");
     for (greek, latin) in SAME {
-        reg.ch(greek, move |g: &mut Draw| g.use_char(latin, 0.0, 0.0));
+        reg.ch(greek, move |g: &mut Draw| g.same_as_char(latin));
     }
     reg.ch('Γ', Gamma);
     reg.ch('Δ', Delta);
@@ -392,4 +392,9 @@ pub fn register(reg: &mut Registry) {
     reg.ch('λ', lambda_);
     reg.ch('μ', mu);
     reg.ch('µ', micro); // the micro sign
+}
+
+/// The proportional family's cells for this module's glyphs.
+pub fn fit(_name: &str, _p: &Params) -> Option<Fit> {
+    None
 }

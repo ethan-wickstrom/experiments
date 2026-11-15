@@ -85,6 +85,12 @@ impl<'a> Draw<'a> {
         self.glyph_of(&name_of(c))
     }
 
+    /// The glyph called `name` as the master `p` draws it, with its components resolved into contours. `p` need
+    /// not be a master of the face: a scaled master with strokes of its own gives the letter at a small size.
+    pub fn glyph_as(&self, name: &str, p: &Params) -> Option<Glyph> {
+        self.registry?.flat(name, p)
+    }
+
     /// Draw the glyph called `name` here as another master would draw it, moved by (dx, dy) in upright
     /// coordinates. The other master's parameters decide its weight, size and slant: a bold letter inside a
     /// regular font is the same program run with the bold's numbers.
@@ -210,6 +216,25 @@ pub struct Fit {
     pub width: f64,
     pub left: f64,
     pub right: f64,
+}
+
+impl Fit {
+    /// A cell `width` wide with the master's standard sidebearings.
+    pub fn new(width: f64) -> Fit {
+        Fit { width, left: 0.0, right: 0.0 }
+    }
+
+    /// The cell of a letter between two straight sides: two of the master's sidebearings, `stems` of its stems
+    /// and `counters` of its counters (the counter of n). The letter n is `Fit::letter(p, 2.0, 1.0)`.
+    pub fn letter(p: &Params, stems: f64, counters: f64) -> Fit {
+        Fit::new(2.0 * p.sb + stems * p.stem + counters * p.counter)
+    }
+
+    /// The same cell with `left` added to the left sidebearing and `right` to the right one, in units of the
+    /// master's sidebearing: `-0.5` takes half of it away.
+    pub fn bearings(self, left: f64, right: f64, p: &Params) -> Fit {
+        Fit { left: self.left + left * p.sb, right: self.right + right * p.sb, ..self }
+    }
 }
 
 /// The fit of a glyph in a master. `None` leaves the master's own cell.
