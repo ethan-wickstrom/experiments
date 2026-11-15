@@ -19,6 +19,8 @@ Every open item of the typeface (a gap, an idea, a deferral, a question, a reque
 - **G11 · The proof tool draws a zero-advance mark in the cell after its base**, so bare combining marks cannot be proofed in place.
 - **G12 · `rachis check` notes every empty glyph and every overhang of the proportional family** (440 notes), which hides a note that matters.
 
+- **G13 · The specimen page's table of pairs is copied by hand** from `measurements.md` (`specimen/specimen.html`, the `PAIRS` constant), as are the build's figures in its terminal block; they go stale when shapes change. `rachis specimen` should compute them.
+
 ### Ideas
 
 - **I1 · An OpenType MATH table** (T25): constants, italic corrections, accent attachment, and delimiters, radicals and integrals of any size made by running their programs at other heights.

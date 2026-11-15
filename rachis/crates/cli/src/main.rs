@@ -4,6 +4,7 @@ mod build;
 mod digest;
 mod measure;
 mod proof;
+mod specimen;
 
 use std::fmt::Write as _;
 use std::process::ExitCode;
@@ -22,6 +23,7 @@ fn main() -> ExitCode {
         Some("proof") => proof::run(&registry, &args[1..]),
         Some("measure") => measure::run(&registry, &args[1..]),
         Some("digest") => digest::run(&registry, &args[1..]),
+        Some("specimen") => specimen::run(&args[1..]),
         Some("widths") => widths(&registry, &args[1..]),
         Some("kern") => kern(&registry, &args[1..]),
         Some("list") => {
@@ -34,7 +36,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | measure ... | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] TEXT | kern [--master NAME] [PAIRS]>"
+                "usage: rachis <build [--out DIR] [--no-statics] [--no-hint] | proof ... | specimen -o FILE | measure ... | digest [--write | --check] [--glyphs] | check [NAMES...] | dump [--module NAME] | list | widths [--master NAME] TEXT | kern [--master NAME] [PAIRS]>"
             );
             ExitCode::FAILURE
         }
