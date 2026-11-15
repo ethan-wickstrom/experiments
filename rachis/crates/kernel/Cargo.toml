@@ -1,0 +1,10 @@
+[package]
+name = "rachis-kernel"
+description = "The kernel of the Rachis typeface: plane geometry, Hobby splines, pens on skeletons, and the canvas glyph programs draw on"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

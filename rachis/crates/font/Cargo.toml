@@ -1,0 +1,13 @@
+[package]
+name = "rachis-font"
+description = "The compiler of the Rachis typeface: masters to OpenType font files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rachis-kernel = { path = "../kernel" }
+
+[lints]
+workspace = true

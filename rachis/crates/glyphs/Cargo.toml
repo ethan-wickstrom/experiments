@@ -1,0 +1,13 @@
+[package]
+name = "rachis-glyphs"
+description = "The glyph programs of the Rachis typeface, and the skeleton parts they share"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rachis-kernel = { path = "../kernel" }
+
+[lints]
+workspace = true
