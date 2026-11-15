@@ -1,0 +1,22 @@
+% What LaTeX stretches sideways: braces and brackets over and under a group, arrows over a label, wide accents.
+%
+%   lualatex "\def\fontdir{fonts/ttf/}\input{proofs/stretch.tex}"
+%
+% from `rachis/`, after `rachis build`. It needs LuaLaTeX with unicode-math (TeX Live: texlive-luatex and
+% texlive-latex-recommended).
+\documentclass[11pt]{article}
+\usepackage[paperwidth=26cm,paperheight=9cm,margin=1cm]{geometry}
+\usepackage{amsmath}
+\usepackage{unicode-math}
+\setmainfont{Rachis}[Path=\fontdir, Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold, ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]
+\setmathfont{RachisMath-Regular.ttf}[Path=\fontdir]
+\pagestyle{empty}\parindent=0pt
+\begin{document}
+\[ \overbrace{a+b}^{2}\quad \overbrace{a+b+c+d}^{4}\quad \underbrace{y+z+w+u}_{6}\quad \overbracket{a+b+c}\quad \underbracket{p+q+y}\quad
+   \overparen{abc}\quad \underparen{xyz}\quad \overbrace{x}\quad \underbrace{y}\quad \overbrace{xy}\quad \overbrace{xyz} \]
+\[ \underbrace{a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9+a_{10}+a_{11}+a_{12}}_{\text{twelve terms in all}}\quad
+   \overbrace{ABCDEFGH}^{\text{eight letters}} \]
+\[ A\xrightarrow{f}B\xrightarrow{\text{a long label here}}C\xleftarrow[\text{back}]{}D \]
+\[ \widehat{a}\ \widehat{ab}\ \widehat{abc}\ \widehat{abcde}\ \widehat{abcdefg}\quad \widetilde{ab}\ \widetilde{abcd}\ \widetilde{abcdefg}\quad
+   \overrightarrow{AB}\ \overrightarrow{ABCD}\ \overleftarrow{ABCDEF}\ \overleftrightarrow{ABCDEFGH}\quad \overline{a+b+c}\ \underline{a+b+c} \]
+\end{document}
