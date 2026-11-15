@@ -61,9 +61,10 @@ fn baseline(p: &Params, place: Place) -> f64 {
     }
 }
 
-/// The side margin the proportional family adds to a small letter's own advance.
-fn pad(p: &Params) -> f64 {
-    0.35 * p.sb
+/// The side margin the proportional family adds to a small letter's own advance: none, because the small
+/// master's sidebearings are already wider in proportion than the text's, as a small size needs.
+fn pad(_p: &Params) -> f64 {
+    0.0
 }
 
 /// Add the outline of `small`, a glyph of the small master, standing on `y` and centred in the cell (the
@@ -104,7 +105,9 @@ fn script(g: &mut Draw, base: char, at: Place, turned: bool) {
 
 /// The superscript letters and the letter each is drawn from. ᵍ is the single-storey g, which is Rachis's g; ᵋ
 /// and ᶥ are the Latin open e and iota, whose shapes are the Greek ε and ι; ᶲ is the Latin phi, the Greek φ.
-const SUPERIORS: [(char, char); 54] = [
+const SUPERIORS: [(char, char); 56] = [
+    ('ⁿ', 'n'),
+    ('ⁱ', 'i'),
     ('ᵃ', 'a'),
     ('ᵇ', 'b'),
     ('ᶜ', 'c'),
@@ -161,8 +164,10 @@ const SUPERIORS: [(char, char); 54] = [
     ('ᵂ', 'W'),
 ];
 
-/// The subscript letters and the letter each is drawn from (ₙ and ᵢ are registered apart).
-const INFERIORS: [(char, char); 20] = [
+/// The subscript letters and the letter each is drawn from.
+const INFERIORS: [(char, char); 22] = [
+    ('ₙ', 'n'),
+    ('ᵢ', 'i'),
     ('ₐ', 'a'),
     ('ₑ', 'e'),
     ('ₒ', 'o'),
@@ -185,26 +190,6 @@ const INFERIORS: [(char, char); 20] = [
     ('ᵪ', 'χ'),
 ];
 
-/// An inferior that is a superior of `digits`, lowered as the inferior figures are. In the proportional family it
-/// takes the advance the small master gives its base letter, as the other script letters do, and not the
-/// figures' cell that the superior keeps.
-fn lowered(reg: &mut Registry, inf: char, sup: char, base: char) {
-    if reg.get(&name_of(sup)).is_none() {
-        return;
-    }
-    reg.ch(inf, move |g: &mut Draw| {
-        let p = g.p;
-        let mut dx = 0.0;
-        if !p.mono {
-            let sp = script_params(p);
-            let own = g.glyph_as(&name_of(base), &sp).map_or(sp.width, |small| small.advance);
-            g.glyph.advance = own + 2.0 * pad(p);
-            dx = (g.glyph.advance - p.width) / 2.0;
-        }
-        g.use_char(sup, dx, inferior_shift(p));
-    });
-}
-
 pub fn register(reg: &mut Registry) {
     reg.module("scripts");
     for (character, base) in SUPERIORS {
@@ -221,6 +206,4 @@ pub fn register(reg: &mut Registry) {
     if reg.get(&name_of('e')).is_some() {
         reg.ch('ₔ', |g: &mut Draw| script(g, 'e', Place::Sub, true));
     }
-    lowered(reg, 'ₙ', 'ⁿ', 'n');
-    lowered(reg, 'ᵢ', 'ⁱ', 'i');
 }

@@ -10,7 +10,7 @@
 
 use rachis_kernel::{Fit, Params, Registry, Spec};
 
-use crate::{greek, latin, lower, punct, upper};
+use crate::{arrows, greek, latin, lower, punct, typography, upper};
 
 /// What a letter asks of the proportional family: its sidebearings, and the breadth of its ink.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -60,6 +60,13 @@ fn sign(name: &str, p: &Params) -> Option<Ask> {
     }
 }
 
+/// Superior and inferior figures and signs: in a formula they follow a letter closely, so they take the room of
+/// their ink and a small sidebearing, not the figures' cell. Fractions keep the cell.
+fn script_figure(spec: &Spec, p: &Params) -> Option<Ask> {
+    let small = |c: &u32| matches!(*c, 0x00B2 | 0x00B3 | 0x00B9 | 0x2070..=0x209F);
+    spec.unicodes.iter().any(small).then_some(Ask { left: 0.32 * p.sb, ink: None, right: 0.32 * p.sb })
+}
+
 /// The cell and the sidebearing adjustments that give the glyph what it asks for.
 fn resolve(registry: &Registry, spec: &Spec, p: &Params, want: Ask) -> Option<Fit> {
     // the first cell is a guess; a program's ink grows by as much as its cell does, so one correction lands
@@ -92,8 +99,11 @@ pub fn fit(registry: &Registry, spec: &Spec, p: &Params) -> Option<Fit> {
         "upper" => upper::ask(&spec.name, p),
         "punct" => punct::ask(&spec.name, p),
         "operators" => sign(&spec.name, p),
+        "digits" => script_figure(spec, p),
         "greek" => return greek::fit(&spec.name, p),
-        "latin" => return latin::fit(&spec.name, p),
+        "arrows" => return arrows::fit(&spec.name, p),
+        "typography" => return typography::fit(registry, &spec.name, p),
+        "latin" => latin::ask(&spec.name, p),
         _ => None,
     };
     resolve(registry, spec, p, want?)

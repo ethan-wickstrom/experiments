@@ -643,6 +643,10 @@ pub(crate) trait Face {
     fn fixed(&self) -> bool;
     /// The advance of `c`, in font units.
     fn advance_of(&mut self, c: char) -> f64;
+    /// The kerning between `a` and the `b` that follows it, in font units.
+    fn kern(&mut self, _a: char, _b: char) -> f64 {
+        0.0
+    }
     fn has(&self, c: char) -> bool;
     /// The outline of `c` in font units, y up; `None` when it is blank or missing.
     fn outline(&mut self, c: char) -> Option<Path>;
@@ -652,11 +656,13 @@ pub(crate) trait Face {
 pub(crate) struct OurFace<'r> {
     built: Built<'r>,
     paths: HashMap<char, Option<Path>>,
+    /// The master's kerning by glyph names, computed when first asked for.
+    kerning: Option<HashMap<(String, String), f64>>,
 }
 
 impl<'r> OurFace<'r> {
     pub(crate) fn new(registry: &'r Registry, params: Params) -> OurFace<'r> {
-        OurFace { built: Built::new(registry, params), paths: HashMap::new() }
+        OurFace { built: Built::new(registry, params), paths: HashMap::new(), kerning: None }
     }
 }
 
@@ -682,6 +688,19 @@ impl Face for OurFace<'_> {
             return 0.0;
         };
         self.built.glyph(&name).map_or(0.0, |g| g.advance)
+    }
+
+    fn kern(&mut self, a: char, b: char) -> f64 {
+        let registry = self.built.registry;
+        let params = &self.built.params;
+        let table = self.kerning.get_or_insert_with(|| {
+            rachis_glyphs::kern::kerning(registry, params).into_iter().map(|(l, r, k)| ((l, r), k)).collect()
+        });
+        let name = |c: char| registry.for_char(c).map(|s| s.name.clone());
+        match (name(a), name(b)) {
+            (Some(l), Some(r)) => table.get(&(l, r)).copied().unwrap_or(0.0),
+            _ => 0.0,
+        }
     }
 
     fn has(&self, c: char) -> bool {
@@ -910,9 +929,14 @@ fn set_lines(face: &mut dyn Face, lines: &[String], size: u32, ink: &Ink) -> Opt
         .iter()
         .map(|text| {
             let mut x = 0.0;
+            let mut before: Option<char> = None;
             let glyphs = text
                 .chars()
                 .map(|c| {
+                    if let (false, Some(b)) = (fixed, before) {
+                        x += face.kern(b, c) * k;
+                    }
+                    before = Some(c);
                     let at = x;
                     x += if fixed { cell } else { face.advance_of(c) * k };
                     (c, at)

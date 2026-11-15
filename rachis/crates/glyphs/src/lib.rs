@@ -12,10 +12,12 @@ pub mod operators;
 pub mod parts;
 pub mod punct;
 pub mod scripts;
+pub mod shapes;
 pub mod special;
 pub mod symbols;
 pub mod technical;
 pub mod text;
+pub mod typography;
 pub mod upper;
 
 use rachis_kernel::Registry;
@@ -34,9 +36,12 @@ pub fn registry() -> Registry {
     letterlike::register(&mut r);
     latin::register(&mut r);
     symbols::register(&mut r);
+    typography::register(&mut r);
+    shapes::register(&mut r);
     technical::register(&mut r);
     scripts::register(&mut r);
     boxes::register(&mut r);
     r.fit = Some(Box::new(text::fit));
+    r.anchors = Some(Box::new(latin::anchors));
     r
 }

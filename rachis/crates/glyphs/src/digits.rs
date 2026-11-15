@@ -7,7 +7,7 @@
 
 use rachis_kernel::{Draw, Knot, Params, Registry, V, knot, pt};
 
-use crate::parts::{Arch, arch, cut, cut_pen, hbar, mirror, ring, turn, vstem};
+use crate::parts::{cut, cut_pen, hbar, mirror, ring, turn, vstem};
 
 // ---------------------------------------------------------------------------------------------------------------
 // frames
@@ -390,39 +390,6 @@ fn draw_small_parenright(g: &mut Draw, f: Frame) {
     g.stroke(&mirror(&small_paren(f), f.cx()));
 }
 
-/// The height of a small lowercase letter above the small figures' baseline.
-fn small_xh(p: &Params, f: Frame) -> f64 {
-    f.h() * p.xh / p.cap
-}
-
-fn draw_small_n(g: &mut Draw, f: Frame) {
-    let p = g.p;
-    let s = f.stem;
-    let xh = small_xh(p, f);
-    let (xl, xr) = (f.x(0.10) + s / 2.0, f.x(0.90) - s / 2.0);
-    g.stroke(&vstem(xl, f.y0, f.y0 + xh, s));
-    g.stroke(&arch(
-        p,
-        xl,
-        xr,
-        f.y0 + xh + f.over,
-        f.y0,
-        Arch { stem: Some(s), hair: Some(f.hair), branch: Some(f.y0 + 0.68 * xh), ..Arch::default() },
-    ));
-}
-
-fn draw_small_i(g: &mut Draw, f: Frame) {
-    let p = g.p;
-    let (s, h) = (f.stem, f.hair);
-    let xh = small_xh(p, f);
-    let x = f.cx() + 0.03 * f.w();
-    let r = 0.5 * p.dot + 12.0; // the dot, reduced as the strokes are
-    g.stroke(&vstem(x, f.y0, f.y0 + xh, s));
-    g.stroke(&hbar(f.x(0.12), x, f.y0 + xh - h / 2.0, h));
-    g.stroke(&hbar(f.x(0.10), f.x(0.90), f.y0 + h / 2.0, h));
-    g.dot(x - 0.25 * s, f.y0 + xh + xh / 6.0 + r, r);
-}
-
 // ---------------------------------------------------------------------------------------------------------------
 // glyphs
 
@@ -530,8 +497,6 @@ pub fn register(reg: &mut Registry) {
     small_pair(reg, draw_small_equal, '⁼', Some('₌'));
     small_pair(reg, draw_small_parenleft, '⁽', Some('₍'));
     small_pair(reg, draw_small_parenright, '⁾', Some('₎'));
-    small_pair(reg, draw_small_n, 'ⁿ', None);
-    small_pair(reg, draw_small_i, 'ⁱ', None);
     reg.named("zero.dot", zero_dot);
     reg.named("zero.plain", zero_plain);
     reg.named("zero.slash", zero_slash);
