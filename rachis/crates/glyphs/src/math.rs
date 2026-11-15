@@ -14,9 +14,9 @@ use rachis_kernel::{Draw, Knot, Opt, Params, Registry, V, knot, pt};
 
 use crate::operators::{
     arc, bar, big_box, big_ring, box_, chevron, chevron_rise, circle, cross, curved_chevron, dot_gap, equal_pitch,
-    fine, half_span, mirrored, outline, over, radical, rake, rel_gap, rel_rise, set_rise, slash, slash_run, small_ring,
-    small_stroke, square_image, stand_top, stem, strike, struck, subset, tack, tack_rise, tip, transposed,
-    triple_pitch, twin_pitch, twin_wave, wave, wave_rise, wedge,
+    fine, half_span, middle_of, mirrored, outline, over, radical, rake, rel_gap, rel_rise, set_rise, slash, slash_run,
+    small_ring, small_stroke, square_image, stand_top, stem, strike, struck, struck_about, subset, tack, tack_rise,
+    tip, transposed, triple_pitch, twin_pitch, twin_wave, wave, wave_rise, wedge,
 };
 use crate::parts::{Arch, arch, cut, cut_pen, diag, flip, hbar, mirror, moved, vee, vstem};
 
@@ -709,8 +709,9 @@ fn half_height(g: &Draw, c: char) -> f64 {
 /// The glyph of `c`, struck through all of its height.
 fn negated(g: &mut Draw, c: char) {
     let rise = half_height(g, c);
+    let cx = middle_of(g, c);
     g.use_char(c, 0.0, 0.0);
-    struck(g, rise, None);
+    struck_about(g, cx, rise, None);
 }
 
 /// The stroke of the short slash that strikes one part of a relation.

@@ -8,7 +8,7 @@
 //! A sign's [`Room`] says how far its program draws across, counted in spans of the master's cell (the span is
 //! the cell without the operators' margins), and how much white stands at each side of its ink. The programs are
 //! the fixed pitch's: they draw across the span they are given, and what should grow with it grows by
-//! [`Params::grown`]. The spans were read from three sans-serif mathematics fonts that grew out of text faces
+//! [`Params::grown`], which the fit sets to the room's span. The spans were read from three sans-serif mathematics fonts that grew out of text faces
 //! (Fira Math, Lete Sans Math, Noto Sans Math) at Rachis's x-height, and gathered into a few classes (decision
 //! T27).
 
@@ -52,10 +52,11 @@ pub fn of(c: char) -> Option<Room> {
         // dots, rings and small signs: their own ink between the margins
         '⋅' | '∙' | '∘' | '∊' | '∍' | '⋴' | '⋼' | '⋷' | '⋾' | '∁' | '≬' | '∎' | '∔' | '⊺' | '⊹' | '⊦' | '⊧' | '⨟'
         | '⟊' | '⟠' | '≀' | '∬' | '∭' | '∯' | '∰' => wide(1.0),
+        // signs built on another sign, which brings its room with it: the ink of the two between the margins
+        '∤' | '∦' | '⊬' | '⊭' | '⊮' | '⊯' => wide(1.0),
         '∗' => wide(1.4),
         // bars: relations, so they stand a little further from their neighbours
         '∣' | '∥' | '‖' | '∶' | '⋮' | '⦂' => room(1.0, 1.5),
-        '∤' | '∦' => wide(1.0),
 
         // relations between sets, cups and caps, wedges, and their square and triangular kin
         '⊂' | '⊃' | '∈' | '∋' | '∉' | '∌' | '⊄' | '⊅' | '⊆' | '⊇' | '⊈' | '⊉' | '⊊' | '⊋' | '⋐' | '⋑' | '⟃' | '⟄'
@@ -65,7 +66,7 @@ pub fn of(c: char) -> Option<Room> {
         | '⊏' | '⊐' | '⊑' | '⊒' | '⋢' | '⋣' | '⋤' | '⋥'
         | '⊲' | '⊳' | '⊴' | '⊵' | '⋪' | '⋫' | '⋬' | '⋭'
         | '∝' | '≔' | '≕' | '∴' | '∵' | '∷' | '⋰' | '⋱' | '∹' | '⋆' | '∿' | '∾'
-        | '∟' | '⊾' | '⟀' | '∠' | '∡' | '∢' | '⊿' | '√' | '∛' | '∜' | '∖' | '∕' => wide(RELATION),
+        | '∟' | '⊾' | '⟀' | '∠' | '∡' | '⊿' | '√' | '∛' | '∜' | '∖' | '∕' => wide(RELATION),
         '⟈' | '⟉' => wide(1.7),
 
         // tacks and turnstiles, circled and boxed operators, bowties
@@ -73,9 +74,9 @@ pub fn of(c: char) -> Option<Room> {
         | '⊕' | '⊖' | '⊗' | '⊘' | '⊙' | '⊚' | '⊛' | '⊜' | '⊝' | '⦾' | '⦿' | '∅'
         | '⊞' | '⊟' | '⊠' | '⊡' | '⧄' | '⧅' | '⧆' | '⧇'
         | '⋈' | '⋉' | '⋊' | '⋋' | '⋌' | '⋯' | '⧺' | '⟎' | '⟏' | '⟡' | '⟢' | '⟣' | '⊸' | '⟜' => wide(ROUND),
-        '⊩' | '⊪' | '⊫' | '⊬' | '⊭' | '≪' | '≫' | '⩴' => wide(1.7),
+        '⊩' | '⊪' | '⊫' | '≪' | '≫' | '⩴' => wide(1.7),
         '⟤' | '⟥' | '⟐' | '⟁' => wide(1.6),
-        '⊮' | '⊯' | '⊶' | '⊷' | '⟕' | '⟖' | '⟋' | '⟍' => wide(1.9),
+        '⊶' | '⊷' | '⟕' | '⟖' | '⟋' | '⟍' => wide(1.9),
         '⋘' | '⋙' | '⟝' | '⟞' | '⟗' | '⨝' => wide(2.2),
         '⟚' | '⟛' => wide(2.8),
         '∞' => room(1.55, 0.6),
@@ -108,9 +109,9 @@ pub fn of(c: char) -> Option<Room> {
         '™' => room(1.4, 0.4),
         '№' => room(1.35, 0.6),
         '§' | '‼' => room(1.0, 0.9),
-        '⁇' | '⁈' | '⁉' => room(1.4, 0.9),
+        '⁇' | '⁉' => room(1.4, 0.9),
         '½' | '¼' | '¾' | '⅐' | '⅑' | '⅓' | '⅔' | '⅕' | '⅖' | '⅗' | '⅘' | '⅙' | '⅚' | '⅛' | '⅜' | '⅝' | '⅞' | '⅒' | '⅟'
-        | '↉' => room(1.25, 0.5),
+        => room(1.25, 0.5),
 
         // delimiters stand as close to what they hold as brackets do
         '⌈' | '⌉' | '⌊' | '⌋' | '⟦' | '⟧' | '⟬' | '⟭' | '⦃' | '⦄' | '⟨' | '⟩' | '⟪' | '⟫' | '⟮' | '⟯' | '⦇' | '⦈'
@@ -130,20 +131,24 @@ pub fn fit(registry: &Registry, spec: &Spec, p: &Params) -> Option<Fit> {
     // bullets, status marks and geometric shapes are all a quarter larger than in the fixed pitch's cell
     let room = listed.or_else(|| (spec.module == "symbols").then_some(Room { span: SHAPE, margin: 1.0 }))?;
     let width = room.span * (p.width - 2.0 * p.op_l) + 2.0 * p.op_l;
-    let trial = registry.trial(spec, p, width);
+    let trial = registry.trial(spec, p, width, room.span);
     if trial.contours.is_empty() {
         // another sign under a second code point: it comes with that sign's room
         return None;
     }
     let (x0, x1) = registry.ends(&trial, p)?;
     let side = room.margin * p.op_l;
-    Some(Fit { width, left: side - x0, right: side - (width - x1) })
+    Some(Fit { width, left: side - x0, right: side - (width - x1), grown: room.span })
 }
 
 #[cfg(test)]
 mod tests {
     use rachis_kernel::name_of;
     use rachis_kernel::params::masters;
+
+    fn master(name: &str) -> Params {
+        rachis_kernel::params::master(name).unwrap_or_else(|| panic!("no master called {name}"))
+    }
 
     use super::*;
 
@@ -187,6 +192,77 @@ mod tests {
             // a dot takes the room of its ink, not a cell
             assert!(near(dot, dx1 - dx0 + 2.0 * p.op_l) && dot < 0.6 * p.width, "⋅ in {}: {dot}", p.name);
         }
+    }
+
+    #[test]
+    fn a_shape_is_larger_in_the_proportional_family_and_an_italic_does_not_change_a_sign() {
+        let r = crate::registry();
+        let (mono, text) = (master("Mono Regular"), master("Text Regular"));
+        let (_, (m0, _, m1, _)) = drawn(&r, '●', &mono);
+        let (advance, (t0, _, t1, _)) = drawn(&r, '●', &text);
+        // to a hundredth of a unit, as above
+        let near = |a: f64, b: f64| (a - b).abs() < 0.01;
+        assert!(near(t1 - t0, SHAPE * (m1 - m0)), "● is {} across in Rachis and {} in Rachis Mono", t1 - t0, m1 - m0);
+        assert!(near(advance, t1 - t0 + 2.0 * text.op_l), "● has the advance {advance}");
+        // signs are registered upright or sheared about their middle: the room is the upright's
+        for (upright, italic) in [("Text Regular", "Text Italic"), ("Small Bold", "Small Bold Italic")] {
+            for c in ['→', '∈', '⊕', '∤', '@', '⟨'] {
+                let (a, b) = (drawn(&r, c, &master(upright)).0, drawn(&r, c, &master(italic)).0);
+                assert!(near(a, b), "{c}: {a} in {upright}, {b} in {italic}");
+            }
+        }
+    }
+
+    /// The x of the middle of the ink of some contours.
+    fn middle(contours: &[rachis_kernel::Contour]) -> Option<f64> {
+        let g = rachis_kernel::Glyph { contours: contours.to_vec(), ..Default::default() };
+        g.bounds().map(|(x0, _, x1, _)| (x0 + x1) / 2.0)
+    }
+
+    #[test]
+    fn what_a_sign_adds_to_a_component_stays_centred_on_it() {
+        // A sign built on another (a struck bar, a negated turnstile, a cup with a dot in it) draws the other as
+        // a component and adds strokes of its own. Where the fixed pitch centres the addition on the component,
+        // every master of the proportional family must too, although the component stands where its own room
+        // put it.
+        let r = crate::registry();
+        let offset = |spec: &Spec, p: &Params| -> Option<f64> {
+            let own = r.build(spec, p);
+            if own.components.is_empty() || own.contours.is_empty() {
+                return None;
+            }
+            let whole = r.flat(&spec.name, p)?;
+            let parts = &whole.contours[own.contours.len()..];
+            Some(middle(&own.contours)? - middle(parts)?)
+        };
+        let mono = master("Mono Regular");
+        let mut checked = 0;
+        for spec in r.specs.iter().filter(|s| ["operators", "math", "arrows"].contains(&s.module)) {
+            if !offset(spec, &mono).is_some_and(|d| d.abs() < 1.0) {
+                continue;
+            }
+            checked += 1;
+            for p in masters().into_iter().filter(|p| !p.mono && !p.italic()) {
+                let d = offset(spec, &p).unwrap_or(f64::NAN);
+                assert!(
+                    d.abs() < 1.0,
+                    "{} in {}: what it adds is {d:.1} from the middle of its component",
+                    spec.name,
+                    p.name
+                );
+            }
+        }
+        assert!(checked >= 10, "only {checked} signs are built on a centred component");
+    }
+
+    #[test]
+    fn every_character_with_a_room_has_a_glyph() {
+        let r = crate::registry();
+        let missing: Vec<char> = (0x20..0x30000)
+            .filter_map(char::from_u32)
+            .filter(|&c| of(c).is_some() && r.for_char(c).is_none())
+            .collect();
+        assert!(missing.is_empty(), "rooms for characters the typeface does not draw: {missing:?}");
     }
 
     #[test]

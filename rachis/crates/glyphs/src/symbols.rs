@@ -56,7 +56,7 @@ fn grow(p: &Params) -> f64 {
 /// Half the side of the square of a class. In the wider cell the proportional family gives these signs, a
 /// shape is as much larger as the span is wider.
 fn half(p: &Params, cls: f64) -> f64 {
-    cls * grow(p) * p.grown()
+    cls * grow(p) * p.grown
 }
 
 /// The stroke of an outlined shape of a class. The full-size classes use the operator stroke; smaller ones use a

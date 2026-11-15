@@ -116,12 +116,21 @@ fn one_dot_leader(g: &mut Draw) {
     g.use_char('.', 0.0, 0.0);
 }
 
-/// The dots of the ellipsis (punct.rs), two of them, at the ellipsis's pitch.
+/// The dots of the ellipsis (punct.rs), two of them, at the ellipsis's pitch: in the fixed-pitch family its small
+/// dots 200 apart, in the proportional one two periods as far apart as two typed periods stand, so that a row
+/// of leaders is a row of evenly spaced dots.
 fn two_dot_leader(g: &mut Draw) {
     let p = g.p;
-    let r = 0.5 * p.punct + 16.0;
-    for cx in [p.mid() - 100.0, p.mid() + 100.0] {
-        g.dot(cx, r - p.over, r);
+    if p.mono {
+        let r = 0.5 * p.punct + 16.0;
+        for cx in [p.mid() - 100.0, p.mid() + 100.0] {
+            g.dot(cx, r - p.over, r);
+        }
+    } else {
+        let pitch = 2.0 * p.punct + 2.0 * 0.86 * p.sb;
+        for cx in [p.mid() - pitch / 2.0, p.mid() + pitch / 2.0] {
+            g.dot(cx, crate::punct::dot_y(p), p.punct);
+        }
     }
 }
 
@@ -731,7 +740,8 @@ pub fn fit(registry: &Registry, name: &str, p: &Params) -> Option<Fit> {
     let same = |other: &str| Some(Fit::new(advance_of(registry, other, p)));
     match name {
         "uni2024" => same("period"),
-        "uni2025" => Some(Fit::new(advance_of(registry, "uni2026", p) - 200.0)),
+        // two periods' room: its dots are a period's pitch apart, and so are those of two leaders in a row
+        "uni2025" => Some(Fit::new(2.0 * period())),
         "uni2035" => same("uni2032"),
         "uni2036" => same("uni2033"),
         "uni201F" => same("uni201D"),
@@ -779,6 +789,24 @@ mod tests {
                 assert!((advance(0x2006) - 1000.0 / 6.0).abs() < 1e-9);
                 assert!((advance(0x205F) - 2000.0 / 9.0).abs() < 1e-9);
                 assert_eq!(advance(0x2008), r.build(r.get("period").unwrap(), &p).advance);
+            }
+        }
+    }
+
+    #[test]
+    fn a_row_of_leaders_in_the_proportional_family_is_a_row_of_evenly_spaced_periods() {
+        let r = crate::registry();
+        for p in masters().into_iter().filter(|p| !p.mono && !p.italic()) {
+            let glyph = |c: char| r.flat(&name_of(c), &p).unwrap();
+            let (period, two, three) = (glyph('.'), glyph('‥'), glyph('…'));
+            let left = |g: &rachis_kernel::Glyph| g.bounds().unwrap().0;
+            let right = |g: &rachis_kernel::Glyph| g.advance - g.bounds().unwrap().2;
+            for (g, dots) in [(&glyph('․'), 1.0), (&two, 2.0), (&three, 3.0)] {
+                // as many periods' room, and a period's white at each side: the dots of two leaders in a row
+                // are as far apart as the dots inside one
+                assert!((g.advance - dots * period.advance).abs() < 1e-6, "{} in {}: {}", g.name, p.name, g.advance);
+                assert!((left(g) - left(&period)).abs() < 1e-6, "{} in {}: left {}", g.name, p.name, left(g));
+                assert!((right(g) - right(&period)).abs() < 1e-6, "{} in {}: right {}", g.name, p.name, right(g));
             }
         }
     }

@@ -19,19 +19,19 @@ pub fn half_span(p: &Params) -> f64 {
 
 /// Half the span of the master's own cell, whatever cell the sign is drawn in.
 pub fn standard_half_span(p: &Params) -> f64 {
-    (p.cell - 2.0 * p.op_l) / 2.0
+    (p.own_cell() - 2.0 * p.op_l) / 2.0
 }
 
 /// How much taller than in the master's own cell a relation between sets is drawn: as much as its span is wider,
 /// and no more than the span of that kind. A relation with something beside it is wider and no taller, so the
 /// kind has one height.
 pub fn relation_growth(p: &Params) -> f64 {
-    p.grown().min(crate::signs::RELATION)
+    p.grown.min(crate::signs::RELATION)
 }
 
 /// The same for tacks and turnstiles, circled and boxed operators and bowties.
 pub fn round_growth(p: &Params) -> f64 {
-    p.grown().min(crate::signs::ROUND)
+    p.grown.min(crate::signs::ROUND)
 }
 
 /// Half the height of a turnstile: half the span in the master's own cell, and as tall in every wider one.
@@ -145,6 +145,17 @@ pub fn slash(g: &mut Draw, x0: f64, y0: f64, x1: f64, y1: f64, t: f64) {
 pub fn rake(x0: f64, y0: f64, x1: f64, y1: f64, t: f64) -> Vec<Knot> {
     let w = t * (x1 - x0).hypot(y1 - y0) / (x1 - x0).abs();
     vec![knot(x0, y0, w).pen(90.0).line(), knot(x1, y1, w).pen(90.0)]
+}
+
+/// The middle of the ink of the glyph of `c` as this master draws it upright: where what a sign adds to that
+/// glyph, used as a component, is centred. In the proportional family a glyph's ink is where its own room puts
+/// it, which need not be the middle of the cell of the sign built on it. The middle of the cell when the glyph
+/// cannot be looked up.
+pub fn middle_of(g: &Draw, c: char) -> f64 {
+    let upright = Params { slant: 0.0, ..g.master().clone() };
+    g.glyph_as(&rachis_kernel::name_of(c), &upright)
+        .and_then(|base| base.bounds())
+        .map_or(g.p.mid(), |(x0, _, x1, _)| (x0 + x1) / 2.0)
 }
 
 /// The slash that negates a sign: through (`cx`, `cy`), reaching `dx` across and `dy` up and down.
@@ -465,7 +476,7 @@ fn cube_root(g: &mut Draw) {
 
 /// The outer half-height of the loops of the infinity sign. In a wider cell it grows with the span.
 pub fn loop_rise(p: &Params) -> f64 {
-    (118.0 + 0.42 * p.op) * p.grown()
+    (118.0 + 0.42 * p.op) * p.grown
 }
 
 fn infinity(g: &mut Draw) {
@@ -517,9 +528,16 @@ fn proportional(g: &mut Draw) {
 
 /// The slash through a relation that reaches `rise` above and below the axis: it passes through all of it.
 pub fn struck(g: &mut Draw, rise: f64, t: Option<f64>) {
+    let cx = g.p.mid();
+    struck_about(g, cx, rise, t);
+}
+
+/// [`struck`] with the slash through (`cx`, the axis): for a relation that is a component and stands where its
+/// own room put it ([`middle_of`]).
+pub fn struck_about(g: &mut Draw, cx: f64, rise: f64, t: Option<f64>) {
     let p = g.p;
     let dy = rise + 0.9 * p.op;
-    strike(g, p.mid(), p.axis, 0.42 * dy, dy, t);
+    strike(g, cx, p.axis, 0.42 * dy, dy, t);
 }
 
 fn notequal(g: &mut Draw) {
@@ -771,8 +789,9 @@ fn divides(g: &mut Draw) {
 
 fn notdivides(g: &mut Draw) {
     let p = g.p;
+    let cx = middle_of(g, '∣');
     g.use_char('∣', 0.0, 0.0);
-    strike(g, p.mid(), p.axis, 112.0, 112.0, Some(0.5 * (p.op + fine(p))));
+    strike(g, cx, p.axis, 112.0, 112.0, Some(0.5 * (p.op + fine(p))));
 }
 
 fn parallel(g: &mut Draw) {
@@ -784,8 +803,9 @@ fn parallel(g: &mut Draw) {
 
 fn notparallel(g: &mut Draw) {
     let p = g.p;
+    let cx = middle_of(g, '∥');
     g.use_char('∥', 0.0, 0.0);
-    strike(g, p.mid(), p.axis, 150.0, 132.0, Some(0.5 * (p.op + fine(p))));
+    strike(g, cx, p.axis, 150.0, 132.0, Some(0.5 * (p.op + fine(p))));
 }
 
 fn double_bar(g: &mut Draw) {
@@ -1202,7 +1222,7 @@ fn squared_dot(g: &mut Draw) {
 pub fn dots(g: &mut Draw, places: &[(f64, f64)], r: Option<f64>) {
     let p = g.p;
     let r = r.unwrap_or(0.5 * p.punct + 16.0);
-    let k = p.grown();
+    let k = p.grown;
     for &(dx, dy) in places {
         g.dot(p.mid() + k * dx, p.axis + k * dy, r);
     }
@@ -1241,7 +1261,7 @@ fn end_of_proof(g: &mut Draw) {
 
 fn star_operator(g: &mut Draw) {
     let p = g.p;
-    let ro = (190.0 + 0.3 * p.op) * p.grown();
+    let ro = (190.0 + 0.3 * p.op) * p.grown;
     let ri = 0.44 * ro;
     let c = pt(p.mid(), p.axis - 0.05 * ro);
     let points: Vec<V> =

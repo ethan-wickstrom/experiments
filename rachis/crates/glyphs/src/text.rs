@@ -87,7 +87,7 @@ fn resolve(registry: &Registry, spec: &Spec, p: &Params, want: Ask) -> Option<Fi
         // a blank glyph: the ask is the advance
         return Some(Fit::new(want.left + want.ink.unwrap_or(0.0) + want.right));
     };
-    Some(Fit { width, left: want.left - x0, right: want.right - (width - x1) })
+    Some(Fit { width, left: want.left - x0, right: want.right - (width - x1), grown: 1.0 })
 }
 
 /// The fit of the glyph `spec` in the master `p`; `None` in the fixed-pitch family.

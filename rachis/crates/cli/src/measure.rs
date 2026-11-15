@@ -831,11 +831,12 @@ pub fn snapshot_path() -> PathBuf {
     root.join("tests/snapshot/distances.tsv")
 }
 
-/// The distance of every watched pair at the targets' view in the Regular master of each upright face: the lines
-/// of the snapshot, `master<TAB>pair<TAB>distance`. A pair the face lacks a character of has no line.
+/// The distance of every watched pair at the targets' view in every master of the upright faces (each weight
+/// of the fixed pitch, and of the proportional family at both optical sizes): the lines of the snapshot,
+/// `master<TAB>pair<TAB>distance`. A pair the face lacks a character of has no line. The italics are the same
+/// programs sheared and are not measured.
 fn snapshot(registry: &Registry) -> Vec<(String, String, f64)> {
-    let masters: Vec<Params> =
-        faces().into_iter().filter(|f| !f.italic).flat_map(|f| f.masters).filter(|p| p.wght == 400.0).collect();
+    let masters: Vec<Params> = faces().into_iter().filter(|f| !f.italic).flat_map(|f| f.masters).collect();
     let mut lines = Vec::new();
     for p in masters {
         let mut face = OurFace::new(registry, p.clone());
@@ -876,6 +877,8 @@ fn compare(recorded: &str, measured: &[(String, String, f64)]) -> (Vec<String>, 
     let mut notes = Vec::new();
     for (master, pair, d) in measured {
         match old.remove(&(master.clone(), pair.clone())) {
+            // a distance that is not a number is nearer or further than nothing: it must not pass
+            _ if !d.is_finite() => problems.push(format!("{master}: {pair} has the distance {d}")),
             None => problems.push(format!("{master}: {pair} is not in the snapshot")),
             Some(was) if *d < was - SNAPSHOT_TOLERANCE => {
                 problems.push(format!("{master}: {pair} fell from {was:.3} to {d:.3}"));
@@ -947,6 +950,13 @@ pub fn run(registry: &Registry, args: &[String]) -> ExitCode {
         }
     };
     if opts.check || opts.write {
+        // the snapshot is of every master and of nothing else: an option that asks for less or for a document
+        // would be ignored, so it is refused
+        let alone = opts.master.is_none() && opts.refs.is_none() && opts.out.is_none() && !opts.targets;
+        if !alone || (opts.check && opts.write) {
+            eprintln!("rachis measure: --check and --write take no other option, and not each other\n{USAGE}");
+            return ExitCode::FAILURE;
+        }
         return run_snapshot(registry, opts.write);
     }
     let mut sections = Vec::new();
@@ -1303,7 +1313,7 @@ fn document(sections: &[Section], refs: &[Reference], opts: &Opts, failures: &[S
     let _ = writeln!(
         out,
         "**What must hold.** `tests/snapshot/distances.tsv` records the distance of every watched pair at 14 px and a \
-         blur of 1.0 px in the three Regular masters. `rachis measure --check` fails when a pair is more than \
+         blur of 1.0 px in every upright master. `rachis measure --check` fails when a pair is more than \
          {SNAPSHOT_TOLERANCE} nearer than recorded there. `rachis measure --write` records a change that is meant, \
          and the diff of the file shows what the change cost and what it gained.\n"
     );
@@ -1496,6 +1506,9 @@ mod tests {
                 "Mono Regular: g q is in the snapshot and no longer measured",
             ]
         );
+        // a distance that is not a number fails, recorded or not
+        let (problems, _) = compare("Mono Regular\t0 O\t0.495\n", &[line("0 O", f64::NAN)]);
+        assert_eq!(problems, ["Mono Regular: 0 O has the distance NaN"]);
         assert_eq!(notes, ["Mono Regular: O D rose from 0.168 to 0.190"]);
         // what was written is what is read back
         let (problems, notes) = compare(&snapshot_text(&measured), &measured);

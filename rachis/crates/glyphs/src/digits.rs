@@ -132,12 +132,12 @@ pub fn inferior_shift(p: &Params) -> f64 {
 /// the wider cell the proportional family gives a fraction, the figures keep their shape and stand further apart.
 fn numerator(p: &Params) -> Frame {
     let top = p.cap + SMALL_RISE;
-    small(p, FRAC_EDGE, FRAC_EDGE + FRAC_W * p.cell, top - FRAC_H * p.cap, top)
+    small(p, FRAC_EDGE, FRAC_EDGE + FRAC_W * p.own_cell(), top - FRAC_H * p.cap, top)
 }
 
 fn denominator(p: &Params) -> Frame {
     let bottom = p.desc + SMALL_RISE;
-    small(p, p.width - FRAC_EDGE - FRAC_W * p.cell, p.width - FRAC_EDGE, bottom, bottom + FRAC_H * p.cap)
+    small(p, p.width - FRAC_EDGE - FRAC_W * p.own_cell(), p.width - FRAC_EDGE, bottom, bottom + FRAC_H * p.cap)
 }
 
 // ---------------------------------------------------------------------------------------------------------------
