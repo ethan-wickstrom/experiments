@@ -255,9 +255,17 @@ fn integral_stroke(p: &Params) -> f64 {
     1.3 * p.op
 }
 
+/// How much further the hooks and the ring of an integral reach when it is drawn `p.delim` times as tall as the
+/// master's brackets, which a formula's display size is. They grow by less than the height does: the integral
+/// of the text is 0.46 as broad as it is tall, and the display integrals of nine reference mathematics fonts
+/// 0.31 to 0.50, at a median of 0.40 (`rachis math --refs`, decision T30). This one comes to 0.38.
+fn integral_growth(p: &Params) -> f64 {
+    p.delim.powf(0.75)
+}
+
 /// How far the hooks of one integral reach to each side of its centre.
 fn integral_run(p: &Params) -> f64 {
-    175.0 + 0.55 * p.op
+    (175.0 + 0.55 * p.op) * integral_growth(p)
 }
 
 fn integral(g: &mut Draw) {
@@ -281,8 +289,9 @@ fn integrals(g: &mut Draw, n: usize) {
 /// The ring of the contour integrals, around the middle of `n` integrals.
 fn contour_ring(g: &mut Draw, n: usize) {
     let p = g.p;
-    let r = 98.0 + 0.3 * p.op + 52.0 * (n as f64 - 1.0);
-    let rx = r + 18.0 * (n as f64 - 1.0);
+    let grown = integral_growth(p);
+    let r = (98.0 + 0.3 * p.op + 52.0 * (n as f64 - 1.0)) * grown;
+    let rx = r + 18.0 * (n as f64 - 1.0) * grown;
     circle(g, p.mid(), p.axis, rx, Some(r), Some(0.92 * fine(p)));
 }
 

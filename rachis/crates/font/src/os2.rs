@@ -232,6 +232,17 @@ pub(crate) fn os2(family: &Family, built: &Built, style: &Style, max_context: u1
     }
     let first = cps.first().map_or(0, |&c| c.min(0xFFFF) as u16);
     let last = cps.last().map_or(0, |&c| c.min(0xFFFF) as u16);
+    // Software that clips a glyph at the win metrics must not clip the delimiters of a mathematics font, which
+    // are several lines tall: there the win metrics are the font's bounding box, as in seven of the nine
+    // mathematics fonts `rachis math --refs` was run on (the other two fall short of theirs). The line is still
+    // the typo metrics' (USE_TYPO_METRICS is set).
+    let (mut win_ascent, mut win_descent) = (m.ascender.max(0) as u16, m.descender.unsigned_abs());
+    if family.math.is_some() {
+        for b in built.glyf.bboxes.iter().flatten() {
+            win_ascent = win_ascent.max(b.y_max.max(0) as u16);
+            win_descent = win_descent.max(b.y_min.min(0).unsigned_abs());
+        }
+    }
     Os2 {
         x_avg_char_width: avg,
         us_weight_class: style.weight,
@@ -260,8 +271,8 @@ pub(crate) fn os2(family: &Family, built: &Built, style: &Style, max_context: u1
         s_typo_ascender: m.ascender,
         s_typo_descender: m.descender,
         s_typo_line_gap: 0,
-        us_win_ascent: m.ascender.max(0) as u16,
-        us_win_descent: m.descender.unsigned_abs(),
+        us_win_ascent: win_ascent,
+        us_win_descent: win_descent,
         ul_code_page_range_1: Some(pages[0]),
         ul_code_page_range_2: Some(pages[1]),
         sx_height: Some(m.x_height),

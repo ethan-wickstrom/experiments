@@ -289,10 +289,18 @@ fn dblprime(g: &mut Draw) {
 fn paren_knots(p: &Params) -> Vec<Knot> {
     let bs = bracket_stem(p);
     let x_out = 186.0; // the outer edge of the arc at its middle
-    let x_tip = 478.0; // the right end of the cuts at top and bottom
+    // the right end of the cuts at top and bottom: a taller parenthesis bows further, by a little of what it
+    // gains in height (the three reference mathematics fonts add 4.3 to 4.4 units for every 100)
+    let x_tip = 478.0 + 0.044 * p.taller();
     let te = p.hair * 0.95;
     let ym = (p.br_top + p.br_bot) / 2.0;
-    let d = 41.0; // the angle of the arc at its ends, from the horizontal
+    // The angle of the arc at its ends, from the horizontal: 41 degrees in the master. A circle through the
+    // tips and the middle would leave its tips at twice the chord's angle from the vertical; the parenthesis
+    // leaves at a fixed part of that (49 of the master's 63.7 degrees), so that a taller, flatter one keeps
+    // the same curve and does not turn into two straight strokes.
+    let half = (p.br_top - p.br_bot) / 2.0;
+    let turn = |bow: f64, half: f64| 2.0 * (bow / half).atan().to_degrees();
+    let d = 90.0 - 49.0 * turn(x_tip - x_out, half) / turn(478.0 - x_out, half / p.delim);
     let tip = cut_pen(0.0, p.br_top, te, -180.0 + d, 0.0);
     let xe = x_tip - tip.w / 2.0;
     vec![
@@ -314,7 +322,7 @@ fn bracket(g: &mut Draw, right: bool) {
     let p = g.p;
     let bs = bracket_stem(p);
     let x0 = 252.0 - 0.45 * p.stem; // the outer edge of the stem
-    let x1 = 458.0 + 0.38 * p.stem; // the end of the arms
+    let x1 = 458.0 + 0.38 * p.stem + 0.03 * p.taller(); // the end of the arms: longer on a taller bracket
     let strokes = [
         vstem(x0 + bs / 2.0, p.br_bot, p.br_top, bs),
         hbar(x0, x1, p.br_top - p.hair / 2.0, p.hair),
@@ -341,12 +349,16 @@ fn brace_half(p: &Params) -> Vec<Knot> {
     // The two pull against each other (a rounder brace is nearer a parenthesis), so both are moderate: with a
     // cusp 60 shorter and a shoulder of 112, } was nearer ] at 14 px than in any of the eight reference faces
     // (decision T28).
+    // a taller brace has larger curls: they grow with the square root of its height
+    let k = p.delim.sqrt();
     let xs = 282.0 + 0.12 * p.stem; // the spine's centre
-    let x_tip = 80.0 - 0.36 * p.stem; // the point of the cusp
-    let x_arm = 450.0 + 0.36 * p.stem; // the end of the arm
+    let r1 = 140.0 * k; // the shoulder's radius on the centre line
+    let r2 = 104.0 * k; // the radius of the turn into the cusp
+    // the point of the cusp: at 80 less 0.36 stems in the master, and nearer the spine on a taller brace, whose
+    // cusp would otherwise read as a dash beside it
+    let x_tip = xs - r2 - (98.0 + 0.48 * p.stem) / k;
+    let x_arm = xs + r1 + (28.0 + 0.24 * p.stem) * k; // the end of the arm: at 450 and 0.36 stems in the master
     let yt = p.br_top - h / 2.0;
-    let r1 = 140.0; // the shoulder's radius on the centre line
-    let r2 = 104.0; // the radius of the turn into the cusp
     vec![
         knot(x_arm, yt, h).pen(90.0).line(),
         knot(xs + r1, yt, h).pen(90.0).dir(180.0).k(p.sq),

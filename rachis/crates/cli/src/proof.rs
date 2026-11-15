@@ -793,7 +793,7 @@ impl Face for RefFace {
 }
 
 /// Collects a reference glyph's outline into a tiny-skia path.
-struct SkiaPen(PathBuilder);
+pub(crate) struct SkiaPen(pub(crate) PathBuilder);
 
 impl OutlinePen for SkiaPen {
     fn move_to(&mut self, x: f32, y: f32) {

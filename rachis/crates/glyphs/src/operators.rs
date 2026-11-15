@@ -413,9 +413,16 @@ fn ring_operator(g: &mut Draw) {
 /// The radical: a tick, a short stroke down to a flat vertex, a long stroke up and a bar over what follows.
 pub fn radical(g: &mut Draw) {
     let p = g.p;
+    radical_between(g, big_bot(p), big_top(p));
+}
+
+/// The radical from `yb` to `yt`: the sizes of the mathematics font are this with other heights. The short
+/// stroke stays as long as it is in the sign of the text, so a taller radical is a longer and steeper long
+/// stroke on the same hook.
+pub fn radical_between(g: &mut Draw, yb: f64, yt: f64) {
+    let p = g.p;
     let t = p.op;
-    let (yb, yt) = (big_bot(p), big_top(p));
-    let ym = p.axis + 30.0; // the top of the short stroke
+    let ym = yb + (p.axis + 30.0 - big_bot(p)); // the top of the short stroke
     let apex = tip(p);
     let xv = 218.0; // the vertex
     let (xl, xr) = (92.0, 392.0); // the outer top corners of the two strokes

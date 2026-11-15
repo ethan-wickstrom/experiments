@@ -4,10 +4,11 @@ What this typeface is, who it is for, and the decisions its shapes follow. `draw
 
 ## Brief
 
-A family for one reader: a software engineer and mathematics student who reads code, logs and hashes in terminals and editors, and textbooks, technical writing and mathematics in documents and browsers, and who wants dense technical text to read without effort at small sizes. There are two families, drawn by the same programs:
+A family for one reader: a software engineer and mathematics student who reads code, logs and hashes in terminals and editors, and textbooks, technical writing and mathematics in documents and browsers, and who wants dense technical text to read without effort at small sizes. There are two families and a mathematics font, drawn by the same programs:
 
 - **Rachis Mono**, fixed pitch, for code, terminals and plain-text mathematics. It is read at 12 to 15 px per em, where the x-height subtends 0.12° to 0.19°, at or below the 0.2° critical print size for fluent reading.
 - **Rachis**, proportional, for prose with notation in it: paragraphs, formulas, captions, footnotes, the scripts of formulas. It has an optical-size axis, because the small sizes are where technical text is densest.
+- **Rachis Math**, the Regular of Rachis with an OpenType `MATH` table, for formulas a typesetter builds: fractions, radicals, scripts of scripts, delimiters and operators of any size (T30).
 
 Both are designed as small print: a large x-height, sturdy low-contrast strokes, open counters, generous room between letters, and characters told apart by their outlines.
 
@@ -76,6 +77,16 @@ Greek: upright, drawn with the Latin's parts, and told from the Latin at a glanc
 
 Mathematics: signs are built from the operator primitives and sit on the axis. `≤` is `<` over a bar; `≠` is `=` struck by a slash; `→` is the minus ending in a head as tall as `>`; `⇒` is `=` ending in a larger one; `↦` adds the stem of `⊢`. The n-ary operators `∑ ∏ ⋂ ⋃ ⨁` are larger than the binary ones and centred on the axis like brackets; `∑` and `∏` are taller than `Σ` and `Π` and reach below the baseline. `∫` runs the height of a bracket. `∂` is a figure. `⟨ ⟩` are full-height brackets with an obtuse angle, lighter than `<`. Double-struck letters are the plain capitals with one stroke doubled, the gap kept open in the Bold. Bracket pieces `⎛ ⎜ ⎝` tile across lines as box drawing does.
 
+Formulas (Rachis Math): the font holds what a typesetter asks for and nothing drawn for it alone.
+
+- A variable is the letter of Rachis Italic and a vector that of the Bold; the sans-serif alphabets are the family's own letters, and the monospaced one the fixed pitch's.
+- A script has a form of its own: the design for 8 point at a heavier weight, so that an exponent, set at 70 per cent, keeps 0.85 of the text's stroke and an exponent of an exponent 0.78. A prime's form for a script is the text's prime made larger and set lower, because a prime is always a superscript.
+- A delimiter has fourteen sizes from 1060 to 6000 units, each the delimiter's own program with taller brackets and strokes that thicken slowly: a parenthesis bows further and a brace's shoulders grow, where a scaled outline would only get heavier. Taller ones are assembled from the bracket pieces.
+- The radical of a formula ends where its bar would begin, so the typesetter's rule continues it without a step.
+- A sum in a display is 1.65 times the text's and an integral 2.4 times, tall enough to reach past the fraction it binds; its hooks grow more slowly than it does, and its limits stand against its hook and under its foot.
+- Arrows, bars and the braces, brackets and parentheses over and under a group stretch to any length. Each is assembled from its own ends and a piece of its level run, which a cutter finds in the outline of the sign drawn long; what lies over or under a group stands 110 units clear of it at every length.
+- The axis, the rules and the height accents sit over are the master's own. The gaps and shifts it has no measure for are the medians of three sans-serif mathematics fonts at its x-height.
+
 Terminal (Rachis Mono only): box-drawing lines are 60 units, the underline's thickness, in every weight (heavy: 120), run through the centre of the cell and overshoot it so that cells and lines join (T22). Rounded corners have a radius of 0.42 of the advance. Block elements divide the cell exactly. Braille dots sit on a 2 by 4 grid. Powerline separators, the branch-drawing set, progress indicators and sextants are included. None of these slant in the italic.
 
 ## Spacing
@@ -84,4 +95,4 @@ The fixed pitch has one advance. The proportional family is spaced as a text fac
 
 ## Coverage
 
-2109 glyphs in Rachis Mono and 1529 in Rachis: ASCII, Latin-1, Latin Extended-A and the parts of Latin Extended-B and Additional that European languages use; monotonic Greek and the mathematical variants; superscripts, subscripts and fractions; 336 mathematical operators and relations; 140 arrows; delimiters and bracket pieces; double-struck and letterlike letters; currency; typographic spaces; geometric shapes and symbols; and in the fixed pitch, box drawing, blocks, Braille, Powerline, branch drawing and sextants. The list came from a survey of what code, proof assistants, plain-text mathematics and terminal programs use (`research/`); what it names and the fonts lack is in `ledger.md` (G5).
+2113 glyphs in Rachis Mono, 1533 in Rachis and 3354 in Rachis Math (the 1533, and 1821 that the family's programs make for formulas: the mathematical alphabets, forms for scripts, sizes and pieces): ASCII, Latin-1, Latin Extended-A and the parts of Latin Extended-B and Additional that European languages use; monotonic Greek and the mathematical variants; superscripts, subscripts and fractions; 336 mathematical operators and relations; 140 arrows; delimiters and bracket pieces; double-struck and letterlike letters; currency; typographic spaces; geometric shapes and symbols; and in the fixed pitch, box drawing, blocks, Braille, Powerline, branch drawing and sextants. The list came from a survey of what code, proof assistants, plain-text mathematics and terminal programs use (`research/`); what it names and the fonts lack is in `ledger.md` (G5).

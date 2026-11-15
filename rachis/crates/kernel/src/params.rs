@@ -27,6 +27,11 @@ pub struct Params {
     /// proportional family. Only the registry sets it, from the glyph's fit: a program that draws a letter in a
     /// cell of another width changes `width` and leaves this alone.
     pub grown: f64,
+    /// How many times as tall as in the master a delimiter is drawn: 1 in every master. The mathematics font
+    /// draws the larger sizes of a delimiter by setting `br_top` and `br_bot` further apart and this to their
+    /// ratio, so that a program can let what should grow with the height grow (the bow of a parenthesis, the
+    /// arms of a bracket, the curls of a brace).
+    pub delim: f64,
 
     // heights
     pub cap: f64,
@@ -118,10 +123,61 @@ impl Params {
         self.width - self.op_l
     }
 
+    /// How much taller than in the master a delimiter is drawn, in units: 0 in every master.
+    pub fn taller(&self) -> f64 {
+        (self.br_top - self.br_bot) * (1.0 - 1.0 / self.delim)
+    }
+
     /// The master's own cell, whatever cell the glyph is drawn in: the span the glyph has, less its growth, and
     /// the operators' two margins.
     pub fn own_cell(&self) -> f64 {
         (self.width - 2.0 * self.op_l) / self.grown + 2.0 * self.op_l
+    }
+
+    /// The master a part `t` of the way from `self` to `other`: every measurement between the two, as the
+    /// variable font has it at that point of the design space. Its name, and whether its rounds are
+    /// superellipses and its pitch fixed, are `self`'s. For a glyph that is drawn at a weight or an optical size
+    /// between the masters and belongs to one font, such as the forms a mathematics font sets in scripts.
+    pub fn between(&self, other: &Params, t: f64) -> Params {
+        let mix = |a: f64, b: f64| a + (b - a) * t;
+        Params {
+            name: self.name,
+            mono: self.mono,
+            lame: self.lame,
+            wght: mix(self.wght, other.wght),
+            opsz: mix(self.opsz, other.opsz),
+            slant: mix(self.slant, other.slant),
+            upm: mix(self.upm, other.upm),
+            width: mix(self.width, other.width),
+            grown: mix(self.grown, other.grown),
+            delim: mix(self.delim, other.delim),
+            cap: mix(self.cap, other.cap),
+            xh: mix(self.xh, other.xh),
+            asc: mix(self.asc, other.asc),
+            desc: mix(self.desc, other.desc),
+            over: mix(self.over, other.over),
+            axis: mix(self.axis, other.axis),
+            br_top: mix(self.br_top, other.br_top),
+            br_bot: mix(self.br_bot, other.br_bot),
+            line_top: mix(self.line_top, other.line_top),
+            line_bot: mix(self.line_bot, other.line_bot),
+            stem: mix(self.stem, other.stem),
+            hair: mix(self.hair, other.hair),
+            cap_stem: mix(self.cap_stem, other.cap_stem),
+            cap_hair: mix(self.cap_hair, other.cap_hair),
+            join: mix(self.join, other.join),
+            sq: mix(self.sq, other.sq),
+            dot_k: mix(self.dot_k, other.dot_k),
+            dot: mix(self.dot, other.dot),
+            punct: mix(self.punct, other.punct),
+            op: mix(self.op, other.op),
+            op_l: mix(self.op_l, other.op_l),
+            sb: mix(self.sb, other.sb),
+            sb_round: mix(self.sb_round, other.sb_round),
+            cap_sb: mix(self.cap_sb, other.cap_sb),
+            fig_sb: mix(self.fig_sb, other.fig_sb),
+            counter: mix(self.counter, other.counter),
+        }
     }
 
     /// The same master drawn `f` times as large: every length multiplied, every ratio and angle kept. The name
@@ -176,6 +232,7 @@ pub fn regular() -> Params {
         upm: 1000.0,
         width: 600.0,
         grown: 1.0,
+        delim: 1.0,
         cap: 714.0,
         xh: 540.0,
         asc: 756.0,

@@ -327,10 +327,14 @@ fn chevron_half(p: &Params) -> f64 {
 /// The circumflex (`up`) and the caron: two straight strokes that meet in a narrow flat, their feet cut level.
 /// The caron's point is sharper than the circumflex's, so that the two are told apart by more than direction.
 fn chevron(g: &mut Draw, cx: f64, z: Zone, up: bool) {
+    let half = chevron_half(g.p);
+    chevron_sized(g, cx, z, up, half, 0.96 * z.h);
+}
+
+/// [`chevron`] with its half width and its height given.
+fn chevron_sized(g: &mut Draw, cx: f64, z: Zone, up: bool, half: f64, h: f64) {
     let p = g.p;
     let t = chevron_t(p);
-    let half = chevron_half(p);
-    let h = 0.96 * z.h;
     if up {
         g.poly(&vee(cx - half, cx + half, z.y0, z.y0 + h, t, 0.42 * t));
     } else {
@@ -348,9 +352,14 @@ fn caron(g: &mut Draw, cx: f64, z: Zone) {
 
 /// A full double curve, its swing large enough that it never reads as a macron at 13 px.
 fn tilde(g: &mut Draw, cx: f64, z: Zone) {
+    let a = 124.0 + 0.5 * 0.9 * mark_t(g.p); // half its length
+    tilde_sized(g, cx, z, a);
+}
+
+/// [`tilde`] with half its length given.
+fn tilde_sized(g: &mut Draw, cx: f64, z: Zone, a: f64) {
     let p = g.p;
     let t = 0.9 * mark_t(p);
-    let a = 124.0 + 0.5 * t; // half its length
     let amp = 0.17 * z.h + 0.12 * t; // how far the centre line swings either side of its middle
     let cy = z.y0 + 0.06 * z.h + amp + t / 2.0;
     g.stroke(&[
@@ -362,10 +371,39 @@ fn tilde(g: &mut Draw, cx: f64, z: Zone) {
 }
 
 fn macron(g: &mut Draw, cx: f64, z: Zone) {
+    let a = 118.0 + 0.5 * 0.92 * mark_t(g.p);
+    macron_sized(g, cx, z, a);
+}
+
+/// [`macron`] with half its length given.
+fn macron_sized(g: &mut Draw, cx: f64, z: Zone, a: f64) {
     let p = g.p;
     let t = 0.92 * mark_t(p);
-    let a = 118.0 + 0.5 * t;
     g.stroke(&hbar(cx - a, cx + a, z.y0 + 0.30 * z.h + t / 2.0, t));
+}
+
+/// The circumflex, the caron, the tilde or the macron over a lowercase letter, `times` as wide as the accent of
+/// the text and drawn with the same strokes: a wide accent of the mathematics font, which sets one accent over a
+/// group of letters. A wider circumflex is a little taller, so that it stays a roof and not a line. The glyph
+/// has no advance and is centred on the middle of the master's cell, where its `_top` anchor is. `None` for any
+/// other mark.
+pub fn wide_mark(p: &Params, mark: char, times: f64, name: &str) -> Option<Glyph> {
+    let mut g = Draw::new(p, name, 0.0, false);
+    let z = lower_zone(&g);
+    let cx = p.mid();
+    match mark {
+        '\u{302}' | '\u{30C}' => {
+            let h = 0.96 * z.h * (1.0 + 0.10 * (times - 1.0));
+            chevron_sized(&mut g, cx, z, mark == '\u{302}', times * chevron_half(p), h);
+        }
+        '\u{303}' => tilde_sized(&mut g, cx, z, times * (124.0 + 0.5 * 0.9 * mark_t(p))),
+        '\u{304}' => macron_sized(&mut g, cx, z, times * (118.0 + 0.5 * 0.92 * mark_t(p))),
+        _ => return None,
+    }
+    g.anchor("_top", cx, p.xh);
+    let mut glyph = g.glyph;
+    glyph.mark = true;
+    Some(glyph)
 }
 
 /// A round cup, half an ellipse, its horns cut level: round where the caron is pointed.

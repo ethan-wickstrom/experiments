@@ -150,6 +150,8 @@ fn synthetic_family() -> Family {
         ],
         kerning: vec![KernPair { left: "A".into(), right: "V".into(), value: -40 }],
         kern_classes: None,
+        alternates: Vec::new(),
+        math: None,
     }
 }
 
@@ -192,6 +194,8 @@ fn rachis_family(italic: bool) -> Family {
         }],
         kerning: Vec::new(),
         kern_classes: None,
+        alternates: Vec::new(),
+        math: None,
     }
 }
 
@@ -590,4 +594,211 @@ fn nearly_every_static_glyph_loses_its_overlaps() {
     assert_eq!(glyphs, 10 * rachis_glyphs::registry().len());
     // the sweep goes wrong on a few glyphs in ten thousand; the check keeps their contours as drawn
     assert!(kept.len() * 500 < glyphs, "{kept:#?}");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// A mathematics font
+
+/// A family without axes: one master of a few boxes, with a `MATH` table and a feature of alternates.
+fn math_family() -> Family {
+    let boxed = |name: &str, unicodes: &[u32], w: f64, h: f64| {
+        let mut g = glyph(name, w + 100.0, unicodes);
+        g.contours.push(rect(50.0, 0.0, 50.0 + w, h));
+        g
+    };
+    let glyphs = vec![
+        boxed("x", &[0x78], 400.0, 500.0),
+        boxed("parenleft", &[0x28], 200.0, 900.0),
+        boxed("parenleft.v1", &[], 220.0, 1200.0),
+        boxed("parenleft.v2", &[], 240.0, 1500.0),
+        boxed("parenleft.bottom", &[], 200.0, 600.0),
+        boxed("parenleft.ext", &[], 200.0, 400.0),
+        boxed("parenleft.top", &[], 200.0, 600.0),
+        boxed("arrowright", &[0x2192], 800.0, 300.0),
+        boxed("arrowright.w1", &[], 1400.0, 300.0),
+        boxed("x.s1", &[], 430.0, 520.0),
+        boxed("x.s2", &[], 460.0, 540.0),
+        boxed("f", &[0x66], 300.0, 700.0),
+    ];
+    let part = |glyph: &str, start: u16, end: u16, advance: u16, extender: bool| Part {
+        glyph: glyph.into(),
+        start,
+        end,
+        advance,
+        extender,
+    };
+    Family {
+        name: "Synthetic Math".into(),
+        italic: false,
+        axes: Vec::new(),
+        masters: vec![Master { location: Vec::new(), glyphs }],
+        instances: vec![Instance { style_name: "Regular".into(), location: Vec::new() }],
+        metrics: metrics(false, 0.0),
+        features: Vec::new(),
+        kerning: Vec::new(),
+        kern_classes: None,
+        alternates: vec![AlternateSub {
+            tag: "ssty".into(),
+            alternates: vec![("x".into(), vec!["x.s1".into(), "x.s2".into()]), ("missing".into(), vec!["x".into()])],
+        }],
+        math: Some(Math {
+            // every constant, each with its place in the table as its value, the axis apart
+            constants: MATH_CONSTANTS
+                .iter()
+                .enumerate()
+                .map(|(i, name)| ((*name).to_string(), if *name == "AxisHeight" { 250 } else { i as i16 + 1 }))
+                .collect(),
+            // listed against the glyph order on purpose: the table must sort them
+            italic_corrections: vec![("x".into(), 30), ("f".into(), 90)],
+            top_accents: vec![("x".into(), 250), ("f".into(), 240)],
+            extended_shapes: vec!["parenleft.v2".into(), "parenleft.v1".into()],
+            vertical: vec![Construction {
+                glyph: "parenleft".into(),
+                variants: vec![("parenleft.v1".into(), 1200), ("parenleft.v2".into(), 1500)],
+                parts: vec![
+                    part("parenleft.bottom", 0, 150, 600, false),
+                    part("parenleft.ext", 160, 160, 400, true),
+                    part("parenleft.top", 150, 0, 600, false),
+                ],
+                italic_correction: 7,
+            }],
+            horizontal: vec![Construction {
+                glyph: "arrowright".into(),
+                variants: vec![("arrowright.w1".into(), 1400)],
+                parts: Vec::new(),
+                italic_correction: 0,
+            }],
+            min_connector_overlap: 20,
+        }),
+    }
+}
+
+#[test]
+fn a_math_table_is_written_and_read_back() {
+    let family = math_family();
+    let bytes = static_ttf(&family, &family.instances[0]).expect("compiles");
+    let font = FontRef::new(&bytes).expect("parses");
+    assert!(tags(&font).contains(&"MATH".to_string()), "{:?}", tags(&font));
+    let gid = |name: &str| {
+        let post = font.post().unwrap();
+        (0..font.maxp().unwrap().num_glyphs())
+            .find(|&g| post.glyph_name(read_fonts::types::GlyphId16::new(g)) == Some(name))
+            .unwrap_or_else(|| panic!("no glyph {name}"))
+    };
+    let math = font.math().expect("a MATH table");
+    let constants = math.math_constants().unwrap();
+    assert_eq!(constants.script_percent_scale_down(), 1);
+    assert_eq!(constants.script_script_percent_scale_down(), 2);
+    assert_eq!(constants.display_operator_min_height().to_u16(), 4);
+    assert_eq!(constants.axis_height().value().to_i16(), 250);
+    assert_eq!(constants.fraction_rule_thickness().value().to_i16(), 39);
+    assert_eq!(constants.radical_degree_bottom_raise_percent(), 56);
+
+    let info = math.math_glyph_info().unwrap();
+    let italics = info.math_italics_correction_info().unwrap().unwrap();
+    let covered: Vec<u16> = italics.coverage().unwrap().iter().map(|g| g.to_u32() as u16).collect();
+    let values: Vec<i16> = italics.italics_correction().iter().map(|r| r.value().to_i16()).collect();
+    // in glyph order, whatever order they were given in, each with its own value
+    let mut expected = vec![(gid("x"), 30), (gid("f"), 90)];
+    expected.sort();
+    assert_eq!(covered.iter().copied().zip(values).collect::<Vec<_>>(), expected);
+    let accents = info.math_top_accent_attachment().unwrap().unwrap();
+    assert_eq!(accents.top_accent_coverage().unwrap().iter().count(), 2);
+    let tall: Vec<u16> = info.extended_shape_coverage().unwrap().unwrap().iter().map(|g| g.to_u32() as u16).collect();
+    let mut expected = vec![gid("parenleft.v1"), gid("parenleft.v2")];
+    expected.sort_unstable();
+    assert_eq!(tall, expected);
+
+    let variants = math.math_variants().unwrap();
+    assert_eq!(variants.min_connector_overlap().to_u16(), 20);
+    let vertical: Vec<u16> =
+        variants.vert_glyph_coverage().unwrap().unwrap().iter().map(|g| g.to_u32() as u16).collect();
+    assert_eq!(vertical, [gid("parenleft")]);
+    let paren = variants.vert_glyph_constructions().get(0).unwrap();
+    let sizes: Vec<(u16, u16)> = paren
+        .math_glyph_variant_records()
+        .iter()
+        .map(|r| (r.variant_glyph().to_u16(), r.advance_measurement().to_u16()))
+        .collect();
+    assert_eq!(sizes, [(gid("parenleft.v1"), 1200), (gid("parenleft.v2"), 1500)]);
+    let assembly = paren.glyph_assembly().unwrap().unwrap();
+    assert_eq!(assembly.italics_correction().value().to_i16(), 7);
+    let parts: Vec<(u16, u16, u16, u16, bool)> = assembly
+        .part_records()
+        .iter()
+        .map(|r| {
+            (
+                r.glyph_id().to_u16(),
+                r.start_connector_length().to_u16(),
+                r.end_connector_length().to_u16(),
+                r.full_advance().to_u16(),
+                r.part_flags().contains(read_fonts::tables::math::PartFlags::EXTENDER_FLAG),
+            )
+        })
+        .collect();
+    assert_eq!(
+        parts,
+        [
+            (gid("parenleft.bottom"), 0, 150, 600, false),
+            (gid("parenleft.ext"), 160, 160, 400, true),
+            (gid("parenleft.top"), 150, 0, 600, false),
+        ]
+    );
+    let horizontal: Vec<u16> =
+        variants.horiz_glyph_coverage().unwrap().unwrap().iter().map(|g| g.to_u32() as u16).collect();
+    assert_eq!(horizontal, [gid("arrowright")]);
+    assert!(variants.horiz_glyph_constructions().get(0).unwrap().glyph_assembly().is_none());
+
+    // the alternates of a script, under the script a formula is shaped in
+    let gsub = font.gsub().unwrap();
+    let scripts: Vec<String> =
+        gsub.script_list().unwrap().script_records().iter().map(|r| r.script_tag().to_string()).collect();
+    assert_eq!(scripts, ["DFLT", "grek", "latn", "math"]);
+    let features: Vec<String> =
+        gsub.feature_list().unwrap().feature_records().iter().map(|r| r.feature_tag().to_string()).collect();
+    assert_eq!(features, ["ssty"]);
+    let charmap = font.charmap();
+    let glyphs = font.glyph_metrics(Size::unscaled(), LocationRef::default());
+    assert_eq!(glyphs.advance_width(charmap.map('x').unwrap()), Some(500.0));
+}
+
+#[test]
+fn a_mathematics_font_is_not_clipped_at_its_line_box() {
+    let family = math_family();
+    let bytes = static_ttf(&family, &family.instances[0]).expect("compiles");
+    let font = FontRef::new(&bytes).expect("parses");
+    let (head, os2) = (font.head().unwrap(), font.os2().unwrap());
+    // the line is the family's, the box a glyph is clipped at is the font's own
+    assert_eq!((os2.s_typo_ascender(), os2.s_typo_descender()), (family.metrics.ascender, family.metrics.descender));
+    assert!(head.y_max() > family.metrics.ascender, "the test font has a glyph taller than its line");
+    assert_eq!(i32::from(os2.us_win_ascent()), i32::from(head.y_max()));
+    assert_eq!(i32::from(os2.us_win_descent()), i32::from(-head.y_min().min(family.metrics.descender)));
+    // a font without the table keeps the line box
+    let plain = Family { math: None, ..family.clone() };
+    let bytes = static_ttf(&plain, &plain.instances[0]).expect("compiles");
+    let os2 = FontRef::new(&bytes).unwrap().os2().unwrap();
+    assert_eq!(i32::from(os2.us_win_ascent()), i32::from(plain.metrics.ascender));
+    assert_eq!(i32::from(os2.us_win_descent()), i32::from(-plain.metrics.descender));
+}
+
+#[test]
+fn a_math_table_that_names_what_is_missing_is_refused() {
+    let compile = |change: &dyn Fn(&mut Math)| {
+        let mut family = math_family();
+        change(family.math.as_mut().unwrap());
+        static_ttf(&family, &family.instances[0]).map(|_| ()).map_err(|e| e.to_string())
+    };
+    let refused = |change: &dyn Fn(&mut Math), word: &str| {
+        let e = compile(change).expect_err("refused");
+        assert!(e.contains(word), "{e}");
+    };
+    assert_eq!(compile(&|_| ()), Ok(()));
+    refused(&|m| drop(m.constants.pop()), "RadicalDegreeBottomRaisePercent is not given");
+    refused(&|m| m.constants.push(("AxisHeight".into(), 1)), "AxisHeight is given twice");
+    refused(&|m| m.constants.push(("AxisHight".into(), 1)), "is not a constant");
+    refused(&|m| m.constants[2].1 = -5, "may not be negative");
+    refused(&|m| m.italic_corrections.push(("g".into(), 1)), "\"g\", which is not a glyph");
+    refused(&|m| m.vertical[0].variants.push(("parenleft.v9".into(), 1)), "parenleft.v9");
+    refused(&|m| m.vertical[0].parts[1].glyph = "nothing".into(), "nothing");
+    refused(&|m| m.vertical.push(m.vertical[0].clone()), "two constructions");
 }

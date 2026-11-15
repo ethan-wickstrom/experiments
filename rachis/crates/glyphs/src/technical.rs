@@ -36,6 +36,12 @@ pub fn angle_stroke(p: &Params) -> f64 {
 /// The angle of the strokes of an angle bracket off the vertical, in degrees.
 const ANGLE: f64 = 18.0;
 
+/// The same in radians for the master `p`: a taller bracket is steeper, because it gains less in breadth than
+/// in height (0.45 of it, about what the reference mathematics fonts do).
+fn angle_of(p: &Params) -> f64 {
+    (ANGLE.to_radians().tan() * (1.0 + 0.45 * (p.delim - 1.0)) / p.delim).atan()
+}
+
 /// How far right of the middle of the cell an opening delimiter is centred, as the opening brackets are.
 const LEAN: f64 = 18.0;
 
@@ -120,15 +126,13 @@ fn path(points: &[V], t: f64, ends: f64, end: f64) -> Vec<Knot> {
 }
 
 /// The width of an angle bracket `rise` tall above and below its point, its strokes `t` thick.
-fn angle_width(rise: f64, t: f64) -> f64 {
-    let a = ANGLE.to_radians();
+fn angle_width(a: f64, rise: f64, t: f64) -> f64 {
     rise * a.tan() + t / a.cos()
 }
 
 /// The polygon of an angle bracket pointing left: its outer edges meet at (`x_tip`, `cy`), where it is cut
-/// plumb, `flat` tall; its strokes are `t` thick, `ANGLE` off the vertical, and cut level at `cy` ± `rise`.
-fn angle(x_tip: f64, cy: f64, rise: f64, t: f64, flat: f64) -> Vec<V> {
-    let a = ANGLE.to_radians();
+/// plumb, `flat` tall; its strokes are `t` thick, `a` radians off the vertical, and cut level at `cy` ± `rise`.
+fn angle(a: f64, x_tip: f64, cy: f64, rise: f64, t: f64, flat: f64) -> Vec<V> {
     let run = rise * a.tan();
     let b = t / a.cos(); // the stroke's breadth along a level cut
     let e = flat / 2.0 * a.tan();
@@ -202,9 +206,10 @@ fn corner(g: &mut Draw, top: bool, right: bool) {
 fn angle_bracket(g: &mut Draw, right: bool) {
     let p = g.p;
     let t = angle_stroke(p);
+    let a = angle_of(p);
     let rise = (p.br_top - p.br_bot) / 2.0;
-    let x_tip = p.mid() + LEAN - angle_width(rise, t) / 2.0;
-    let pts = angle(x_tip, br_mid(p), rise, t, 0.8 * tip(p));
+    let x_tip = p.mid() + LEAN - angle_width(a, rise, t) / 2.0;
+    let pts = angle(a, x_tip, br_mid(p), rise, t, 0.8 * tip(p));
     g.poly(&if right { mirrored(&pts, p.mid()) } else { pts });
 }
 
@@ -212,12 +217,12 @@ fn angle_bracket(g: &mut Draw, right: bool) {
 fn double_angle(g: &mut Draw, right: bool) {
     let p = g.p;
     let t = fine(p);
-    let a = ANGLE.to_radians();
+    let a = angle_of(p);
     let rise = (p.br_top - p.br_bot) / 2.0;
     let pitch = (t + double_gap(p)) / a.cos();
-    let x_tip = p.mid() + LEAN - (angle_width(rise, t) + pitch) / 2.0;
+    let x_tip = p.mid() + LEAN - (angle_width(a, rise, t) + pitch) / 2.0;
     for x in [x_tip, x_tip + pitch] {
-        let pts = angle(x, br_mid(p), rise, t, 0.8 * tip(p));
+        let pts = angle(a, x, br_mid(p), rise, t, 0.8 * tip(p));
         g.poly(&if right { mirrored(&pts, p.mid()) } else { pts });
     }
 }
@@ -457,19 +462,74 @@ fn horizontal_bracket(g: &mut Draw, top: bool) {
 fn horizontal_brace(g: &mut Draw, top: bool) {
     let p = g.p;
     let t = p.op;
-    let (r1, r2) = (70.0, 66.0);
+    // a brace drawn across more than the cell has larger curls and a longer cusp, by the square root of what
+    // it is longer, so that it is still a brace and not a rule with marks on it
+    let k = p.grown.sqrt().min(2.4);
+    let (r1, r2) = (70.0 * k, 66.0 * k);
     let ys = p.br_top - 150.0; // the spine's centre line
     let x0 = p.op_l + t / 2.0;
     let half = vec![
-        knot(x0, ys - r1 - 50.0, t).pen(0.0).line(),
+        knot(x0, ys - r1 - 50.0 * k, t).pen(0.0).line(),
         knot(x0, ys - r1, t).pen(0.0).dir(90.0).k(p.sq),
         knot(x0 + r1, ys, t).pen(90.0).dir(0.0).line(),
         knot(p.mid() - r2, ys, t).pen(90.0).dir(0.0).k(p.sq),
         knot(p.mid(), ys + r2, t).pen(0.0).dir(90.0).line(),
-        knot(p.mid(), ys + r2 + 54.0, 0.5 * t).pen(0.0),
+        knot(p.mid(), ys + r2 + 54.0 * k, 0.5 * t).pen(0.0),
     ];
     for s in [mirror(&half, p.mid()), half] {
         g.stroke(&if top { s } else { flip(&s, br_mid(p)) });
+    }
+}
+
+/// ⏜ ⏝: the parenthesis lying over (or under) what it groups: an arc that rises from the ends of the span, runs
+/// level across the middle and is thin at its ends, as the parenthesis is. Drawn across more than the cell it
+/// turns as the brace does, by the square root of what it is longer, and is level between its turns.
+fn horizontal_paren(g: &mut Draw, top: bool) {
+    let p = g.p;
+    let t = p.op;
+    let end = 0.55 * t;
+    let k = p.grown.sqrt().min(2.4);
+    let depth = 118.0 * k;
+    let yc = p.br_top - 60.0 - t / 2.0; // the crest's upper edge is the horizontal bracket's
+    let (x0, x1) = (p.op_l + end / 2.0, p.op_r() - end / 2.0);
+    // the turns never meet: every master draws the same four knots
+    let turn = (212.0 * k).min(0.47 * (x1 - x0));
+    let a = 2.0 * (depth / turn).atan().to_degrees();
+    let knots = vec![
+        knot(x0, yc - depth, end).dir(a),
+        knot(x0 + turn, yc, t).dir(0.0).line(),
+        knot(x1 - turn, yc, t).dir(0.0),
+        knot(x1, yc - depth, end).dir(-a),
+    ];
+    g.stroke(&if top { knots } else { flip(&knots, br_mid(p)) });
+}
+
+/// ⏠ ⏡: the tortoise-shell bracket lying over (or under) what it groups: the horizontal bracket with its ends
+/// sloping outwards.
+fn horizontal_shell(g: &mut Draw, top: bool) {
+    let p = g.p;
+    let t = p.op;
+    let depth: f64 = 150.0;
+    let run = 0.62 * depth;
+    let y = p.br_top - 60.0;
+    let (x0, x1) = (p.op_l, p.op_r());
+    let b = t * depth.hypot(run) / depth; // a sloping end's breadth along a level cut
+    let inner = b + run * (depth - t) / depth; // where the inner edges meet, from the end of the span
+    let points = vec![
+        pt(x0, y - depth),
+        pt(x0 + run, y),
+        pt(x1 - run, y),
+        pt(x1, y - depth),
+        pt(x1 - b, y - depth),
+        pt(x1 - inner, y - t),
+        pt(x0 + inner, y - t),
+        pt(x0 + b, y - depth),
+    ];
+    if top {
+        g.poly(&points);
+    } else {
+        let m = br_mid(p);
+        g.poly(&points.iter().rev().map(|z| pt(z.x, 2.0 * m - z.y)).collect::<Vec<_>>());
     }
 }
 
@@ -782,6 +842,10 @@ pub fn register(reg: &mut Registry) {
     reg.ch_with('⎵', u, |g: &mut Draw| horizontal_bracket(g, false));
     reg.ch_with('⏞', u, |g: &mut Draw| horizontal_brace(g, true));
     reg.ch_with('⏟', u, |g: &mut Draw| horizontal_brace(g, false));
+    reg.ch_with('⏜', u, |g: &mut Draw| horizontal_paren(g, true));
+    reg.ch_with('⏝', u, |g: &mut Draw| horizontal_paren(g, false));
+    reg.ch_with('⏠', u, |g: &mut Draw| horizontal_shell(g, true));
+    reg.ch_with('⏡', u, |g: &mut Draw| horizontal_shell(g, false));
     // keyboard and interface signs
     reg.ch_with('⌘', u, place_of_interest);
     reg.ch_with('⌃', u, up_arrowhead);

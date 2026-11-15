@@ -8,11 +8,11 @@ use write_fonts::read::collections::IntSet;
 use write_fonts::tables::gdef::Gdef;
 use write_fonts::tables::gpos::builders::{AnchorBuilder, MarkToBaseBuilder, PairPosBuilder, ValueRecordBuilder};
 use write_fonts::tables::gpos::{Gpos, PositionLookup, PositionLookupList};
-use write_fonts::tables::gsub::builders::SingleSubBuilder;
-use write_fonts::tables::gsub::{Gsub, SubstitutionLookup, SubstitutionLookupList};
+use write_fonts::tables::gsub::builders::{AlternateSubBuilder, SingleSubBuilder};
+use write_fonts::tables::gsub::{AlternateSubst, Gsub, SubstitutionLookup, SubstitutionLookupList};
 use write_fonts::tables::layout::builders::{Builder, LookupBuilder};
 use write_fonts::tables::layout::{
-    ClassDef, Feature, FeatureList, FeatureParams, FeatureRecord, LangSys, LookupFlag, Script, ScriptList,
+    ClassDef, Feature, FeatureList, FeatureParams, FeatureRecord, LangSys, Lookup, LookupFlag, Script, ScriptList,
     ScriptRecord, StylisticSetParams,
 };
 use write_fonts::tables::variations::ivs_builder::VariationStoreBuilder;
@@ -21,8 +21,10 @@ use write_fonts::types::{GlyphId16, Tag};
 use crate::names::Names;
 use crate::{Built, Error, Family};
 
-/// The scripts every feature is registered under, in tag order.
+/// The scripts every feature is registered under, in tag order. A mathematics font adds `math`, the script a
+/// formula is shaped in.
 const SCRIPTS: [&[u8; 4]; 3] = [b"DFLT", b"grek", b"latn"];
+const MATH_SCRIPT: &[u8; 4] = b"math";
 
 /// The layout tables of one font, and the longest context their lookups read (for `OS/2.usMaxContext`).
 pub(crate) struct Layout {
@@ -37,13 +39,14 @@ fn tag(s: &str) -> Result<Tag, Error> {
 }
 
 /// A script list that registers every feature, under each script's default language system.
-fn script_list(features: usize) -> Result<ScriptList, Error> {
+fn script_list(features: usize, math: bool) -> Result<ScriptList, Error> {
     let indices: Vec<u16> = (0..features)
         .map(|i| u16::try_from(i).map_err(|_| Error::Family("too many features".into())))
         .collect::<Result<_, _>>()?;
     Ok(ScriptList::new(
         SCRIPTS
             .iter()
+            .chain(math.then_some(&MATH_SCRIPT))
             .map(|t| ScriptRecord::new(Tag::new(t), Script::new(Some(LangSys::new(indices.clone())), vec![])))
             .collect(),
     ))
@@ -115,11 +118,35 @@ pub(crate) fn layout(family: &Family, built: &Built, names: &mut Names) -> Resul
         entries.push((t, index, params));
         max_context = max_context.max(1);
     }
+    // and one lookup of alternates per feature of alternates
+    for alt in &family.alternates {
+        let mut b = AlternateSubBuilder::default();
+        for (from, to) in &alt.alternates {
+            let targets: Option<Vec<GlyphId16>> = to.iter().map(|n| gid.get(n.as_str()).copied()).collect();
+            if let (Some(&a), Some(targets)) = (gid.get(from.as_str()), targets) {
+                b.insert(a, targets);
+            }
+        }
+        if b.is_empty() {
+            continue;
+        }
+        let index = u16::try_from(lookups.len()).map_err(|_| Error::Family("too many lookups".into()))?;
+        let lookup = LookupBuilder::new_with_lookups(LookupFlag::empty(), None, vec![b]).build(&mut var_store);
+        let subtables = lookup.subtables.into_iter().map(|s| AlternateSubst::Format1(s.into_inner())).collect();
+        lookups.push(SubstitutionLookup::Alternate(Lookup::new(lookup.lookup_flag, subtables)));
+        entries.push((tag(&alt.tag)?, index, None));
+        max_context = max_context.max(1);
+    }
+    let math = family.math.is_some();
     let gsub = if lookups.is_empty() {
         None
     } else {
         let features = feature_list(entries);
-        Some(Gsub::new(script_list(features.feature_records.len())?, features, SubstitutionLookupList::new(lookups)))
+        Some(Gsub::new(
+            script_list(features.feature_records.len(), math)?,
+            features,
+            SubstitutionLookupList::new(lookups),
+        ))
     };
 
     // GPOS: mark-to-base from anchors X on bases and _X on marks; kerning pairs.
@@ -199,7 +226,7 @@ pub(crate) fn layout(family: &Family, built: &Built, names: &mut Names) -> Resul
         None
     } else {
         let features = feature_list(entries);
-        Some(Gpos::new(script_list(features.feature_records.len())?, features, PositionLookupList::new(lookups)))
+        Some(Gpos::new(script_list(features.feature_records.len(), math)?, features, PositionLookupList::new(lookups)))
     };
     Ok(Layout { gdef, gsub, gpos, max_context })
 }
