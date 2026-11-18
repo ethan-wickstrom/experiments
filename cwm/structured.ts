@@ -1,13 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import {
-  evaluate,
-  readTraces,
-  rollForward,
-  type Frame,
-  type Observation,
-  type Program,
-  type Trace,
-} from "./cwm.ts";
+import { rollForward, type Frame, type Observation, type Program, type Trace } from "./cwm.ts";
 import { compile, type Graph, type Instruction } from "./structured/graph.ts";
 import { fitGuards, type GuardRows } from "./structured/guards.ts";
 import { fitLandings, type Example, type Landing } from "./structured/landing.ts";
@@ -82,9 +74,9 @@ export function fitStructured(
     )
       throw Error("Incomplete function trajectory in " + t.entry);
     const first = states[0]!;
+    if (!isDeepStrictEqual(first.store, t.args))
+      throw Error("Call arguments do not identify the entry store in " + t.entry);
     if (entryEvidence) {
-      if (!isDeepStrictEqual(first.store, t.args))
-        throw Error("Call arguments do not identify the entry store in " + t.entry);
       landings.push({
         origin: undefined,
         dest: first.node,
@@ -198,23 +190,13 @@ export function fitStructured(
     predict,
     start(call: Program) {
       const g = prepare(call.files, call.entry, call.fn);
-      if (!entryEvidence || !g || call.args.length !== g.names.length || !call.args.every(scalar))
-        return;
+      const args = Array.from(call.args);
+      if (!entryEvidence || !g || args.length !== g.names.length || !args.every(scalar)) return;
       const entry = g.nodes[g.entry];
       if (!entry) return;
-      return frame(g, entry, call.args, land(undefined, entry, false));
+      return frame(g, entry, args, land(undefined, entry, false));
     },
     rollout: (files: Program["files"], start: Frame, budget: number) =>
       rollForward(predict, files, start, budget),
   };
-}
-
-if (import.meta.main) {
-  const [mode, training, held] = process.argv.slice(2);
-  if (mode !== "score" || !training || !held)
-    throw Error("Usage: bun structured.ts score TRAIN.jsonl HELD.jsonl");
-  const model = fitStructured(await Array.fromAsync(readTraces(training)));
-  let score = evaluate(model, []);
-  for await (const t of readTraces(held)) score = evaluate(model, [t], score);
-  console.log(JSON.stringify(score));
 }

@@ -772,7 +772,13 @@ async function* records<T>(
 }
 
 export function readTraces(path: string) {
-  return records(Readable.from(Bun.file(path).stream()), traceSchema);
+  const stream = Bun.file(path).stream();
+  return records(
+    Readable.from(
+      path.endsWith(".gz") ? stream.pipeThrough(new DecompressionStream("gzip")) : stream,
+    ),
+    traceSchema,
+  );
 }
 
 if (!isMainThread && workerData?.cwmObserver) {

@@ -15,3 +15,7 @@ The frozen model missed all eight loop-exit-to-if landings. Every training if wa
 ## Intervene on joins
 
 Three first errors in the confirmation set predicted a payload-bearing return immediately after writing the returned slot. V8 instead stepped at the return keyword when another control path reached that statement. Test a binary feature for more than one distinct incoming CFG edge, counted over reachable instructions and function entry. Keep emission supervision, semantics and all other features fixed. Add either six fresh inputs to familiar straight-line programs or six interventions at returns reached by multiple edges. Freeze three new source bodies with four inputs each. Compare the full two-by-two design on exact uninterrupted paths, wrong nonterminal frames and abstentions. Also rescore the previous sets to detect regressions, identified separately. A gain confined to the three templates supports a training rule within this grammar.
+
+## Independent falsification
+
+Freeze the targeted six-run fit with entry and join context enabled. A second author supplied seven previously unexecuted program bodies and four input pairs per body without running a predictor or inspecting their labels. Preserve the supplied body bytes inside one standard function wrapper. Score every declared call on entry, full path from the predicted entry, nonterminal frames, and paths from observed entry. Report first discrepancies and abstentions. Do not select anchors, fit operators, or modify the model using these 28 records.
