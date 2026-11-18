@@ -2,6 +2,25 @@
 
 Given a goal and a host-selected file, the model first chooses a contiguous span and then generates its replacement. The host applies the splice to exactly the supplied snapshot. Tests remain observations produced by Bun. The model also trains on real test outcomes and V8 pauses.
 
+## Frozen local results
+
+Both trained editors produced executable improvements on the four held-out libraries. The edit-only control passed both the visible and additional Bun checks on 10 of 24 requests, the joint arm on eight and the unchanged base on zero. Every joint pass was also an edit-only pass. Six base replacements reached the generation cap. All three arms used greedy decoding and the same 96-token limit.
+
+| Local measure                     | Base | Joint | Edit-only |
+| --------------------------------- | ---: | ----: | --------: |
+| Completed replacement, of 24      |   18 |    24 |        24 |
+| Exact location, of 24             |    4 |    11 |        13 |
+| Exact resulting source, of 24     |    0 |     7 |         9 |
+| Visible checks pass, of 24        |    0 |     8 |        10 |
+| Additional checks pass, of 24     |    0 |     9 |        10 |
+| Both pass, of 24                  |    0 |     8 |        10 |
+| Both pass on setting edits, of 16 |    0 |     7 |         8 |
+| Both pass on behavior edits, of 8 |    0 |     1 |         2 |
+
+The joint arm exactly reproduced seven setting edits and zero behavior edits. The edit-only arm exactly reproduced eight setting edits and one behavior edit. Both returned early on the brochure behavior task, leaving an unreachable reference to the removed variable `first`. The two Bun checks passed. Compiling that patch with TypeScript 7.0.2 produced TS2304. The edit-only arm's other behavior pass exactly restored the locker function's fractional and zero capacity behavior. The saved [base](data/score-base.json.gz), [joint](data/score-trained.json.gz) and [edit-only](data/score-edit-only.json.gz) results include the model's precise spans and replacements and both Bun logs for each completed edit.
+
+The 24 requests come from four function families, each with paired change directions. Sixteen requests reuse a setting-change pattern seen in training. The host selects the target file, indexes its lines and copies bytes outside the predicted range. The learned interventions select the line span and generate the replacement. This single-seed comparison supports improvement on these bounded edits. Adding forecast and trace updates produced two fewer local passes. It also changed the optimizer trajectory and total update count. This evaluation measures editing and leaves the accuracy of the two consequence predictions open.
+
 ## Use the editor
 
 Use the [pinned Python and CPU model setup](../README.md#reproduction). Run from the repository root. Requests and responses are one UTF-8 JSON object per line. The same interface supports the unchanged base, the joint trained adapter and the edit-only control.
@@ -63,4 +82,6 @@ for arm in base trained edit-only; do
 done
 ```
 
-A training checkpoint stores the optimizer, RNG, draws, count, history and all adapter tensors. Repeating the command with the same checkpoint path resumes at the next step. The released standard PEFT adapters use the original verified base weights. The inference service verifies the adapter and configuration hashes on load. During evaluation only completed patches run, each in a network-disabled, read-only non-root Bun container with resource limits. The evaluator checks the visible assertion and additional behavior independently.
+A training checkpoint stores the optimizer, RNG, draws, count, history and all adapter tensors. Repeating the command with the same checkpoint path resumes at the next step. A fresh process restored the edit-only checkpoint at global step 1,792 and reproduced the final safetensors byte-for-byte. All twenty AdamW counters in the final checkpoints were 2,048 for joint and 1,792 for edit-only. Both fits have initialization SHA-256 `99bafd298071d39c5dcd8c20737c483db52f712bc6478cf1311a7e9d35fd78fe` and edit-step/draw SHA-256 `eb520f2b585b984e84f18ce24dad98a4b27aff8d2476ba969c97eafdd6ce710b`. The longest prompt plus target was 265 tokens for location, 295 for replacement, 949 for forecast and 117 for execution.
+
+The released standard PEFT adapters use the original verified base weights. The inference service verifies the adapter and configuration hashes on load. During evaluation only completed patches run, each in a network-disabled, read-only non-root Bun container with resource limits. The evaluator checks the visible assertion and additional behavior independently. To reproduce the recorded counts, compare each output's metrics object with the decompressed published result. Bun logs include incidental runtime durations.
