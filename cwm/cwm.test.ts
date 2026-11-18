@@ -193,7 +193,9 @@ test("coupled scalar inputs identify a law only on their observed subspace", () 
 });
 
 test("learns an unseen affine return and rolls forward without executing the held-out program", async () => {
-  const spec = program("export function run(x:number, y:number) { return 2*x - 3*y + 7; }");
+  const spec = program(
+    "function affine(x:number,y:number){return 2*x-3*y+7;}\nexport function run(x:number,y:number){return affine(x,y);}",
+  );
   const train = await Promise.all(
     [
       [0, 1],

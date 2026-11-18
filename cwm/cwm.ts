@@ -641,6 +641,8 @@ export class WorldModel {
               next.locals[name] = structuredClone(current.locals[name]!);
             }
           }
+          if (from.value && current.value && isDeepStrictEqual(from.value, next.value))
+            next.value = structuredClone(current.value);
         } else if (from.value && current.value && isDeepStrictEqual(from.value, next.result)) {
           next.result = structuredClone(current.value);
         }
