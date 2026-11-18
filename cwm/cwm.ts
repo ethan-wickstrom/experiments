@@ -710,22 +710,36 @@ export class WorldModel {
     start: Frame,
     maxSteps: number,
   ): Generator<Observation, "terminal" | "unseen" | "limit"> {
-    if (!Number.isSafeInteger(maxSteps) || maxSteps < 1)
-      throw new Error("Expected a positive rollout budget");
-    let current = start;
-    for (let i = 0; i < maxSteps; i++) {
-      const next = this.predict(files, current);
-      if (!next) return "unseen";
-      yield next;
-      if (!("stack" in next)) return "terminal";
-      current = next;
-    }
-    return "limit";
+    return yield* rollForward(
+      (source, frame) => this.predict(source, frame),
+      files,
+      start,
+      maxSteps,
+    );
   }
 }
 
+export function* rollForward(
+  predict: WorldModel["predict"],
+  files: Program["files"],
+  start: Frame,
+  maxSteps: number,
+): Generator<Observation, "terminal" | "unseen" | "limit"> {
+  if (!Number.isSafeInteger(maxSteps) || maxSteps < 1)
+    throw new Error("Expected a positive rollout budget");
+  let current = start;
+  for (let i = 0; i < maxSteps; i++) {
+    const next = predict(files, current);
+    if (!next) return "unseen";
+    yield next;
+    if (!("stack" in next)) return "terminal";
+    current = next;
+  }
+  return "limit";
+}
+
 export function evaluate(
-  model: WorldModel,
+  model: Pick<WorldModel, "predict">,
   heldOut: Iterable<Trace>,
   { total, predicted, correct } = { total: 0, predicted: 0, correct: 0 },
 ) {
@@ -758,7 +772,13 @@ async function* records<T>(
 }
 
 export function readTraces(path: string) {
-  return records(Readable.from(Bun.file(path).stream()), traceSchema);
+  const stream = Bun.file(path).stream();
+  return records(
+    Readable.from(
+      path.endsWith(".gz") ? stream.pipeThrough(new DecompressionStream("gzip")) : stream,
+    ),
+    traceSchema,
+  );
 }
 
 if (!isMainThread && workerData?.cwmObserver) {
