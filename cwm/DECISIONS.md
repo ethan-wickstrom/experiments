@@ -1,0 +1,7 @@
+# Decisions
+
+1. **Observe a real engine rather than inject hooks.** The debugger sees scopes and control transfers without rewriting returns, duplicating predicate evaluations, or reading a binding before initialization. A fresh debuggee per run costs startup time but eliminates shared collector state. Bun owns orchestration; V8 supplies break locations, return values and scope descriptors.
+2. **Compile modules separately.** Oxc's source maps preserve original positions. The native ESM linker handles cycles, re-exports and live bindings. A bundled executable or a hand-sorted CommonJS dependency graph would hide module boundaries. The resolver has only one job: match explicit relative imports to the provided in-memory files.
+3. **Learn a measurable baseline.** Use state-conditioned retrieval and identifiable affine transitions before introducing neural training infrastructure. Score held-out observations and allow abstention. These results say nothing about a large pretrained model's accuracy.
+4. **Store evidence once.** Structured JSONL replaces delimiter parsing, masked duplicate frames and inferred trace modes. The actual source, locations and checked shape are sufficient to form supervised pairs. No old record formats, migration paths, guessed failures, or action-bigram deduplication.
+5. **Invert edits, not guesses about intent.** An edit contains its original slice and offset. Restore those exact characters and run the repository again. Retain unsuccessful interactions rather than generating a synthetic diagnosis or treating any return as a pass.
