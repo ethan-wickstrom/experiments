@@ -1,0 +1,74 @@
+[
+  {
+    "id": "contact-sheet",
+    "path": "sheet.ts",
+    "files": {
+      "frames.ts": "export type Frame = { id: string; takenAt: number };\n\nexport function frameIds(frames: readonly Frame[]) {\n  return frames.map(frame => frame.id);\n}\n",
+      "sheet.ts": "import { frameIds, type Frame } from \"./frames\";\n\nexport function sheet(frames: readonly Frame[], width: number, snake = false): string[][] {\n  const ids = frameIds(frames);\n  const rows: string[][] = [];\n  for (let start = 0; start + width <= ids.length; start += width) {\n    rows.push(ids.slice(start, start + width));\n  }\n  return rows;\n}\n"
+    },
+    "turns": [
+      {
+        "goal": "Our photographer's contact sheet loses the last few frames when a row isn't full. Keep that partial row without padding it. Width is a positive integer. Keep the input order and leave the frames alone.",
+        "old": "  for (let start = 0; start + width <= ids.length; start += width) {\n",
+        "replacement": "  for (let start = 0; start < ids.length; start += width) {\n",
+        "visible": "import { expect, test } from \"bun:test\";\nimport { sheet } from \"./sheet\";\n\ntest(\"retain a short last row\", () => {\n  const frames = [\"A\", \"B\", \"C\"].map(id => ({id, takenAt: 0}));\n  expect(sheet(frames, 2)).toEqual([[\"A\",\"B\"],[\"C\"]]);\n});\n",
+        "hidden": "import { expect, test } from \"bun:test\";\nimport { sheet } from \"./sheet\";\n\ntest(\"retain one copy of each frame including short and empty sheets\", () => {\n  const frames = Object.freeze([\"K\", \"K\", \"J\", \"I\", \"H\"].map(id => ({id, takenAt: 4})));\n  expect(sheet(frames, 3)).toEqual([[\"K\",\"K\",\"J\"],[\"I\",\"H\"]]);\n  expect(sheet(frames, 8)).toEqual([[\"K\",\"K\",\"J\",\"I\",\"H\"]]);\n  expect(sheet([], 1)).toEqual([]);\n  expect(sheet(frames.slice(0,4),2)).toEqual([[\"K\",\"K\"],[\"J\",\"I\"]]);\n});\n"
+      },
+      {
+        "goal": "Now support the snake option on the printer. With snake=true, lay the first row left to right, reverse the second row, and alternate from there, including short rows. The ordinary sheet stays as it was.",
+        "old": "    rows.push(ids.slice(start, start + width));\n",
+        "replacement": "    const row = ids.slice(start, start + width);\n    if (snake && rows.length % 2 === 1) row.reverse();\n    rows.push(row);\n",
+        "visible": "import { expect, test } from \"bun:test\";\nimport { sheet } from \"./sheet\";\n\ntest(\"reverse every other printed strip\", () => {\n  const frames = [\"p\",\"q\",\"r\",\"s\",\"t\"].map(id => ({id,takenAt: 0}));\n  expect(sheet(frames, 2, true)).toEqual([[\"p\",\"q\"],[\"s\",\"r\"],[\"t\"]]);\n});\n",
+        "hidden": "import { expect, test } from \"bun:test\";\nimport { sheet } from \"./sheet\";\n\ntest(\"snake a partial reverse row without reordering other rows\", () => {\n  const frames = Object.freeze(\"abcdefghijk\".split(\"\").map(id => ({id,takenAt: 1})));\n  expect(sheet(frames, 3, true)).toEqual([[\"a\",\"b\",\"c\"],[\"f\",\"e\",\"d\"],[\"g\",\"h\",\"i\"],[\"k\",\"j\"]]);\n  expect(sheet(frames, 3, false)[3]).toEqual([\"j\",\"k\"]);\n  expect(frames.map(f=>f.id).join(\"\")).toBe(\"abcdefghijk\");\n});\n"
+      }
+    ]
+  },
+  {
+    "id": "parcel-locker",
+    "path": "redeem.ts",
+    "files": {
+      "tickets.ts": "export async function readTickets(path: string): Promise<string[]> {\n  const file = Bun.file(path);\n  return (await file.exists()) ? await file.json() : [];\n}\n\nexport async function writeTickets(path: string, tickets: string[]) {\n  await Bun.write(path, JSON.stringify(tickets));\n}\n",
+      "redeem.ts": "import { readTickets, writeTickets } from \"./tickets\";\n\nexport async function redeem(path: string, scan: string): Promise<boolean> {\n  const pending = await readTickets(path);\n  const index = pending.indexOf(scan);\n  if (index < 0) return false;\n  pending.splice(0, 1);\n  await writeTickets(path, pending);\n  return true;\n}\n"
+    },
+    "turns": [
+      {
+        "goal": "Picking up the second parcel consumes someone else's ticket. When a scanned code is present, remove only its first occurrence from the saved pending list. Return true for a pickup and false for a miss. Keep the remaining tickets in order.",
+        "old": "  pending.splice(0, 1);\n",
+        "replacement": "  pending.splice(index, 1);\n",
+        "visible": "import { expect, test } from \"bun:test\";\nimport { redeem } from \"./redeem\";\nimport { readTickets } from \"./tickets\";\n\ntest(\"collect the requested parcel\", async () => {\n  const path = \"/tmp/visible-locker.json\";\n  await Bun.write(path, '[\"A1\",\"B2\",\"C3\"]');\n  expect(await redeem(path,\"B2\")).toBe(true);\n  expect(await readTickets(path)).toEqual([\"A1\",\"C3\"]);\n});\n",
+        "hidden": "import { expect, test } from \"bun:test\";\nimport { redeem } from \"./redeem\";\nimport { readTickets } from \"./tickets\";\n\ntest(\"consume one persisted matching ticket per scan\", async () => {\n  const path = \"/tmp/pending-pickups.json\";\n  expect(await redeem(path,\"none\")).toBe(false);\n  await Bun.write(path, JSON.stringify([\"z\",\"q\",\"x\",\"q\"]));\n  expect(await redeem(path,\"unknown\")).toBe(false);\n  expect(await redeem(path,\"q\")).toBe(true);\n  expect(await Bun.file(path).json()).toEqual([\"z\",\"x\",\"q\"]);\n  expect(await redeem(path,\"q\")).toBe(true);\n  expect(await redeem(path,\"q\")).toBe(false);\n  expect(await readTickets(path)).toEqual([\"z\",\"x\"]);\n});\n"
+      },
+      {
+        "goal": "The new scanner sometimes changes ASCII letter case and adds edge spaces. Compare both the scanned code and the saved codes after trimming and folding case. Consume just the first match, and keep the spelling and order of every remaining ticket on disk.",
+        "old": "  const index = pending.indexOf(scan);\n",
+        "replacement": "  const key = scan.trim().toLowerCase();\n  const index = pending.findIndex(ticket => ticket.trim().toLowerCase() === key);\n",
+        "visible": "import { expect, test } from \"bun:test\";\nimport { redeem } from \"./redeem\";\nimport { readTickets } from \"./tickets\";\n\ntest(\"recognize the new scanner spelling\", async () => {\n  const path = \"/tmp/padded-locker.json\";\n  await Bun.write(path, JSON.stringify([\"Left\", \" Qx7 \", \"End\"]));\n  expect(await redeem(path,\"  qX7\")).toBe(true);\n  expect(await readTickets(path)).toEqual([\"Left\",\"End\"]);\n});\n",
+        "hidden": "import { expect, test } from \"bun:test\";\nimport { redeem } from \"./redeem\";\nimport { readTickets } from \"./tickets\";\n\ntest(\"normalize solely for lookup and consume the earliest equivalent ticket\", async () => {\n  const path = \"/tmp/mixed-pickups.json\";\n  await Bun.write(path, JSON.stringify([\"  pre\", \" Lm \", \"tag\", \"lM\", \" POST \"]));\n  expect(await redeem(path,\" lm\\t\")).toBe(true);\n  expect(await Bun.file(path).json()).toEqual([\"  pre\",\"tag\",\"lM\",\" POST \"]);\n  expect(await redeem(path,\"p r e\")).toBe(false);\n  expect(await redeem(path,\" LM \")).toBe(true);\n  expect(await readTickets(path)).toEqual([\"  pre\",\"tag\",\" POST \"]);\n});\n"
+      }
+    ]
+  },
+  {
+    "id": "gallery-audio",
+    "path": "narration.ts",
+    "files": {
+      "catalog.ts": "export type Clips = Readonly<Record<string, string>>;\n\nexport function clipFor(clips: Clips, language: string): string | undefined {\n  return Object.hasOwn(clips, language) ? clips[language] : undefined;\n}\n",
+      "narration.ts": "import { clipFor, type Clips } from \"./catalog\";\n\nexport function narration(clips: Clips, requested: string, fallback: string): string | undefined {\n  return clipFor(clips, fallback) ?? clipFor(clips, requested);\n}\n"
+    },
+    "turns": [
+      {
+        "goal": "The gallery guide plays its default narration even when the requested language exists. Prefer the exact requested tag and use the fallback tag only if it is absent. An empty string is an intentional silent clip.",
+        "old": "  return clipFor(clips, fallback) ?? clipFor(clips, requested);\n",
+        "replacement": "  return clipFor(clips, requested) ?? clipFor(clips, fallback);\n",
+        "visible": "import { expect, test } from \"bun:test\";\nimport { narration } from \"./narration\";\n\ntest(\"prefer the visitor language\", () => {\n  expect(narration({en:\"hello\",es:\"hola\"},\"es\",\"en\")).toBe(\"hola\");\n});\n",
+        "hidden": "import { expect, test } from \"bun:test\";\nimport { narration } from \"./narration\";\n\ntest(\"exact tags can be silent or absent\", () => {\n  expect(narration({ja:\"\",en:\"fallback\"},\"ja\",\"en\")).toBe(\"\");\n  expect(narration({pt:\"OLÁ\",it:\"CIAO\"},\"it\",\"pt\")).toBe(\"CIAO\");\n  expect(narration({it:\"CIAO\"},\"fr\",\"it\")).toBe(\"CIAO\");\n  expect(narration({},\"fr\",\"en\")).toBeUndefined();\n});\n"
+      },
+      {
+        "goal": "Some visitors choose a more specific language tag than a gallery recorded. Try the exact tag, then successively remove the last hyphen-separated subtag until a clip is found. Try the supplied fallback last. Silent clips still count.",
+        "old": "  return clipFor(clips, requested) ?? clipFor(clips, fallback);\n",
+        "replacement": "  let tag = requested;\n  while (true) {\n    const clip = clipFor(clips, tag);\n    if (clip !== undefined) return clip;\n    const cut = tag.lastIndexOf(\"-\");\n    if (cut < 0) return clipFor(clips, fallback);\n    tag = tag.slice(0, cut);\n  }\n",
+        "visible": "import { expect, test } from \"bun:test\";\nimport { narration } from \"./narration\";\n\ntest(\"fall back to a recorded parent tag\", () => {\n  expect(narration({fr:\"bonjour\",en:\"hello\"},\"fr-CA\",\"en\")).toBe(\"bonjour\");\n});\n",
+        "hidden": "import { expect, test } from \"bun:test\";\nimport { narration } from \"./narration\";\n\ntest(\"prefer the nearest available ancestor even for a silent clip\", () => {\n  const clips = Object.freeze({zh:\"broad\",\"zh-Hant\":\"\",en:\"other\",de:\"ton\"});\n  expect(narration(clips,\"zh-Hant-HK\",\"en\")).toBe(\"\");\n  expect(narration(clips,\"de-Latn-DE\",\"en\")).toBe(\"ton\");\n  expect(narration(clips,\"nl-BE\",\"en\")).toBe(\"other\");\n  expect(narration(clips,\"nl-BE\",\"xx\")).toBeUndefined();\n});\n"
+      }
+    ]
+  }
+]
