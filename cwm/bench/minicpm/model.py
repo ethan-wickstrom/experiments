@@ -4,13 +4,14 @@ import gzip
 import hashlib
 import json
 import os
+from contextlib import nullcontext
 from pathlib import Path
 
 import torch
 from peft import PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
-from provenance import verify_base
+from provenance import verified_base
 
 MODEL_ID = "openbmb/MiniCPM5-1B"
 REVISION = "ac83f813ba7da263c51a9f3ec37c2072597e54af"
@@ -20,15 +21,16 @@ TRAIN = DIRECTORY.parent / "recurrent/data/fixed.jsonl.gz"
 TEMPLATE = (DIRECTORY / "resume.txt").read_text(encoding="utf8").rstrip("\n")
 
 
-def load(*, verify_local=False):
+def load(*, verify_local=True):
     torch.set_num_threads(int(os.environ.get("CWM_THREADS", "8")))
     path = os.environ.get("CWM_MODEL_PATH", MODEL_ID)
-    if verify_local and path != MODEL_ID:
-        verify_base(path)
-    tok = AutoTokenizer.from_pretrained(path, revision=REVISION)
-    model = AutoModelForCausalLM.from_pretrained(
-        path, revision=REVISION, dtype=torch.float32, attn_implementation="eager"
-    ).eval()
+    local = Path(path).is_dir() or path != MODEL_ID
+    with verified_base(path) if verify_local and local else nullcontext(path) as snapshot:
+        options = dict(revision=REVISION, local_files_only=local)
+        tok = AutoTokenizer.from_pretrained(snapshot, **options)
+        model = AutoModelForCausalLM.from_pretrained(
+            snapshot, **options, dtype=torch.float32, attn_implementation="eager"
+        ).eval()
     return model, tok
 
 

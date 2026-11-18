@@ -33,7 +33,7 @@ printf '%s\n%s\n%s\n%s' 'export function run(x:number, y:number) {' 'x = x + y;'
 python prompt.py --source /tmp/mini-example.ts --current 'S,2,1,2,3'
 ```
 
-The loader pins the release revision shown above. The first call downloads approximately 2.16 GB of BF16 weights and loads them in FP32 for CPU inference. To use a downloaded copy, set `CWM_MODEL_PATH` to the local snapshot directory. Use `CWM_THREADS` to change the default of eight CPU threads. Both coding and pause prompts use the same PEFT weights in `adapter/`.
+The loader pins the release revision shown above. The first call downloads approximately 2.16 GB of BF16 weights and loads them in FP32 for CPU inference. To use a downloaded copy, set `CWM_MODEL_PATH` to the local snapshot directory. Local loading copies the eight release files into a temporary directory, checks their digests there, and loads the tokenizer and model offline from those copies. Allow 2.2 GB of temporary disk space during loading. Use `CWM_THREADS` to change the default of eight CPU threads. Both coding and pause prompts use the same PEFT weights in `adapter/`.
 
 ## Use the same adapter with llama.cpp
 
