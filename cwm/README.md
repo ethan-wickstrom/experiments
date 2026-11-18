@@ -4,6 +4,8 @@ Given a paused TypeScript program, what will its next observable state be? The *
 
 For the experimental design and measured results beyond the raw-frame baseline, see [Learning compositional updates under partial observation](RESEARCH.md).
 
+The [recurrent raw-frame experiment](bench/recurrent/README.md) adds a source-held-out predictor for scalar assignments, branches and loops. It includes frozen oracle observations and commands to replay training, controls and independent falsification.
+
 ## Run
 
 Use Bun 1.4+ and Node 24.11+ on PATH. Bun runs the library, CLI and tests. Node is only the debuggee: a worker connects to its [V8 inspector](https://nodejs.org/api/inspector.html#support-of-breakpoints) without opening a network port.

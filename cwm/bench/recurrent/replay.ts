@@ -21,7 +21,7 @@ function manifestFor(split: Dataset) {
   return later[split].map((program) => ({ program, family: program.entry, layout: split }));
 }
 const fingerprints: Record<Dataset, string> = {
-  blind: "", // Reserved until the independent collection.
+  blind: "a085a9cf560ad70b519f9599f9d9b4255c8a0c11408395bf4f7023af586a9fe8",
   fixed: "96c458b2c043df456f0db53129d51beaedfed0b5c6164f5d6a2039b87d9972fb",
   varied: "978ef5696d8adeb08edfbff83588831d39e435a54e9b4f6087da12d5cc085797",
   held: "eb3245bb7150ff452424501863d2ad51c4d2a38d4d6a5f65ea15c3d019d6e2a8",
