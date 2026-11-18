@@ -1,0 +1,5 @@
+# Matched edit-only control
+
+Before any model has been run against these fixtures, add the trainer's matched edit-only checkpoint to the base and joint arms. Use the trainer's released CLI arm name and record its revision and weights. The host, fixtures, one-request limit, feedback, cumulative trajectory and offline grading are identical for all three. The earlier transport smoke test used a fixed empty splice and no model.
+
+Report accepted parseable edits, edits changing source, solved turns and individual suite outcomes for each checkpoint. Compare joint and edit-only by project and turn. For location accuracy, compare the response's reported legal span against the reference only when the original gold predecessor matches the actual implementation. Report exact locations over all matching predecessors, the count with a usable reported location, and any differing denominator caused by divergent trajectories. Report raw interval differences between the two checkpoints on byte-identical inputs separately. A capped or otherwise incomplete reply without bounds leaves its location unavailable. Use only the original requests and existing offline hybrid controls.

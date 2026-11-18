@@ -11,10 +11,10 @@ import { validate } from "./reply.ts";
 
 const [results, output] = process.argv.slice(2);
 if (!results || !output)
-  throw Error("Usage: bun diagnose.ts RESULTS_WITH_BASE_AND_TRAINED FRESH_OUTPUT_DIR");
+  throw Error("Usage: bun diagnose.ts RESULTS_WITH_THREE_ARMS FRESH_OUTPUT_DIR");
 await mkdir(output);
 const rows = [];
-for (const arm of ["base", "trained"]) {
+for (const arm of ["base", "trained", "edit-only"]) {
   for (const project of projects) {
     const files = new Map(Object.entries(project.files) as [string, string][]);
     let gold = files.get(project.path)!;

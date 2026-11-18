@@ -27,15 +27,21 @@ export type Transcript = {
   solved: boolean;
 };
 
-const [checkout, arm, output] = process.argv.slice(2);
-if (!checkout || !output || (arm !== "base" && arm !== "trained") || !process.env.CWM_MODEL_PATH)
+const [checkout, arm, output, releasedArm = arm] = process.argv.slice(2);
+if (
+  !checkout ||
+  !output ||
+  !arm ||
+  !["base", "trained", "edit-only"].includes(arm) ||
+  !process.env.CWM_MODEL_PATH
+)
   throw Error(
-    "Usage: CWM_MODEL_PATH=SNAPSHOT bun evaluate.ts EDITOR_CHECKOUT base|trained FRESH_OUTPUT_DIR",
+    "Usage: CWM_MODEL_PATH=SNAPSHOT bun evaluate.ts EDITOR_CHECKOUT base|trained|edit-only FRESH_OUTPUT_DIR [CLI_ARM]",
   );
 await mkdir(output);
 const server = spawn(
   process.env.PYTHON || "python",
-  ["cwm/bench/development/local_edit/edit.py", "--serve", "--arm", arm],
+  ["cwm/bench/development/local_edit/edit.py", "--serve", "--arm", releasedArm!],
   {
     cwd: resolve(checkout),
     stdio: ["pipe", "pipe", "inherit"],
