@@ -1,4 +1,5 @@
 """Boundary, tensor supervision and draw-schedule regression tests."""
+import hashlib
 import json
 import os
 import unittest
@@ -7,7 +8,8 @@ from collections import Counter
 import torch
 from transformers import AutoTokenizer
 from edit import SpanGrammar
-from local_data import training, digest
+from local_data import HERE, authored, training, digest
+from provenance import file_hash
 from train_local import CORPUS, schedule
 from wire import derive, inspect_request, lines, splice, user
 
@@ -54,6 +56,29 @@ class LocalEdit(unittest.TestCase):
             if n:
                 prefix=tok.encode(f"{n}:",add_special_tokens=False)
                 self.assertNotIn(tok.encode("0",add_special_tokens=False)[0],grammar(0,torch.tensor(prefix)))
+
+    def test_released_control(self):
+        rows = training()
+        held = {ep["family"] for ep, _ in authored("holdout")}
+        self.assertEqual(len(held), 4)
+        self.assertTrue(held.isdisjoint(r["family"] for r in rows))
+        draws = [(step, i) for step, i in enumerate(schedule(rows), 1)
+                 if rows[i]["task"] in ("locate", "fill")]
+        fingerprint = hashlib.sha256(json.dumps(draws, separators=(",", ":")).encode()).hexdigest()
+        fits = []
+        for folder, arm, updates in [("model", "trained", 2048), ("edit-only", "edit-only", 1792)]:
+            root = HERE / folder
+            pins = json.loads((root / "provenance.json").read_text())
+            fit = json.loads((root / "fit.json").read_text())
+            self.assertEqual((pins["arm"], fit["arm"]), (arm, arm))
+            for name, sha in pins["files"].items():
+                self.assertEqual(file_hash(root / name), sha)
+            self.assertEqual(fit["edit_plan_sha256"], fingerprint)
+            self.assertEqual(fit["optimizer_steps"], updates)
+            fits.append(fit)
+        for key in ("revision", "corpus", "cache_sha256", "seed", "steps", "blocks", "initial_sha256"):
+            self.assertEqual(fits[0][key], fits[1][key], key)
+        self.assertNotEqual(fits[0]["peft_sha256"], fits[1]["peft_sha256"])
 
 
 if __name__ == "__main__":
