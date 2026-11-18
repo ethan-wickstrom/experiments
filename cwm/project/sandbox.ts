@@ -23,9 +23,14 @@ export function runTests(files: ReadonlyMap<string, string>, only?: string) {
   const name = "cwm-test-" + randomUUID();
   const command =
     stage +
-    "const run=Bun.spawnSync({cmd:" +
+    "const run=Bun.spawn({cmd:" +
     JSON.stringify(["bun", "test", ...(only ? ["./" + only] : [])]) +
-    ',stdout:"inherit",stderr:"inherit"});process.exit(run.exitCode);';
+    `,stdout:"inherit",stderr:"inherit"});
+let timedOut=false;
+const deadline=setTimeout(()=>{timedOut=true;run.kill("SIGKILL")},15000);
+const exit=await run.exited;clearTimeout(deadline);
+if(timedOut)console.error("Bun test exceeded the 15-second execution limit");
+process.exit(timedOut?124:exit);`;
   return Effect.acquireUseRelease(
     Effect.succeed(name),
     () =>
@@ -56,7 +61,7 @@ export function runTests(files: ReadonlyMap<string, string>, only?: string) {
                 "--eval",
                 command,
               ],
-              { signal, timeout: 15000, maxBuffer: 262144 },
+              { signal, timeout: 25000, killSignal: "SIGKILL", maxBuffer: 262144 },
               (error, stdout, stderr) => {
                 const code = error?.code ?? 0;
                 if (error?.killed || typeof code !== "number" || code >= 125)
