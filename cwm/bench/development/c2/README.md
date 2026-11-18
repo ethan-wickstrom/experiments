@@ -63,3 +63,13 @@ done
 ```
 
 These local probes use two new library families with eight directed edit requests, including follow-ups from verified source, four observed native executions on two new scalar programs, and additional Bun assertions absent from prompts. Test exit codes, generation stop reasons, raw text, forecast margins, goals and actual oracle outcomes remain separate. Each choice pair compares the pass-minus-fail first-token logit margin of two candidates conditioned on the same history. Both candidates were actually tested against that requirement. Self-fed pause rollouts start from observed entry and finish at predicted return, invalid output, repetition or the 16-step cap. The local FP32 diagnostic uses a 128-token source cap, a 32-token pause cap and an eight-token decision/forecast cap. The live directed interface allows longer source output. The integration runner separately evaluates the independently held live projects.
+
+## Frozen local results
+
+| FP32 arm | Directed edits passing both Bun checks / 8 | Correct decisions / 40 | Exact forecast words / 20 | Correct choices / 8 | Exact pauses / 10 | Exact rollouts / 4 | Pause loss (nats/token) |
+| -------- | ------------------------------------------ | ---------------------- | ------------------------- | ------------------- | ----------------- | ------------------ | ----------------------- |
+| A        | 0                                          | 8                      | 9                         | 4                   | 0                 | 0                  | 1.339                   |
+| B2       | 0                                          | 37                     | 6                         | 4                   | 0                 | 0                  | 1.504                   |
+| C2       | 0                                          | 40                     | 13                        | 4                   | 1                 | 0                  | 0.678                   |
+
+Each arm stopped within budget on four of eight raw edits. None of the completed edits passed the visible Bun check. The joint arm improved decision accuracy and next-pause loss in these two small probes. Candidate choice stayed at half and all arms missed the changed locals on all four write transitions. Full outputs, cap status and test observations are in the compressed score files under `data/`.
