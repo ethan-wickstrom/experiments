@@ -38,7 +38,7 @@ python ../minicpm/prompt.py --adapter C/peft --text 'Choose one TypeScript proje
 {"files":["checks.test.ts","numbers.ts"],"history":[{"user":"Round each number down to an integer."}]}' --max-new-tokens 96
 ```
 
-[The wire contract](contract.ts) serializes the sorted filenames and complete observed history as compact JSON. A forecast appends the specific candidate action. The runtime supplies the corresponding instruction. An independent `--source ... --current ...` request to the same adapter uses the original next-pause prompt. The live project evaluation uses schema-constrained actions for all three arms and free word forecasts. The retention results here use unconstrained, greedy FP32 decoding.
+[The wire contract](../../project/protocol.ts) serializes the sorted filenames and complete observed history as compact JSON. A forecast appends the specific candidate action. The runtime supplies the corresponding instruction. An independent `--source ... --current ...` request to the same adapter uses the original next-pause prompt. The live project evaluation uses schema-constrained actions for all three arms and free word forecasts. The retention results here use unconstrained, greedy FP32 decoding.
 
 ## Training evidence
 

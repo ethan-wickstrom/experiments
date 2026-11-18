@@ -9,9 +9,10 @@ export type Generate = (
   limit: number,
   signal?: AbortSignal,
   grammar?: ReturnType<typeof permittedActions>["grammar"],
+  verbatim?: boolean,
 ) => Promise<Completion>;
 export function endpoint(url: string, model: string): Generate {
-  return async (prompt, limit, signal, grammar) => {
+  return async (prompt, limit, signal, grammar, verbatim = false) => {
     const timeout = AbortSignal.timeout(180000);
     const response = await fetch(url, {
       method: "POST",
@@ -41,7 +42,7 @@ export function endpoint(url: string, model: string): Generate {
     )
       throw Error("Malformed model response");
     return {
-      text: choice.message.content.trim(),
+      text: verbatim ? choice.message.content : choice.message.content.trim(),
       finish: choice.finish_reason,
       tokens: data.usage.completion_tokens,
       inputTokens: data.usage.prompt_tokens,

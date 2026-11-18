@@ -43,7 +43,12 @@ export async function editFile(
     }
     const fence = /^`{3}(?:typescript|ts)?[^\S\r\n]*\r?\n([\s\S]*?)^`{3}\s*$/m.exec(reply.text);
     const text = fence?.[1] ?? reply.text;
-    if (!text.trim() || text.includes("```") || parseSync(path, text).errors.length) {
+    if (
+      (reply.text.match(/^`{3}/gm)?.length ?? 0) > 2 ||
+      !text.trim() ||
+      text.includes("```") ||
+      parseSync(path, text).errors.length
+    ) {
       onEvent?.(event);
       return { stop: "invalid", events };
     }
