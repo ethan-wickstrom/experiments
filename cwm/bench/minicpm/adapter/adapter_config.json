@@ -29,9 +29,7 @@
   "r": 8,
   "rank_pattern": {},
   "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
-  "target_modules": [
-    "model.layers.23.mlp.down_proj"
-  ],
+  "target_modules": ["model.layers.23.mlp.down_proj"],
   "target_parameters": null,
   "task_type": "CAUSAL_LM",
   "trainable_token_indices": null,

@@ -3,7 +3,6 @@
 import argparse
 import hashlib
 import json
-import re
 from collections import Counter
 from pathlib import Path
 
@@ -11,8 +10,10 @@ import torch
 from torch.nn.functional import cross_entropy
 
 from model import (
-    ADAPTER, TRAIN, adapted, chat_ids, examples, generate, load, prompt, target_ids,
+    ADAPTER, MODEL_ID, REVISION, TRAIN, adapted, chat_ids, examples, generate,
+    load, prompt, target_ids, valid_row,
 )
+from provenance import CONFIG_SHA, HELD_SHA, PEFT_SHA, TRAIN_SHA, file_hash
 
 
 @torch.no_grad()
@@ -37,12 +38,12 @@ def token_loss(base, tok, rows):
 
 
 def grade(current, target, output):
+    """'valid' measures only CSV structure and the numeric field domain."""
     gold = target.split(",")
     changed = gold[3:5] != current.split(",")[3:5]
     fields = output.split(",")
-    valid = len(fields) in (5, 6) and fields[0] == ("S" if len(fields) == 5 else "R")
-    valid = valid and all(re.fullmatch(r"-?(0|[1-9][0-9]*)", v) for v in fields[1:])
-    exact = output == target
+    valid = valid_row(output)
+    exact = valid and output == target
     return dict(rows=1, exact=int(exact), valid=int(valid),
                 site_event=int(valid and gold[:3] == fields[:3]),
                 locals=int(valid and gold[3:5] == fields[3:5]), changed=int(changed),
@@ -63,6 +64,14 @@ def run(model, base, tok, rows):
         for (source, current, target), text in zip(batch, texts, strict=True):
             key = hashlib.sha256(source.encode()).hexdigest()[:12]
             counts = grade(current, target, text)
+            counts["inside_source"] = 0
+            if counts["valid"]:
+                line, column = map(int, text.split(",")[1:3])
+                # V8 columns count UTF-16 code units. These source tapes use LF.
+                lines = source.split("\n")
+                if line <= len(lines):
+                    width = len(lines[line - 1].encode("utf-16-le")) // 2
+                    counts["inside_source"] = int(column <= width)
             totals.update(counts)
             by_source.setdefault(key, Counter()).update(counts)
             outputs.append(dict(source=key, current=current, expected=target, generated=text))
@@ -75,13 +84,21 @@ def main():
     parser.add_argument("traces", type=Path)
     parser.add_argument("--adapter", type=Path, default=ADAPTER)
     args = parser.parse_args()
-    rows = examples(args.traces)
-    if not rows or {r[0] for r in rows} & {r[0] for r in examples(TRAIN)}:
+    rows = examples(args.traces, expected_sha=HELD_SHA)
+    training = examples(TRAIN, expected_sha=TRAIN_SHA)
+    if not rows or {r[0] for r in rows} & {r[0] for r in training}:
         parser.error("Evaluation requires source-disjoint nonempty observations")
-    base, tok = load()
+    weights = file_hash(args.adapter / "adapter_model.safetensors")
+    config = file_hash(args.adapter / "adapter_config.json")
+    if args.adapter.resolve() == ADAPTER.resolve() and (weights, config) != (PEFT_SHA, CONFIG_SHA):
+        parser.error("Shipped PEFT adapter digest mismatch")
+    base, tok = load(verify_local=True)
     result = {"base": run(base, base, tok, rows)}
     model = adapted(base, args.adapter)
     result["adapted"] = run(model, base, tok, rows)
+    result["provenance"] = dict(model=MODEL_ID, revision=REVISION, train_sha256=TRAIN_SHA,
+                                held_sha256=HELD_SHA, adapter_sha256=weights,
+                                adapter_config_sha256=config)
     print(json.dumps(result, separators=(",", ":")))
 
 
