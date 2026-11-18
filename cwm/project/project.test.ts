@@ -8,6 +8,7 @@ import { type ToolRun } from "./sandbox.ts";
 import { decodeAction, type Action } from "./protocol.ts";
 import { openProject } from "./workspace.ts";
 import { editFile } from "./directed.ts";
+import { workFile } from "./work.ts";
 
 const answer = (text: string, finish = "stop"): Completion => ({
   text,
@@ -128,4 +129,28 @@ test("truncated directed source and multiple fenced files leave the workspace in
     expect(["invalid", "incomplete"]).toContain(result.stop);
     expect(session.project.files.size).toBe(0);
   }
+});
+
+test("reading after a factorized edit preserves the pending test across turns", async () => {
+  const raw = " export const rate = 2;\n";
+  const replies = ["read", "edit", raw, "read", "done", "done", "test", "done"];
+  const session = new ProjectSession(
+    { files: new Map([["a.ts", "export const rate = 1;"]]) },
+    async (_prompt, limit, _signal, _grammar, verbatim) => {
+      const next = replies.shift();
+      if (next === undefined) throw Error("Unexpected model request");
+      if (next === raw) {
+        expect(verbatim).toBe(true);
+        expect(limit).toBe(384);
+      }
+      return answer(next);
+    },
+    async () => ({ exit: 0, stdout: "", stderr: "1 pass" }),
+  );
+  expect((await workFile(session, "a.ts", "double the rate")).stop).toBe("untested");
+  expect(session.project.files.get("a.ts")).toBe(raw);
+  expect((await workFile(session, "a.ts", "keep that change")).stop).toBe("untested");
+  expect((await workFile(session, "a.ts", "check it")).stop).toBe("done");
+  expect(session.untestedChanges).toBe(false);
+  expect(replies).toEqual([]);
 });
