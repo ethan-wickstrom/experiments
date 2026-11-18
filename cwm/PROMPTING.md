@@ -48,7 +48,25 @@ CWM_PYTHON=/path/to/training/bin/python CWM_MODEL_PATH=/path/to/MiniCPM5-1B \
 
 A request runs the visible tests and passes their diagnostic, the current files and the goal to MiniCPM5. The model chooses the line boundaries and writes the replacement. The host independently reconstructs the splice, parses the complete file and tests each changed write. Follow-ups start from the actual edited project. Use `/local src/other.ts REQUEST` to switch focus. Use `/forecast {"op":"test"}` to query the same loaded weights about the consequences without executing the tests. A forecast requires a stopped, recognized answer. The default arm is `trained`. Set `CWM_LOCAL_ARM=base` or `CWM_LOCAL_ARM=edit-only` for the controls. Other explicit editing commands retain their documented model endpoints.
 
-For a reproducible first session, materialize the first training example into a fresh directory. The script prints its actual request and selected filename.
+To try a held behavior edit, start from the locker library and its visible check. This example was selected after scoring the 24 held edits. Export `CWM_PYTHON` and `CWM_MODEL_PATH` as above, then run from `cwm/`.
+
+```sh
+locker=$(mktemp -d)
+python - "$locker" <<'PYEXAMPLE'
+import gzip, json, pathlib, sys
+goal = "Allow fractional and zero locker capacity."
+with gzip.open("bench/development/local_edit/data/holdout.jsonl.gz", "rt") as records:
+    example = next(row for row in map(json.loads, records) if row["goal"] == goal)
+root = pathlib.Path(sys.argv[1])
+(root / example["path"]).write_bytes(example["before"].encode())
+(root / "checks.test.ts").write_bytes(example["check"].encode())
+PYEXAMPLE
+CWM_LOCAL_ARM=edit-only bun run project "$locker" --local locker.ts
+```
+
+Enter `Allow fractional and zero locker capacity.` In the verified session the visible assertion received 2 for an input of 1.2. The model selected lines `[7, 8)` and changed the implementation to `return n;`. The persisted source matched the held reference and passed a separate check for zero capacity and the other exports. Across all eight held behavior requests, this was the only edit-only output that compiled and passed both suites. [All held results](bench/development/local_edit/README.md#frozen-local-results)
+
+For a training replay, materialize the first training example into a fresh directory. The script prints its actual request and selected filename.
 
 ```sh
 demo=$(mktemp -d)

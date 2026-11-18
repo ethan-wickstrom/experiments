@@ -52,6 +52,8 @@ The two trained arms used the same 1,792 edit updates with identical initial wei
 
 All three preferred the passing candidate under both reversed requirements in 1/6 families and got 12/24 pass/fail labels correct. Every arm missed all four actual changes of local values. The edit-only arm also missed both retrospective debugger source pairs. Adding execution examples recovered valid debugger output after edit training. The measured gain stops short of predicting the effects of the assignments in these programs. [Base](results/world-base.json.gz) · [Edit-only](results/world-edit-only.json.gz) · [Joint](results/world-trained.json.gz)
 
+On four separately held libraries drawn from the same edit-task design, the base, joint and edit-only arms passed both Bun suites on 0/24, 8/24 and 10/24 requests. Strictly compiling each resulting module together with its two test files leaves 0, 7 and 9 passing all three checks. All seven joint passes were setting changes. Edit-only also completed one behavior edit. [Local scores and compiler diagnostics](local_edit/README.md#frozen-local-results)
+
 ## Multi-file editing with a learned span
 
 Three independently authored projects each received an initial request and a follow-up on the model's resulting workspace. The base produced no accepted changes, the edit-only model changed 5/6 workspaces, and the joint model changed 3/6. All three solved 0/6. The edit-only model passed one visible check by duplicating a requested-language lookup. An independent case where the language was missing required falling back to a different tag and failed. The two adapters selected identical ranges on all three first turns and matched the reference on one. [Free-location transcripts and hybrid checks](local-external/README.md)
