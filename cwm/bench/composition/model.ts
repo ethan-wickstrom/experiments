@@ -32,8 +32,10 @@ export function fit(rows: readonly Atom[], mode: Mode = "compose") {
   }
   const tokens = [...rules.keys()].sort();
   function infer(e: Expr, slots: readonly number[]): number | undefined {
-    if ("slot" in e) return slots[e.slot];
-    if ("literal" in e) return e.literal;
+    if (!("op" in e)) {
+      const value = "slot" in e ? slots[e.slot] : e.literal;
+      return scalar(value) ? value : undefined;
+    }
     if (mode === "whole" && !seen.has(JSON.stringify(e))) return;
     const x = infer(e.l, slots),
       y = infer(e.r, slots);
@@ -50,6 +52,7 @@ export function fit(rows: readonly Atom[], mode: Mode = "compose") {
     return value;
   }
   return {
+    evaluate: infer,
     survivors: Object.fromEntries([...rules].map(([op, rs]) => [op, rs.map((r) => r.map(Number))])),
     next(p: Plan, state: State): Boundary | undefined {
       const s = p.code[state.pc];

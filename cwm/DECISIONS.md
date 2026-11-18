@@ -1,5 +1,7 @@
 # Decisions
 
+**Learn branch choice separately from debugger landing position.** Static CFG edges provide possible transitions, not the arm taken. The [observed arm experiments](bench/branch/README.md) support semantic paths but expose large raw-site errors. Keep both targets. Use [class-identifying probes](bench/composition/fingerprint.md) only with independent falsification; a unique fit alone even gives spurious polynomials for bitwise operators.
+
 **Research track: factor sparse effects, not whole snapshots.** The [architecture and promotion gate](RESEARCH.md) separates locating the next event, learning a state change, and maintaining a distribution when observations cannot distinguish possible successors. We rejected replacing the public predictor on the strength of a different target. The [scalar falsification](bench/composition/regime.md) shows why within-class agreement needs distinguishing interventions; the [alias study](bench/belief/README.md) shows why hiding an informative prefix must change confidence. Selecting covering contexts reduced labels in replay, not the cost of a completed oracle run.
 
 1. **Observe a real engine rather than inject hooks.** The debugger sees scopes and control transfers without rewriting returns, duplicating predicate evaluations, or reading a binding before initialization. A fresh debuggee per run costs startup time but eliminates shared collector state. Bun owns orchestration; V8 supplies break locations, return values and scope descriptors.
