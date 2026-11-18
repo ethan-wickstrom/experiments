@@ -158,15 +158,24 @@ export class ProjectSession {
       .sort()
       .filter((path) => current.get(path) !== this.project.files.get(path))
       .map((path) => ({ path, text: current.get(path) ?? null }));
-    // Disk changes and real reads already expose those bytes. A local forecast can also
-    // inspect the other current files without adding read actions or granting write permission.
-    const sources = includeSources
-      ? files
-          .filter(
-            (path) => !this.read.has(path) && current.get(path) === this.project.files.get(path),
-          )
-          .map((path) => ({ path, text: current.get(path)! }))
-      : [];
+    const sources = [];
+    if (includeSources) {
+      // The forecast sees the full history across requests. Write permissions only
+      // describe the current turn, so use the last observed version for each path.
+      const known = new Map<string, string>();
+      for (const event of this.history) {
+        if (!("action" in event)) continue;
+        const { action, observed } = event;
+        if (action.op === "read") known.set(action.path, observed);
+        else if (action.op === "write" && observed === "written")
+          known.set(action.path, action.text);
+      }
+      for (const path of files) {
+        const text = current.get(path)!;
+        if (known.get(path) !== text && this.project.files.get(path) === text)
+          sources.push({ path, text });
+      }
+    }
     const prompt = wire(
       files,
       this.history,

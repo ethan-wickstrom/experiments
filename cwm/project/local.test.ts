@@ -138,3 +138,29 @@ test("a fresh local forecast sees current source without granting a read or exec
   expect(session.history).toEqual([]);
   expect((await session.act({ op: "write", path, text: original })).observed).toBe("rejected");
 });
+
+test("a local forecast reuses earlier observed bytes across turns and reports refreshed files", async () => {
+  const path = "data.ts";
+  const text = "//" + "x".repeat(9000);
+  const other = "extra.ts";
+  const files = new Map([
+    [path, text],
+    [other, text + "more"],
+  ]);
+  const prompts: string[] = [];
+  const session = new ProjectSession({ files }, async (prompt) => {
+    prompts.push(prompt);
+    return { text: "fail", finish: "stop", inputTokens: 10, tokens: 2 };
+  });
+  await session.begin("inspect");
+  await session.act({ op: "read", path });
+  await session.act({ op: "read", path: other });
+  await session.begin("follow-up");
+  await session.predict({ op: "test" }, undefined, { includeSources: true });
+  expect(JSON.parse(prompts[0]!.split("\n")[1]!).visibleSources).toBeUndefined();
+  files.set(path, "export const updated = true;");
+  await session.predict({ op: "test" }, undefined, { includeSources: true });
+  expect(JSON.parse(prompts[1]!.split("\n")[1]!).visibleSources).toEqual([
+    { path, text: files.get(path) },
+  ]);
+});

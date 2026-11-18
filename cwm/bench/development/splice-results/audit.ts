@@ -4,7 +4,8 @@ import { readFile } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 import type { evaluateSplices } from "../splice-evaluate.ts";
 import { spliceHeld } from "../splice-held.ts";
-import { spliceSource, visiblePass } from "../../../project/splice.ts";
+import { ProjectSession } from "../../../project/agent.ts";
+import { spliceFile, spliceSource, visiblePass } from "../../../project/splice.ts";
 
 type Run = Awaited<ReturnType<typeof evaluateSplices>>;
 for (const [arm, mode] of [
@@ -38,6 +39,36 @@ for (const [arm, mode] of [
       assert.equal(turn.path, path);
       assert.equal(turn.trials.length, 8);
       assert.equal(turn.candidates.length, turn.trials.length);
+      // Replay the production site menu and reply decoder from raw generations.
+      // Only recorded visible observations may advance the search.
+      let calls = 0;
+      const runs = [
+        turn.baseline,
+        ...turn.trials.filter((t) => t.status === "tested").map((t) => t.run!),
+      ];
+      if (turn.verification) runs.push(turn.verification);
+      const replay = new ProjectSession(
+        { files: new Map(Object.entries(files)) },
+        async (prompt, _limit, _signal, _grammar, _verbatim, sampling) => {
+          const trial = turn.trials[calls++]!;
+          assert.equal(prompt, trial.request);
+          assert.deepEqual(sampling, trial.sampling);
+          assert.ok(trial.reply);
+          return trial.reply;
+        },
+        async () => {
+          const run = runs.shift();
+          assert.ok(run);
+          return run;
+        },
+      );
+      for (const user of goals.slice(0, -1)) replay.history.push({ user });
+      const replayed = await spliceFile(replay, path, spec.goal, { feedback: mode === "feedback" });
+      assert.equal(calls, turn.trials.length);
+      assert.equal(runs.length, 0);
+      for (const [j, trial] of replayed.trials.entries()) {
+        assert.deepEqual({ ...trial, elapsedMs: 0 }, { ...turn.trials[j], elapsedMs: 0 });
+      }
       const firstDraft = turn.trials.slice(0, 4).find((t) => t.status === "tested");
       const winner = turn.trials.find((t) => t.status === "tested" && visiblePass(t.run!));
       assert.equal(turn.selected, winner?.index ?? null);
