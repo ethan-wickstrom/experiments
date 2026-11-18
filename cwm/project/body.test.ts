@@ -101,7 +101,8 @@ test("unavailable selection, tests and missing declarations never receive a writ
     editBody(session, generate, path, "Change behavior", { name: "missing" }),
     /Expected an exported/,
   );
-  await rejects(editBody(session, generate, "smoke.test.ts", "Change behavior"), /implementation/);
+  for (const testFile of ["smoke.test.ts", "rate_test.ts", "path/helper_SPEC.cts"])
+    await rejects(editBody(session, generate, testFile, "Change behavior"), /implementation/);
 });
 
 test("forecast errors are recorded independently and user cancellation still prevents the write", async () => {

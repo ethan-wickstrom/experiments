@@ -3,7 +3,7 @@ import { type ProjectSession } from "./agent.ts";
 import { type BodyGenerate, type BodyQuery, type BodyReply } from "./body-completion.ts";
 import { projectJson, wire } from "./protocol.ts";
 import { testObservation, type ToolRun } from "./sandbox.ts";
-import { sourcePath } from "./workspace.ts";
+import { sourcePath, testPath } from "./workspace.ts";
 
 const fence = "\x60\x60\x60";
 type Target = { name: string; declaration: string; start: number; end: number };
@@ -60,11 +60,7 @@ export async function editBody(
   goal: string,
   { name, signal }: { name?: string; signal?: AbortSignal } = {},
 ) {
-  if (
-    !sourcePath(path) ||
-    !/\.(?:[cm]?ts|tsx)$/i.test(path) ||
-    /\.(?:spec|test)\.[cm]?tsx?$/i.test(path)
-  )
+  if (!sourcePath(path) || !/\.(?:[cm]?ts|tsx)$/i.test(path) || testPath(path))
     throw Error("Expected an implementation TypeScript path");
   await session.begin(goal);
   const files: Record<string, string> = Object.create(null);
