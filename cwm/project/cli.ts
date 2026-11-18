@@ -6,6 +6,7 @@ import { decodeAction } from "./protocol.ts";
 import { workFile } from "./work.ts";
 import { editFile } from "./directed.ts";
 import { editReturn } from "./return.ts";
+import { planFile } from "./plan.ts";
 
 if (!process.argv[2] || process.argv.includes("--help")) {
   console.log(
@@ -46,8 +47,8 @@ if (!process.argv[2] || process.argv.includes("--help")) {
               answer: await session.predict(decodeAction(line.slice(10)), abort.signal),
             }),
           );
-        } else if (/^\/(?:edit|work|return)\b/.test(line)) {
-          const match = /^\/(edit|work|return)\s+(\S+)\s+(.+)$/.exec(line);
+        } else if (/^\/(?:edit|work|return|plan)\b/.test(line)) {
+          const match = /^\/(edit|work|return|plan)\s+(\S+)\s+(.+)$/.exec(line);
           if (!match)
             throw Error(
               "Usage: /edit PATH REQUEST, /work PATH REQUEST, or /return PATH FUNC REQUEST",
@@ -75,7 +76,12 @@ if (!process.argv[2] || process.argv.includes("--help")) {
           };
           const [, command, path, request] = match;
           let result;
-          if (command === "return") {
+          if (command === "plan") {
+            result = await planFile(session, path!, request!, { signal: abort.signal });
+            if (result.prediction)
+              console.log(JSON.stringify({ kind: "prediction", ...result.prediction }));
+            for (const event of result.events) show(event);
+          } else if (command === "return") {
             const args = /^(\S+)\s+(.+)$/.exec(request!);
             if (!args) throw Error("Usage: /return PATH FUNC REQUEST");
             result = await editReturn(session, path!, args[1]!, args[2]!, abort.signal, show);

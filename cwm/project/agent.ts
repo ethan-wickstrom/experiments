@@ -10,9 +10,10 @@ export type Generate = (
   signal?: AbortSignal,
   grammar?: ReturnType<typeof permittedActions>["grammar"],
   verbatim?: boolean,
+  sampling?: { temperature: number; seed: number },
 ) => Promise<Completion>;
 export function endpoint(url: string, model: string): Generate {
-  return async (prompt, limit, signal, grammar, verbatim = false) => {
+  return async (prompt, limit, signal, grammar, verbatim = false, sampling) => {
     const timeout = AbortSignal.timeout(180000);
     const response = await fetch(url, {
       method: "POST",
@@ -21,7 +22,8 @@ export function endpoint(url: string, model: string): Generate {
         model,
         messages: [{ role: "user", content: prompt }],
         chat_template_kwargs: { enable_thinking: false },
-        temperature: 0,
+        temperature: sampling?.temperature ?? 0,
+        ...(sampling ? { seed: sampling.seed } : {}),
         max_tokens: limit,
         stream: false,
         ...(grammar ? { response_format: { type: "json_object", schema: grammar } } : {}),

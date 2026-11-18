@@ -63,7 +63,7 @@ const cases = [
   },
 ] as const;
 
-function queries() {
+export function queries() {
   return cases.flatMap((c) =>
     c.goals.flatMap((goal, spec) => {
       const path = c.name + ".ts";
