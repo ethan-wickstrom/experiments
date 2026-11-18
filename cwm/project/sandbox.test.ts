@@ -7,6 +7,18 @@ import { runTests, testObservation } from "./sandbox.ts";
 
 const exec = promisify(execFile);
 
+test.skipIf(!process.env.CWM_TEST_DOCKER)(
+  "verbose tests retain their exit and final diagnostic",
+  async () => {
+    const source =
+      'import {test,expect} from "bun:test";test("verbose",()=>{console.log("x".repeat(300000));expect(1).toBe(2)});';
+    const run = await Effect.runPromise(runTests(new Map([["log.test.ts", source]])));
+    expect(run.exit).toBe(1);
+    expect(run.stdout).toMatch(/^\[omitted \d+ bytes\]/);
+    expect(testObservation(run)).toContain("Expected: 2");
+  },
+);
+
 test("failure history keeps assertion values while the raw run retains full diagnostics", () => {
   const run = {
     exit: 1,
