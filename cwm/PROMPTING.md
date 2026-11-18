@@ -64,7 +64,7 @@ PY
 bun run project "$demo" --local palette.ts
 ```
 
-Export the same `CWM_PYTHON` and `CWM_MODEL_PATH` as above before starting the command. In the verified training replay, Bun initially received `" red "` where the assertion expected `"RED"`. The joint checkpoint replaced line range `[3, 4)` with `return s.trim().toUpperCase();` at the original indentation. The persisted file passed Bun. A subsequent test forecast from that checkpoint returned `pass` with the earlier actual result visible in history. For forecasts made before observing the candidate outcome and coding attempts on unfamiliar projects, see the [independent measurements](bench/development/evaluation.md).
+Export the same `CWM_PYTHON` and `CWM_MODEL_PATH` as above before starting the command. In the verified training replay, Bun initially received `" red "` where the assertion expected `"RED"`. The joint checkpoint replaced line range `[3, 4)` with `return s.trim().toUpperCase();` at the original indentation. The persisted file passed Bun. A subsequent test forecast from that checkpoint returned `pass` with the earlier actual result visible in history. A forecast can also be the first command in local mode and sees the current source. On six independent requests the joint editor changed three workspaces and passed zero cumulative hidden checks. [Independent measurements](bench/development/evaluation.md#multi-file-editing-with-a-learned-span)
 
 ## Write and revise a function
 

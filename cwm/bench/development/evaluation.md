@@ -42,6 +42,22 @@ Freeze two diagnostics before loading either trained line-editor checkpoint. Sco
 
 A retrospective debugger check groups real transitions with the same current pause, two distinct source programs and different oracle successors. Two such pairs occur in the frozen ten transitions. In both pairs the joint editor greedily returned the same next row under either program. With both actual successors supplied as alternatives for teacher-forced scoring, neither the base nor the joint editor reversed its preference correctly on either pair. The source and current row are the only model inputs. Scores include every target token and the native stop. [Scorer](local_edit/source_pairs.py) · [Base](results/source-pairs-base.json.gz) · [Joint](results/source-pairs-trained.json.gz)
 
+The two trained arms used the same 1,792 edit updates with identical initial weights, cached features, draws and learning rates. Joint training added 128 forecast and 128 debugger updates. The table reports the final frozen checkpoints. A relocation pair requires choosing the correct span in both source layouts. An execution rollout begins from a real function entry and feeds every predicted successor back to the model.
+
+| Arm       | Correct locations / 48 choices | Correct relocation pairs / 24 | Passing candidate preferred / 12 | Token NLL on V8 pauses | Legal V8 rows / 10 | Exact next rows / 10 | Exact rollouts / 4 |
+| --------- | -----------------------------: | ----------------------------: | -------------------------------: | ---------------------: | -----------------: | -------------------: | -----------------: |
+| Base      |                             22 |                             1 |                                7 |                  1.339 |                  0 |                    0 |                  0 |
+| Edit-only |                             28 |                             6 |                                7 |                  3.238 |                  0 |                    0 |                  0 |
+| Joint     |                             28 |                             5 |                                7 |                  0.595 |                 10 |                    1 |                  0 |
+
+All three preferred the passing candidate under both reversed requirements in 1/6 families and got 12/24 pass/fail labels correct. Every arm missed all four actual changes of local values. The edit-only arm also missed both retrospective debugger source pairs. Adding execution examples recovered valid debugger output after edit training. The measured gain stops short of predicting the effects of the assignments in these programs. [Base](results/world-base.json.gz) · [Edit-only](results/world-edit-only.json.gz) · [Joint](results/world-trained.json.gz)
+
+## Multi-file editing with a learned span
+
+Three independently authored projects each received an initial request and a follow-up on the model's resulting workspace. The base produced no accepted changes, the edit-only model changed 5/6 workspaces, and the joint model changed 3/6. All three solved 0/6. The edit-only model passed one visible check by duplicating a requested-language lookup. An independent case where the language was missing required falling back to a different tag and failed. The two adapters selected identical ranges on all three first turns and matched the reference on one. [Free-location transcripts and hybrid checks](local-external/README.md)
+
+In a separate intervention the evaluator gave each adapter the correct range and canonical predecessor on every turn. The current reference replacement and hidden tests stayed outside the FILL prompt. The joint arm generated two valid changed files, and the edit-only arm generated four. Both still solved 0/6. Some earlier behaviors survived in the follow-ups, but neither arm passed a hidden suite for the new requirement. This identifies replacement generation as a remaining obstacle even with location and prior project state supplied. [Fixed-location prompts, edits and outcomes](local-external/oracle-results/README.md)
+
 ## Reproduce
 
 Build the sandbox from the project root as in the [project guide](../../PROMPTING.md#work-on-a-project). From this benchmark directory, start one b6602 server per arm in turn. Set `BASE_GGUF` to the pinned Q8_0 and `ARM` to A, B or C. Use a fresh result directory for each run.
