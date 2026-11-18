@@ -66,7 +66,7 @@ export class ProjectSession {
   readonly history: Event[] = [];
   private tested = false;
   private needsTest = false;
-  private readonly read = new Set<string>();
+  private readonly read = new Map<string, string>();
   readonly project: Workspace;
   readonly generate: Generate;
   readonly test: (files: ReadonlyMap<string, string>, signal?: AbortSignal) => Promise<ToolRun>;
@@ -86,6 +86,9 @@ export class ProjectSession {
   get untestedChanges() {
     return this.needsTest;
   }
+  get observedFiles(): ReadonlyMap<string, string> {
+    return this.read;
+  }
   async begin(goal: string) {
     if (!goal.trim()) throw Error("Expected a project request");
     await this.project.refresh?.();
@@ -94,18 +97,22 @@ export class ProjectSession {
     this.history.push({ user: goal });
   }
 
-  async act(action: Exclude<Action, { op: "done" }>, signal?: AbortSignal) {
+  async act(
+    action: Exclude<Action, { op: "done" }>,
+    signal?: AbortSignal,
+    observeTest = testObservation,
+  ) {
     let run: ToolRun | undefined;
     let observed: string;
     if (action.op === "test") {
       run = await this.test(this.project.files, signal);
-      observed = testObservation(run);
+      observed = observeTest(run);
       this.tested = true;
       this.needsTest = false;
     } else if (!sourcePath(action.path)) observed = "rejected";
     else if (action.op === "read") {
       const text = this.project.files.get(action.path);
-      if (text !== undefined) this.read.add(action.path);
+      if (text !== undefined) this.read.set(action.path, text);
       observed = text ?? "rejected";
     } else if (
       !/\.(?:[cm]?ts|tsx)$/i.test(action.path) ||
@@ -122,7 +129,7 @@ export class ProjectSession {
         this.needsTest = true;
       }
       this.project.files.set(action.path, action.text);
-      this.read.add(action.path);
+      this.read.set(action.path, action.text);
       observed = "written";
     }
     this.history.push({ action, observed });

@@ -6,6 +6,16 @@ export const DECIDE =
 export type Source = { path: string; text: string };
 export type Status = "unread" | "read" | "written" | "pass" | "fail";
 
+/** C2's bounded visible-test observation in history; decision rows carry only its status. */
+export function observation(run: { exit: number; stderr: string }) {
+  if (!run.exit) return "pass";
+  const diagnostic = run.stderr
+    .split("\n")
+    .filter((s) => /^(Expected|Received):/.test(s))
+    .join("\n");
+  return "fail\n" + (diagnostic || "behavior check failed").slice(0, 240);
+}
+
 /** Both transformations operate inside JSON strings and preserve JSON.parse. */
 export function jsonState(value: object) {
   return JSON.stringify(value)

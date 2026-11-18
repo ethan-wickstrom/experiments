@@ -154,3 +154,44 @@ test("reading after a factorized edit preserves the pending test across turns", 
   expect(session.untestedChanges).toBe(false);
   expect(replies).toEqual([]);
 });
+
+test("aligned work keeps unread files private after a test and rejects unread replacement before generation", async () => {
+  const files = new Map([
+    ["a.ts", "rejected"],
+    ["a.test.ts", "test file bytes"],
+  ]);
+  const replies = ["read", "done", "test", "edit"];
+  const session = new ProjectSession(
+    { files },
+    async () => answer(replies.shift()!),
+    async () => ({ exit: 1, stderr: "stack dump", stdout: "Expected: misleading stdout" }),
+  );
+  expect((await workFile(session, "a.ts", "read this")).stop).toBe("done");
+  const second = await workFile(session, "a.ts", "revise it");
+  expect(second.stop).toBe("rejected");
+  expect(second.events).toHaveLength(2);
+  for (const event of second.events)
+    expect(JSON.parse(event.request.split("\n")[1]!).files).toEqual([]);
+  expect(second.events[0]).toMatchObject({
+    observed: "fail\nbehavior check failed",
+    run: { stderr: "stack dump", stdout: "Expected: misleading stdout" },
+  });
+  expect(second.events[1]!.observed).toBe("rejected");
+  expect(files.get("a.ts")).toBe("rejected");
+  expect(replies).toHaveLength(0);
+});
+
+test("the historical full-context policy still sees the project at unread and requests rejected source", async () => {
+  const text = "export const value=1;";
+  const files = new Map([["a.ts", text]]);
+  const replies = ["edit", "export const value=2;"];
+  const session = new ProjectSession({ files }, async () => answer(replies.shift()!));
+  const result = await workFile(session, "a.ts", "revise", { visibility: "full-context" });
+  expect(result.stop).toBe("rejected");
+  expect(result.events).toHaveLength(2);
+  expect(JSON.parse(result.events[0]!.request.split("\n")[1]!)).toMatchObject({
+    status: "unread",
+    files: [{ path: "a.ts", text }],
+  });
+  expect(files.get("a.ts")).toBe(text);
+});

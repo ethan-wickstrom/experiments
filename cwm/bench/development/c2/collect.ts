@@ -7,7 +7,8 @@ import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
 import libraries from "./libraries.json";
 import { FORECAST, type Event, type Action } from "../../../project/protocol.ts";
-import { edit, decide, jsonState, type Source } from "./wire.ts";
+import { edit, decide, jsonState, observation, type Source } from "./wire.ts";
+export { observation } from "./wire.ts";
 
 type Project = {
   name: string;
@@ -45,14 +46,6 @@ function file(p: Project, body: string, index: number) {
     default:
       return `import { edition } from "./meta";\nexport { edition };\n\nexport function ${fn} {\n${lines}\n}\n`;
   }
-}
-export function observation(t: Trial) {
-  if (!t.exit) return "pass";
-  const diag = t.stderr
-    .split("\n")
-    .filter((s) => /^(Expected|Received):/.test(s))
-    .join("\n");
-  return "fail\n" + (diag || "behavior check failed").slice(0, 240);
 }
 export function history(ep: Episode) {
   const events: Event[] = [...ep.prefix, { user: ep.goal }];
