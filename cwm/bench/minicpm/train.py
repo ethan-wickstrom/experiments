@@ -1,6 +1,7 @@
 """CPU LoRA fitting with an exact frozen-prefix cache for supervised target tokens."""
 
 import argparse
+from pathlib import Path
 
 import torch
 from peft import LoraConfig, get_peft_model
@@ -44,7 +45,7 @@ def cache_targets(base, tok, rows):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", default=ADAPTER, type=type(ADAPTER))
+    parser.add_argument("--out", default=ADAPTER, type=Path)
     args = parser.parse_args()
     if args.out.exists():
         parser.error("--out must be a fresh path")
