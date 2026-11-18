@@ -5,7 +5,7 @@ import sys
 
 import torch
 from transformers import GenerationConfig
-from backbone import HERE, chat_ids, load
+from backbone import HERE, REVISION, chat_ids, load
 from model import adapted
 from provenance import file_hash
 from wire import inspect_request, lines, splice, user
@@ -45,6 +45,10 @@ class Editor:
         if arm != "base":
             release = HERE / ("model" if arm == "trained" else "edit-only")
             pins = json.loads((release / "provenance.json").read_text())
+            if (pins["arm"], pins["revision"], set(pins["files"])) != (
+                arm, REVISION, {"fit.json","peft/adapter_config.json","peft/adapter_model.safetensors"}
+            ):
+                raise ValueError("Wrong adapter release manifest")
             for name, sha in pins["files"].items():
                 if file_hash(release/name) != sha:
                     raise ValueError(f"Changed local-edit artifact {name}")
