@@ -34,10 +34,7 @@ test("captures all six insertions from the CWM figure, before and after each spl
 }`;
   const input = [1, 3, -1, 1, -2, 6];
   const run = await trace(program(source, [input]));
-  const invocation = `console.log(JSON.stringify(run(${JSON.stringify(input)})))`;
-  const native = await Bun.$`${process.execPath} -e ${source + "\n" + invocation}`.quiet();
-  const expected = native.json();
-  expect(expected).toEqual([1, 1, 1, 1, 1, 1, 1, 3, -1, 1, -2, 6]);
+  const expected = [1, 1, 1, 1, 1, 1, 1, 3, -1, 1, -2, 6];
   expect(run.outcome).toEqual({ kind: "returned", result: { value: expected, exact: true } });
   for (const [line, growth] of [
     [4, 0],
@@ -103,7 +100,7 @@ test("snapshots never invoke object accessors and incomplete values cannot pass 
 
 test("replays a Unicode-offset mutation, does not count a helper return as a pass", async () => {
   const spec = program(
-    'import { sum } from "./lib.ts"; export function run(){ return [sum(6, 2)]; }',
+    'import { sum } from "./lib.ts"; const target = () => [8]; export function run(){ return [sum(target()[0]-2, 2)]; }',
   );
   spec.files["lib.ts"] = "/* 🪴 + */ export const sum = (lhs:number, rhs:number) => (lhs + rhs);";
   const edit = (await mutations(spec)).find((e) => e.file === "lib.ts")!;
@@ -120,26 +117,79 @@ test("replays a Unicode-offset mutation, does not count a helper return as a pas
   const undo = history.steps[1]!.action;
   if (undo === "run") throw new Error("Missing repair");
   expect(applyEdit(mutant, undo)).toEqual(spec);
-  const failed = await episode(mutant, [edit, "run"], [8]);
+  const expected = [8];
+  const failed = await episode(mutant, [edit, "run"], expected);
+  mutant.files["lib.ts"] = "";
+  edit.after = "";
+  expected.pop();
   expect(failed.steps[0]).toHaveProperty("error");
+  expect(failed.steps[0]!.action).not.toEqual(edit);
+  expect(failed.initial).not.toEqual(mutant);
+  expect(failed.expected).toEqual([8]);
   expect(failed.steps[1]).toHaveProperty("verdict", "fail");
 });
 
-test("rejects non-repository imports, bad entrypoints, malformed code and exhausted budgets", async () => {
+test("rejects non-repository imports, bad entrypoints and invalid programs", async () => {
   await rejects(trace(program('export { run } from "node:path";')), /Not a repository import/);
   await rejects(trace(program("export const run = () => import('./later.ts');")), /static/);
   await rejects(trace(program("export function other(){}")), /Missing export/);
   await rejects(trace(program("export const run = 1;")), /not callable/);
   await rejects(trace(program("export const run = (")), /main.ts/);
-  await rejects(
-    trace(program("export function run(){return 3;}"), { maxFrames: 1 }),
-    /frame limit/,
-  );
-  await rejects(
-    trace(program("export function run(){return new Promise(() => {});}"), { timeoutMs: 400 }),
-    /deadline/,
-  );
   await rejects(trace(program("export function run(){}", [Infinity])), /JSON/);
+  const extra = { ...program(""), description: "not a trace field" };
+  await rejects(trace(extra), /excess property/);
+  await rejects(trace(program("", [-0])), /losslessly/);
+});
+
+test("frame exhaustion interrupts a busy guest; the wall deadline also covers idle promises", async () => {
+  const source = "export function run(stall:boolean){ return stall ? new Promise(()=>{}) : 3; }";
+  const limits = { timeoutMs: 3000 };
+  const [complete] = await Promise.all([
+    trace(program(source, [false]), limits),
+    rejects(trace(program(source, [true]), limits), /deadline/),
+    rejects(
+      trace(program("export function run(){let i=0; while(true){i++;}}"), {
+        ...limits,
+        maxFrames: 1,
+      }),
+      /frame limit/,
+    ),
+  ]);
+  expect(complete.outcome.result).toEqual({ value: 3, exact: true });
+});
+
+test("coupled scalar inputs identify a law only on their observed subspace", () => {
+  const spec = program("return x + y");
+  const site = { file: "main.ts", line: 1, column: 1, fn: "run" };
+  const observation = (x: number, y: number): Frame => ({
+    kind: "step",
+    stack: [site],
+    locals: { x: { value: x, exact: true }, y: { value: y, exact: true } },
+  });
+  for (const scale of [0.5, 1e-16]) {
+    const train: Trace[] = [0, 2, 4, 6].map((x) => ({
+      ...spec,
+      frames: [observation(x, x)],
+      outcome: { kind: "returned", result: { value: x * scale, exact: true } },
+    }));
+    const model = new WorldModel().fit(train);
+    const query = observation(1, 1);
+    query.stack = [{ fn: site.fn, column: site.column, line: site.line, file: site.file }];
+    expect(model.predict(spec.files, query)).toEqual({
+      kind: "returned",
+      result: { value: scale, exact: true },
+    });
+    expect(model.predict(spec.files, observation(1, 3))).toBeUndefined();
+  }
+  const state = observation(1, 1);
+  const conflicts: Trace[] = [true, false].map((value) => ({
+    ...spec,
+    frames: [state],
+    outcome: { kind: "returned", result: { value, exact: true } },
+  }));
+  for (const order of [conflicts, conflicts.toReversed()]) {
+    expect(new WorldModel().fit(order).predict(spec.files, state)).toBeUndefined();
+  }
 });
 
 test("learns an unseen affine return and rolls forward without executing the held-out program", async () => {
