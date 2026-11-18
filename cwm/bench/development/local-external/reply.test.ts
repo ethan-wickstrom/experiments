@@ -31,4 +31,9 @@ test("response validation requires exact text, bounded lines and a parsable Type
     expect(check(change)).toMatchObject({ accepted: false, text: original });
   }
   expect(validate('{"stopped":false,"error":"capped"}', "lib.ts", original).edit).toBeNull();
+  expect(check({ stopped: false, start: 0, end: 1, error: "capped" })).toMatchObject({
+    accepted: false,
+    span: [0, 1],
+    edit: null,
+  });
 });

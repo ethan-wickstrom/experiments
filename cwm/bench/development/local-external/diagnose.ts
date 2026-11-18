@@ -100,6 +100,7 @@ for (const arm of ["base", "trained", "edit-only"]) {
         transcript: path,
         transcriptSha256: createHash("sha256").update(bytes).digest("hex"),
         beforeSha256: createHash("sha256").update(before).digest("hex"),
+        requestSha256: createHash("sha256").update(JSON.stringify(r.request)).digest("hex"),
         elapsedMs: r.elapsedMs,
         edit,
         accepted: result.accepted,
@@ -111,7 +112,12 @@ for (const arm of ["base", "trained", "edit-only"]) {
         solved: r.solved,
         diagnostics,
         hybridEligibility: reason,
-        exactSpan: eligible ? edit.start === ref.start && edit.end === ref.end : null,
+        samePredecessor: matches,
+        span: result.span,
+        exactSpan:
+          matches && result.span
+            ? result.span[0] === ref.start && result.span[1] === ref.end
+            : null,
         exactReplacement: eligible ? edit.replacement === ref.replacement : null,
         modelSpanPass: modelSpan?.pass ?? null,
         modelReplacementPass: modelReplacement?.pass ?? null,
