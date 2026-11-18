@@ -71,7 +71,7 @@ export async function workFile(
     if (
       event.reply.finish !== "stop" ||
       !text.trim() ||
-      /^\s*\x60{3}/m.test(text) ||
+      /^\s*\x60{3}/.test(text) ||
       parseSync(path, text).errors.length
     ) {
       onEvent?.(event);

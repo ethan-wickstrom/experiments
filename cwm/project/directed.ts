@@ -3,6 +3,20 @@ import { type ProjectSession, type TurnEvent } from "./agent.ts";
 import { projectJson, type Action } from "./protocol.ts";
 import { sourcePath } from "./workspace.ts";
 
+function replacement(path: string, reply: string) {
+  const valid = (source: string) => !!source.trim() && !parseSync(path, source).errors.length;
+  if (!/^\s*`{3}/.test(reply) && valid(reply)) return reply;
+  const opening = /^`{3}(?:typescript|ts)?[^\S\r\n]*\r?\n/m.exec(reply);
+  if (!opening) return;
+  const content = reply.slice(opening.index + opening[0].length);
+  for (const close of content.matchAll(/^`{3}[^\S\r\n]*\r?$/gm)) {
+    const source = content.slice(0, close.index);
+    if (!valid(source)) continue;
+    if (!/^`{3}/m.test(content.slice(close.index + close[0].length))) return source;
+    break;
+  }
+}
+
 /** The user selects the file. The same checkpoint supplies every byte of each replacement. */
 export async function editFile(
   session: ProjectSession,
@@ -41,14 +55,8 @@ export async function editFile(
       onEvent?.(event);
       return { stop: "incomplete", events };
     }
-    const fence = /^`{3}(?:typescript|ts)?[^\S\r\n]*\r?\n([\s\S]*?)^`{3}\s*$/m.exec(reply.text);
-    const text = fence?.[1] ?? reply.text;
-    if (
-      (reply.text.match(/^`{3}/gm)?.length ?? 0) > 2 ||
-      !text.trim() ||
-      text.includes("```") ||
-      parseSync(path, text).errors.length
-    ) {
+    const text = replacement(path, reply.text);
+    if (text === undefined) {
       onEvent?.(event);
       return { stop: "invalid", events };
     }

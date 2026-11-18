@@ -154,3 +154,20 @@ test("reading after a factorized edit preserves the pending test across turns", 
   expect(session.untestedChanges).toBe(false);
   expect(replies).toEqual([]);
 });
+
+test("Markdown inside valid source survives raw and single-block editing", async () => {
+  const text = "/* docs\n```ts\nconst x = 1;\n```\n*/\nexport const fence = '```';\n";
+  for (const wrapped of [true, false]) {
+    const files = new Map<string, string>();
+    const session = new ProjectSession(
+      { files },
+      async () => answer(wrapped ? "```ts\n" + text + "```" : text),
+      async () => ({ exit: 0, stdout: "", stderr: "1 pass" }),
+    );
+    const turn = wrapped
+      ? await editFile(session, "a.ts", "document it")
+      : await workFile(session, "a.ts", "document it", { sourceOnly: true });
+    expect(turn.stop).toBe("tested");
+    expect(files.get("a.ts")).toBe(text);
+  }
+});
