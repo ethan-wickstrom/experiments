@@ -93,20 +93,31 @@ async function collect(root: string, out: string, signal: AbortSignal) {
     };
     const read = async (path: string) =>
       policy({ op: "read", path }, await readFile(join(dir, path), "utf8"));
+    const trialWrite = async (text: string) => {
+      const candidate = write(text);
+      if (
+        !history.some((e) => "action" in e && e.action.op === "read" && e.action.path === source)
+      ) {
+        forecast(candidate, "rejected");
+        return;
+      }
+      const path = join(dir, source);
+      const saved = await readFile(path);
+      await writeFile(path, text);
+      try {
+        const oracle = await check(dir, signal);
+        forecast(candidate, oracle.exit ? "fail" : "pass", oracle);
+      } finally {
+        await writeFile(path, saved);
+      }
+    };
     for (const phase of [0, 1]) {
       const testText = tests(p, Boolean(phase));
       await writeFile(join(dir, checks), testText);
       const user = phase ? p.follow : p.request;
       raw({ type: "request", user, supplied: { [checks]: testText } });
       history.push({ user });
-      if (!phase) {
-        const candidate = write(initial);
-        // Replacing an existing unread file is rejected by the action contract.
-        assert(
-          !history.some((e) => "action" in e && e.action.op === "read" && e.action.path === source),
-        );
-        forecast(candidate, "rejected");
-      }
+      if (!phase) await trialWrite(initial);
       if ((index + phase) % 2 === 0) await read(checks);
       await read(source);
       const test = { op: "test" } as const;
@@ -116,15 +127,7 @@ async function collect(root: string, out: string, signal: AbortSignal) {
       policy(test, observed(before), before);
       const saved = await readFile(join(dir, source), "utf8");
       const good = fixture(p, phase ? p.final : p.first);
-      for (const text of [good, fixture(p, p.wrong), saved]) {
-        await writeFile(join(dir, source), text);
-        try {
-          const oracle = await check(dir, signal);
-          forecast(write(text), oracle.exit ? "fail" : "pass", oracle);
-        } finally {
-          await writeFile(join(dir, source), saved);
-        }
-      }
+      for (const text of [good, fixture(p, p.wrong), saved]) await trialWrite(text);
       await writeFile(join(dir, source), good);
       policy(write(good), "written");
       const after = await check(dir, signal);
@@ -149,11 +152,15 @@ if (import.meta.main) {
   const out = process.argv[2];
   if (!out) throw Error("Pass a fresh output directory");
   await mkdir(out);
+  const controller = new AbortController();
+  process.once("SIGINT", () => controller.abort());
+  process.once("SIGTERM", () => controller.abort());
   await Effect.runPromise(
     Effect.acquireUseRelease(
       Effect.tryPromise(() => mkdtemp(join(tmpdir(), "cwm-lib-"))),
       (dir) => Effect.tryPromise((signal) => collect(dir, out, signal)),
       (dir) => Effect.promise(() => rm(dir, { recursive: true, force: true })),
     ),
+    { signal: controller.signal },
   );
 }
