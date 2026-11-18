@@ -8,13 +8,19 @@ import { editFile } from "./directed.ts";
 import { editReturn } from "./return.ts";
 import { editBody } from "./body.ts";
 import { bodyEndpoint } from "./body-completion.ts";
-import { planFile } from "./plan.ts";
+import { openRanker, planFile } from "./plan.ts";
+import { spliceFile } from "./splice.ts";
+import { openLocalEditor, editLocal } from "./local.ts";
 
 if (!process.argv[2] || process.argv.includes("--help")) {
   console.log(
-    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /plan PATH REQUEST (two proposals with C2 ranking), /body PATH EXPORT|* REQUEST, /return PATH FUNC REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project.",
+    "Usage: bun run project DIRECTORY [--local PATH]\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /plan PATH REQUEST (two proposals with C2 ranking), /local PATH REQUEST, /splice PATH REQUEST, /body PATH EXPORT|* REQUEST, /return PATH FUNC REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project.",
   );
 } else {
+  const args = process.argv.slice(3);
+  if (args.length && (args.length !== 2 || args[0] !== "--local" || !args[1]))
+    throw Error("Usage: bun run project DIRECTORY [--local PATH]");
+  let focusedPath = args[1];
   const project = await openProject(resolve(process.argv[2]));
   const model = process.env.CWM_PROJECT_MODEL ?? "minicpm5-joint";
   const generate = endpoint(
@@ -26,6 +32,8 @@ if (!process.argv[2] || process.argv.includes("--help")) {
     throw Error("Expected CWM_PROJECT_FORMAT=project or c2");
   const session = new ProjectSession(project, generate, undefined, format);
   const abort = new AbortController();
+  const ranker = openRanker();
+  const localEditor = openLocalEditor(process.env.CWM_LOCAL_ARM);
   const lines = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -39,7 +47,10 @@ if (!process.argv[2] || process.argv.includes("--help")) {
   process.once("SIGINT", cancel);
   process.once("SIGTERM", cancel);
   try {
-    console.log("Project:", resolve(process.argv[2]), "  Model:", model);
+    const displayedModel = focusedPath
+      ? "local/" + (process.env.CWM_LOCAL_ARM ?? "trained")
+      : model;
+    console.log("Project:", resolve(process.argv[2]), "  Model:", displayedModel);
     lines.setPrompt("> ");
     if (process.stdin.isTTY) lines.prompt();
     for await (const line of lines) {
@@ -49,9 +60,28 @@ if (!process.argv[2] || process.argv.includes("--help")) {
           console.log(
             JSON.stringify({
               kind: "prediction",
-              answer: await session.predict(decodeAction(line.slice(10)), abort.signal),
+              answer: await session.predict(
+                decodeAction(line.slice(10)),
+                abort.signal,
+                focusedPath ? localEditor.forecast : generate,
+              ),
             }),
           );
+        } else if (
+          /^\/local\b/.test(line) ||
+          (focusedPath && line.trim() && !line.startsWith("/"))
+        ) {
+          let path = focusedPath;
+          let goal = line;
+          if (line.startsWith("/local")) {
+            const match = /^\/local\s+(\S+)\s+(.+)$/.exec(line);
+            if (!match) throw Error("Usage: /local PATH REQUEST");
+            path = match[1]!;
+            goal = match[2]!;
+          }
+          const result = await editLocal(session, localEditor.propose, path!, goal, abort.signal);
+          if (focusedPath) focusedPath = path;
+          console.log(JSON.stringify({ kind: "local", path, ...result }));
         } else if (/^\/body\b/.test(line)) {
           const match = /^\/body\s+(\S+)\s+(\S+)\s+(.+)$/.exec(line);
           if (!match) throw Error("Usage: /body PATH EXPORT|* REQUEST");
@@ -79,11 +109,11 @@ if (!process.argv[2] || process.argv.includes("--help")) {
               writes: result.writes,
             }),
           );
-        } else if (/^\/(?:edit|work|return|plan)\b/.test(line)) {
-          const match = /^\/(edit|work|return|plan)\s+(\S+)\s+(.+)$/.exec(line);
+        } else if (/^\/(?:edit|work|return|plan|splice)\b/.test(line)) {
+          const match = /^\/(edit|work|return|plan|splice)\s+(\S+)\s+(.+)$/.exec(line);
           if (!match)
             throw Error(
-              "Usage: /edit PATH REQUEST, /work PATH REQUEST, /plan PATH REQUEST, or /return PATH FUNC REQUEST",
+              "Usage: /edit PATH REQUEST, /work PATH REQUEST, /plan PATH REQUEST, /splice PATH REQUEST, or /return PATH FUNC REQUEST",
             );
           const show = (event: import("./agent.ts").TurnEvent) => {
             console.log(
@@ -108,8 +138,14 @@ if (!process.argv[2] || process.argv.includes("--help")) {
           };
           const [, command, path, request] = match;
           let result;
-          if (command === "plan") {
-            result = await planFile(session, path!, request!, { signal: abort.signal });
+          if (command === "splice") {
+            result = await spliceFile(session, path!, request!, { signal: abort.signal });
+            console.log(JSON.stringify({ kind: "splice", ...result }));
+          } else if (command === "plan") {
+            result = await planFile(session, path!, request!, {
+              signal: abort.signal,
+              choose: ranker.choose,
+            });
             if (result.prediction)
               console.log(JSON.stringify({ kind: "prediction", ...result.prediction }));
             for (const event of result.events) show(event);
@@ -147,6 +183,7 @@ if (!process.argv[2] || process.argv.includes("--help")) {
     }
   } finally {
     lines.close();
+    await Promise.all([ranker.close(), localEditor.close()]);
     process.off("SIGINT", cancel);
     process.off("SIGTERM", cancel);
   }

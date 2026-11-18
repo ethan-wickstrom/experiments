@@ -29,12 +29,24 @@ Type a goal such as `Make the board restore its saved lanes from the local JSON 
 
   For this command, serve the [pinned F16 release and C2 adapter](bench/development/c2/README.md) with b6602, `--jinja -c 4096 --alias minicpm5-joint-c2`. Set `CWM_PROJECT_MODEL=minicpm5-joint-c2` and `CWM_PROJECT_URL=http://127.0.0.1:8080/v1/chat/completions` when launching the CLI. The command calls the llama-server template, tokenizer and raw completion endpoints on that origin. Import `editBody` from `project/body.ts` and `bodyEndpoint` from `project/body-completion.ts` to use the same operation with a `ProjectSession`.
 
+- `/splice PATH REQUEST` samples localized TypeScript expression changes and tests each distinct valid candidate on a private workspace copy. It persists the first changed candidate passing the visible tests, then tests the persisted file. [Supported locations and budgets](bench/development/splice-results/PROTOCOL.md)
 - `/return PATH EXPORT REQUEST` asks for a replacement expression in a named function containing a single return.
 - `/plan PATH REQUEST` samples a greedy and a seeded alternative with C2. For two distinct parseable proposals it runs the local learned head. Set `CWM_PYTHON` to the pinned training interpreter and `CWM_MODEL_PATH` to the verified Transformers snapshot. The selected write runs in the real sandbox. Set `CWM_PROJECT_FORMAT=c2` when using C2 for project forecasts. [Ranker setup](bench/development/ranking/README.md)
 - `/forecast {"op":"test"}` asks the same checkpoint to predict the current tests. A candidate `write` asks about replacing a file and then running the tests. This command neither writes nor executes.
 - `/quit` closes the project session. The server in the first terminal has its own lifetime. Set `CWM_PROJECT_URL` and `CWM_PROJECT_MODEL` to address another local instance.
 
 The sandbox sends project bytes into a fresh unprivileged container with no host mounts or network. It provides Bun and the installed Effect package. The workspace supports up to 128 UTF-8 source, JSON and Markdown files, each at most 64 KiB. Writes are limited to TypeScript. A model's `done` and a visible test pass each have their own meaning. Check the changed source and independent behavior before relying on it. [Held project transcripts and limits](bench/development/evaluation.md)
+
+## Use the learned line editor
+
+With the [pinned Python environment and Transformers snapshot](bench/development/local_edit/README.md), select an existing implementation file in a small project and start typing requests. This mode needs the Bun Docker image and loads the checkpoint once on CPU.
+
+```sh
+CWM_PYTHON=/path/to/training/bin/python CWM_MODEL_PATH=/path/to/MiniCPM5-1B \
+  bun run project /path/to/project --local src/settings.ts
+```
+
+A request runs the visible tests and passes their diagnostic, the current files and the goal to MiniCPM5. The model chooses the line boundaries and writes the replacement. The host independently reconstructs the splice, parses the complete file and tests each changed write. Follow-ups start from the actual edited project. Use `/local src/other.ts REQUEST` to switch focus. Use `/forecast {"op":"test"}` to query the same loaded weights about the consequences without executing the tests. A forecast requires a stopped, recognized answer. The default arm is `trained`. Set `CWM_LOCAL_ARM=base` or `CWM_LOCAL_ARM=edit-only` for the controls. Other explicit editing commands retain their documented model endpoints.
 
 ## Write and revise a function
 

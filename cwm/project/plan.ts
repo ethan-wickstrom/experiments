@@ -1,10 +1,10 @@
-import { fileURLToPath } from "node:url";
 import { Schema } from "effect";
 import { edit, type Source } from "../bench/development/c2/wire.ts";
 import { type ProjectSession, type TurnEvent } from "./agent.ts";
 import { type Action } from "./protocol.ts";
 import { completeSource } from "./work.ts";
 import { sourcePath } from "./workspace.ts";
+import { pythonModel } from "./model-process.ts";
 
 type Write = Extract<Action, { op: "write" }>;
 export type Pair = { goal: string; path: string; files: Source[]; candidates: [Write, Write] };
@@ -13,31 +13,25 @@ const decision = Schema.Struct({
   choice: Schema.Union([Schema.Literal(0), Schema.Literal(1), Schema.Null]),
 });
 const result = Schema.Union([decision, Schema.Struct({ error: Schema.String })]);
-const decode = Schema.decodeUnknownSync(Schema.fromJsonString(result));
+const decode = Schema.decodeUnknownSync(result);
 type Decision = typeof result.Type;
 type Rank = (pair: Pair, signal?: AbortSignal) => Promise<Decision>;
 
-/** One local model load can score a batch. Only visible files and proposed writes cross stdin. */
+export function openRanker(arm = "C2") {
+  const server = pythonModel(new URL("../bench/development/ranking/rank.py", import.meta.url), arm);
+  const choose: Rank = async (pair, signal) => decode(await server.request(pair, signal));
+  return { choose, close: server.close };
+}
+
+/** Only visible files and proposed writes cross stdin. */
 export async function rankPairs(pairs: Pair[], arm = "C2", signal?: AbortSignal) {
-  if (!pairs.length) return [];
-  const script = fileURLToPath(new URL("../bench/development/ranking/rank.py", import.meta.url));
-  const child = Bun.spawn([process.env.CWM_PYTHON ?? "python", script, "--serve", "--arm", arm], {
-    stdin: new Blob(pairs.map((pair) => JSON.stringify(pair) + "\n")),
-    stdout: "pipe",
-    stderr: "inherit",
-    signal,
-    timeout: 600000,
-    killSignal: "SIGKILL",
-  });
+  const server = openRanker(arm);
   try {
-    const raw = await new Response(child.stdout).text();
-    if ((await child.exited) !== 0) throw Error("Consequence ranker failed");
-    const lines = raw.trimEnd().split("\n");
-    if (lines.length !== pairs.length) throw Error("Incomplete ranking batch");
-    return lines.map((line) => decode(line));
+    const answers = [];
+    for (const pair of pairs) answers.push(await server.choose(pair, signal));
+    return answers;
   } finally {
-    child.kill();
-    await child.exited;
+    await server.close();
   }
 }
 

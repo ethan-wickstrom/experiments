@@ -28,6 +28,16 @@ Across five fresh TypeScript execution boundaries, full and reconstructible-delt
 
 The second training comparison increased the final-layer rank to 32, trained on raw file and decision tokens, and balanced opposing write forecasts. Its independently frozen project evaluation separates action selection and raw source generation. [Training and checkpoints](c2/README.md) · [Blind comparison](c2-results/README.md)
 
+## Learned ranking and proposal coverage
+
+On the six paired reversal families, the [A head](results/rank-A.json.gz) ranked the passing candidate first on 9/12 requests and both forks of 3/6 families. [B2](results/rank-B2.json.gz) and [C2](results/rank-C2.json.gz) each ranked 8/12 requests and both forks of 2/6 families correctly. On three original project pairs, A scored 1/3, B2 and C2 each scored 0/3. All 45 choices agreed after swapping the candidate order. Each pair had one actual Bun pass and one failure.
+
+On the original six cumulative requests C2 produced seven complete parseable files in twelve attempts. None passed all the independent checks for its turn. On five turns only one proposal survived parsing and stop validation. On the remaining turn both candidates failed. Ranking could not have yielded a passing edit from these samples. The function-body experiment also solved 0/6 across each of its three arms. [Full-file proposals and individual grades](results/plan-C2.json.gz) · [Body-level observations and costs](body-results/README.md)
+
+## Independent diagnostics for the line editor
+
+Freeze two diagnostics before loading either trained line-editor checkpoint. Score the original 24 candidate forecasts, ten individual V8 pauses and four self-fed rollouts on the exact same weights used for editing. Separately, for each of the 24 local held requests, add two comment lines either before or after its module. This moves the required span by two lines while preserving both candidate coordinates, the requested behavior and the other model inputs. Score the joint token log probability of each complete coordinate string and its native stop under each layout. Both locations are legal in both versions. A pair succeeds only if the model's preference reverses in the correct direction. Each family contributes six requests. This measures a forced choice between two spans. The independent external evaluator measures unconstrained location choice and actual behavior. [Consequence and rollout scoring](local_edit/world_score.py) · [Location intervention](local_edit/position_score.py)
+
 ## Reproduce
 
 Build the sandbox from the project root as in the [project guide](../../PROMPTING.md#work-on-a-project). From this benchmark directory, start one b6602 server per arm in turn. Set `BASE_GGUF` to the pinned Q8_0 and `ARM` to A, B or C. Use a fresh result directory for each run.
@@ -46,7 +56,15 @@ bun projects-evaluate.ts "$url" project-eval "$out/policy.json.gz" policy
 bun projects-evaluate.ts "$url" project-eval "$out/directed.json.gz" directed
 bun action-consequences.ts "$url" project-eval "$out/boundary.json.gz"
 bun transfer.ts "$url" project-eval "$out/transfer.json"
+# With CWM_MODEL_PATH and CWM_PYTHON from the pinned training setup
+for arm in A B2 C2; do bun rank-evaluate.ts "$arm" "$out/rank-$arm.json.gz"; done
+# Point url and alias at the F16 C2 server for the proposal run.
+bun plan-evaluate.ts "$url" project-eval "$out/plan.json.gz"
 # With the verified FP32 snapshot and Python environment from the training guide
 bun reversals.ts "$out/reversals.json.gz"
 bun reversals.ts "$out/reversals-2.json.gz" B2 C2
+for arm in base trained edit-only; do
+  "$CWM_PYTHON" local_edit/world_score.py "$arm" "$out/world-$arm.json.gz"
+  "$CWM_PYTHON" local_edit/position_score.py "$arm" "$out/position-$arm.json.gz"
+done
 ```

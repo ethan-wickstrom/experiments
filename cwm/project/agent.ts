@@ -142,7 +142,7 @@ export class ProjectSession {
     return { observed, run };
   }
   // A write candidate asks about applying the replacement followed by the project's tests.
-  async predict(candidate: Action, signal?: AbortSignal) {
+  async predict(candidate: Action, signal?: AbortSignal, generate = this.generate) {
     if (candidate.op !== "write" && candidate.op !== "test")
       throw Error("Forecast a write followed by tests, or the current tests");
     const current = (await this.project.snapshot?.()) ?? this.project.files;
@@ -154,7 +154,7 @@ export class ProjectSession {
     const prompt = wire(files, this.history, candidate, changed.length ? changed : undefined);
     if (Buffer.byteLength(prompt) > 32000)
       throw Error("Forecast exceeds the project context budget");
-    const reply = await this.generate(prompt, 8, signal);
+    const reply = await generate(prompt, 8, signal);
     return {
       ...reply,
       prediction:
