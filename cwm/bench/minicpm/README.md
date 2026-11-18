@@ -1,11 +1,12 @@
 # MiniCPM5 trained on TypeScript debugger pauses
 
-A rank-eight LoRA on [openbmb/MiniCPM5-1B](https://huggingface.co/openbmb/MiniCPM5-1B/tree/ac83f813ba7da263c51a9f3ec37c2072597e54af) produced 25 well-formed forecasts and one completely correct next pause on 34 held-out transitions. The unmodified release produced zero well-formed forecasts under the same prompt. Both missed the new local values on all 12 writes.
+A rank-eight LoRA on [openbmb/MiniCPM5-1B](https://huggingface.co/openbmb/MiniCPM5-1B/tree/ac83f813ba7da263c51a9f3ec37c2072597e54af) produced one completely correct next pause on 34 held-out transitions. Of its 25 outputs within the CSV and numeric domain, six pointed outside the supplied source. The unmodified release produced zero rows within the domain under the same prompt. Both missed the new local values on all 12 writes.
 
 | Fresh-source metric                 | Original weights | Trace-trained LoRA |
 | ----------------------------------- | ---------------: | -----------------: |
 | Complete next frame                 |             0/34 |               1/34 |
-| Valid row                           |             0/34 |              25/34 |
+| CSV and numeric domain              |             0/34 |              25/34 |
+| Within domain and inside source     |             0/34 |              19/34 |
 | Event, line and column together     |             0/34 |              10/34 |
 | Both locals                         |             0/34 |               3/34 |
 | Both locals when either changed     |             0/12 |               0/12 |
@@ -28,7 +29,7 @@ python prompt.py --text 'Write a TypeScript function that sums two integers.' --
 In a free-form smoke test, the adapter answered this request with a typed `sumIntegers` function returning `a + b`. For a next-pause prompt, supply the exact source bytes and current observation. The expected format is `S,line,column,x,y` or `R,line,column,x,y,returnValue`. The command prints the model's greedy completion. It does not execute the file. Add `--base` to use the original weights.
 
 ```sh
-printf '%s\n' 'export function run(x:number, y:number) {' 'x = x + y;' 'return x - y;' '}' > /tmp/mini-example.ts
+printf '%s\n%s\n%s\n%s' 'export function run(x:number, y:number) {' 'x = x + y;' 'return x - y;' '}' > /tmp/mini-example.ts
 python prompt.py --source /tmp/mini-example.ts --current 'S,2,1,2,3'
 ```
 
@@ -63,10 +64,13 @@ The trainable matrices modify layer 23's MLP down projection, with 49,152 traina
 ```sh
 python train.py --out /tmp/fresh-mini-adapter
 python score.py held.jsonl.gz --adapter /tmp/fresh-mini-adapter > /tmp/mini-scores.json
-python -c 'import json; d=json.load(open("/tmp/mini-scores.json")); print({k:(v["counts"],v["nll"]) for k,v in d.items()})'
+python -c 'import json; d=json.load(open("/tmp/mini-scores.json")); print({k:(d[k]["counts"],d[k]["nll"]) for k in ("base","adapted")})'
+python -m unittest test_integrity
 ```
 
-The scorer runs both models on identical source-disjoint queries. Both use the model's chat template with thinking disabled, a maximum of 32 new tokens, and the full vocabulary. Exact match uses the complete decoded response after stripping surrounding whitespace. Invalid rows earn zero for field accuracy. Token NLL scores the true row and end token conditioned on their true prefix. [Recorded scores](scores.json.gz) include every generated string, target, current row, source digest and count.
+The scorer runs both models on identical source-disjoint queries. Both use the model's chat template with thinking disabled, a maximum of 32 new tokens, and the full vocabulary. Exact match uses the complete decoded response after stripping surrounding whitespace. The `valid` count checks only CSV structure and the numeric domain. The `inside_source` diagnostic additionally requires the coordinate to name a UTF-16 code unit in the supplied source. Breakpoint reachability requires a separate test. Rows outside the CSV or numeric domain earn zero for field accuracy. Token NLL scores the true row and end token conditioned on their true prefix. [Recorded scores](scores.json.gz) include every generated string, target, current row, source digest and count.
+
+Before fitting or scoring, the official entry points verify the SHA-256 of the complete uncompressed training tape (`96c458b2c043df456f0db53129d51beaedfed0b5c6164f5d6a2039b87d9972fb`). Scoring also requires the exact held tape (`98c719f0deccac27a242ee5ad52c0ab924d15895512cb877b2632bf7017024c7`). These digests cover every byte of source, frame, outcome and record order. The [training corpus revision](https://github.com/ethan-wickstrom/experiments/commit/bdca8db4ebc4cda7b5dd1cb64378eb8f23876db0) and [frozen held-source manifest](https://github.com/ethan-wickstrom/experiments/commit/1044b99) identify their origin. Fitting and scoring verify any local base snapshot against the release digests. The score report identifies the exact adapter weights and config used, including when a separately reproduced adapter is supplied. Grading and frame projection require safe integers, positive coordinates and canonical decimal output spelling. Malformed rows receive zero partial credit even if their site or locals match.
 
 To regenerate the fresh traces, install the CWM dependencies as described in the [project README](../../README.md), then run the following with Bun 1.4.4 and Node 24.19.0 on PATH:
 

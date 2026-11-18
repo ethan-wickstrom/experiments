@@ -8,6 +8,7 @@ from peft import LoraConfig, get_peft_model
 from torch.nn.functional import cross_entropy
 
 from model import ADAPTER, MODEL_ID, REVISION, TRAIN, chat_ids, examples, load, prompt, target_ids
+from provenance import TRAIN_SHA
 
 
 def encode_example(tok, row):
@@ -49,9 +50,9 @@ def main():
     args = parser.parse_args()
     if args.out.exists():
         parser.error("--out must be a fresh path")
-    base, tok = load()
+    rows = examples(TRAIN, expected_sha=TRAIN_SHA)
+    base, tok = load(verify_local=True)
     torch.manual_seed(17)
-    rows = examples(TRAIN)
     features, residuals, labels = cache_targets(base, tok, rows)
     print(f"Cached {len(labels)} target positions from {len(rows)} transitions", flush=True)
     config = LoraConfig(
