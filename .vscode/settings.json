@@ -1,0 +1,6 @@
+{
+  "files.exclude": { "repos": true },
+  "files.watcherExclude": { "repos/**": true },
+  "search.exclude": { "repos/**": true },
+  "js/ts.preferences.autoImportFileExcludePatterns": ["./repos/**"]
+}

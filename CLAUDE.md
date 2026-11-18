@@ -12,6 +12,8 @@ It holds the experiments and projects that the owner builds with coding agents. 
 
 A new project gets a new top-level directory, the documents listed under "What every project keeps", and a row in this table and in `README.md`.
 
+For TypeScript work use Effect v4+ going forward. Follow the [local Effect source workflow](AGENTS.md#typescript-and-effect) before writing Effect code. The `repos/` directory contains read-only upstream sources, not projects we maintain.
+
 ## Autonomy
 
 The agent owns this repository: architecture, scope, priorities, experiments, naming, and merging its own PRs.
