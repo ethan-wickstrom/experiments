@@ -7,10 +7,11 @@ import { workFile } from "./work.ts";
 import { editFile } from "./directed.ts";
 import { editReturn } from "./return.ts";
 import { planFile } from "./plan.ts";
+import { spliceFile } from "./splice.ts";
 
 if (!process.argv[2] || process.argv.includes("--help")) {
   console.log(
-    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /plan PATH REQUEST (two proposals with C2 ranking), /return PATH FUNC REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project.",
+    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /plan PATH REQUEST (two proposals with C2 ranking), /splice PATH REQUEST (sampled AST edits with visible feedback), /return PATH FUNC REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project.",
   );
 } else {
   const project = await openProject(resolve(process.argv[2]));
@@ -50,11 +51,11 @@ if (!process.argv[2] || process.argv.includes("--help")) {
               answer: await session.predict(decodeAction(line.slice(10)), abort.signal),
             }),
           );
-        } else if (/^\/(?:edit|work|return|plan)\b/.test(line)) {
-          const match = /^\/(edit|work|return|plan)\s+(\S+)\s+(.+)$/.exec(line);
+        } else if (/^\/(?:edit|work|return|plan|splice)\b/.test(line)) {
+          const match = /^\/(edit|work|return|plan|splice)\s+(\S+)\s+(.+)$/.exec(line);
           if (!match)
             throw Error(
-              "Usage: /edit PATH REQUEST, /work PATH REQUEST, /plan PATH REQUEST, or /return PATH FUNC REQUEST",
+              "Usage: /edit PATH REQUEST, /work PATH REQUEST, /plan PATH REQUEST, /splice PATH REQUEST, or /return PATH FUNC REQUEST",
             );
           const show = (event: import("./agent.ts").TurnEvent) => {
             console.log(
@@ -79,7 +80,10 @@ if (!process.argv[2] || process.argv.includes("--help")) {
           };
           const [, command, path, request] = match;
           let result;
-          if (command === "plan") {
+          if (command === "splice") {
+            result = await spliceFile(session, path!, request!, { signal: abort.signal });
+            console.log(JSON.stringify({ kind: "splice", ...result }));
+          } else if (command === "plan") {
             result = await planFile(session, path!, request!, { signal: abort.signal });
             if (result.prediction)
               console.log(JSON.stringify({ kind: "prediction", ...result.prediction }));
