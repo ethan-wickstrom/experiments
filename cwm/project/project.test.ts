@@ -179,6 +179,23 @@ test("reading after a factorized edit preserves the pending test across turns", 
   expect(replies).toEqual([]);
 });
 
+test("C2 forecast prefixes replay the training diagnostic for array diffs", async () => {
+  const session = new ProjectSession(
+    { files: new Map() },
+    async (prompt) => {
+      expect(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)).history.at(-1).observed).toBe(
+        "fail\nbehavior check failed",
+      );
+      return answer("fail");
+    },
+    async () => ({ exit: 1, stdout: "", stderr: "- [1]\n+ [2]\n(fail) visible behavior [1.2ms]" }),
+    "c2",
+  );
+  const actual = await session.act({ op: "test" });
+  expect(actual.run?.stderr).toContain("(fail) visible behavior");
+  expect((await session.predict({ op: "test" })).prediction).toBe("fail");
+});
+
 test("Markdown inside valid source survives raw and single-block editing", async () => {
   const text = "/* docs\n```ts\nconst x = 1;\n```\n*/\nexport const fence = '```';\n";
   for (const wrapped of [true, false]) {

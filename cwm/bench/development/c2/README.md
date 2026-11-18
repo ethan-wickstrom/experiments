@@ -4,6 +4,8 @@ C2 is a rank-32 LoRA on the unchanged [MiniCPM5-1B release](https://huggingface.
 
 ## Load and prompt
 
+Set `CWM_PROJECT_FORMAT=c2` when using the project CLI with the B2/C2 protocol. This selects the same compact test diagnostics used by the frozen forecast trajectories. The CLI retains the executed command's stdout, stderr and exit status separately.
+
 Download the release F16 base once. Its verified SHA-256 is `68c40b08b1242754a107b9510af89aa75b10c75843ca7844643c70956b7f1e3d`. Pass one LoRA to llama-server. Each GGUF contains exactly two FP32 tensors with all 196,608 trained coefficients checked against PEFT. [Base GGUF](https://huggingface.co/openbmb/MiniCPM5-1B-GGUF/resolve/5385560dd3e232bcc3577fd9442c332cad2facbd/MiniCPM5-1B-F16.gguf) · [C2](C2/artifacts.json) · [B2](B2/artifacts.json)
 
 ```sh

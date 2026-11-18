@@ -71,15 +71,18 @@ export class ProjectSession {
   readonly project: Workspace;
   readonly generate: Generate;
   readonly test: (files: ReadonlyMap<string, string>, signal?: AbortSignal) => Promise<ToolRun>;
+  readonly observationFormat: "project" | "c2";
   constructor(
     project: Workspace,
     generate: Generate,
     test = (files: ReadonlyMap<string, string>, signal?: AbortSignal) =>
       Effect.runPromise(runTests(files), { signal }),
+    observationFormat: "project" | "c2" = "project",
   ) {
     this.project = project;
     this.generate = generate;
     this.test = test;
+    this.observationFormat = observationFormat;
   }
   state() {
     return { files: [...this.project.files.keys()].sort(), history: this.history.slice() };
@@ -100,7 +103,7 @@ export class ProjectSession {
     let observed: string;
     if (action.op === "test") {
       run = await this.test(this.project.files, signal);
-      observed = testObservation(run);
+      observed = testObservation(run, this.observationFormat);
       this.tested = true;
       this.needsTest = false;
     } else if (!sourcePath(action.path)) observed = "rejected";

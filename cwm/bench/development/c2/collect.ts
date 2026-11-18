@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
 import libraries from "./libraries.json";
+import { testObservation } from "../../../project/sandbox.ts";
 import { FORECAST, type Event, type Action } from "../../../project/protocol.ts";
 import { edit, decide, jsonState, type Source } from "./wire.ts";
 
@@ -47,12 +48,7 @@ function file(p: Project, body: string, index: number) {
   }
 }
 export function observation(t: Trial) {
-  if (!t.exit) return "pass";
-  const diag = t.stderr
-    .split("\n")
-    .filter((s) => /^(Expected|Received):/.test(s))
-    .join("\n");
-  return "fail\n" + (diag || "behavior check failed").slice(0, 240);
+  return testObservation(t, "c2");
 }
 export function history(ep: Episode) {
   const events: Event[] = [...ep.prefix, { user: ep.goal }];

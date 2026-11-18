@@ -114,10 +114,11 @@ process.exit(timedOut?124:exit);`;
       }),
   );
 }
-export function testObservation(run: ToolRun) {
+export function testObservation(run: ToolRun, format: "project" | "c2" = "project") {
   if (run.exit === 0) return "pass";
-  const lines = (run.stdout + "\n" + run.stderr).split("\n");
+  const lines = (format === "c2" ? run.stderr : run.stdout + "\n" + run.stderr).split("\n");
   const diagnostic = lines.filter((s) => /^(Expected|Received):/.test(s)).join("\n");
+  if (format === "c2") return "fail\n" + (diagnostic || "behavior check failed").slice(0, 240);
   const failure = lines.find((s) => s.includes("(fail)"))?.replace(/ \[[\d.]+m?s\]$/, "");
   return "fail\n" + (diagnostic || failure || run.stderr.trim() || run.stdout.trim()).slice(0, 240);
 }
