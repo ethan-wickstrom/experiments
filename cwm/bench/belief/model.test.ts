@@ -61,7 +61,7 @@ test("recombines a learned write with a different setup and new cell values", ()
   for (const [index, first] of [
     [0, [7, -7]],
     [1, [4, -4]],
-  ] as const) {
+  ] satisfies [number, number[]][]) {
     const observed = input(choose, dec, true, [7, -4], index);
     expect(predict(observed)).toEqual([{ state: [first, first], prob: 1 }]);
     expect(predict({ ...observed, signal: false })).toEqual([{ state: [first, [7, -4]], prob: 1 }]);
