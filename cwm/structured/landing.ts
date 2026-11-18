@@ -1,14 +1,18 @@
 import type { Instruction } from "./graph.ts";
 
 export type Event = "step" | "return";
-type Landing = { event: Event; position: number };
-export type Example = Landing & { origin: Instruction; dest: Instruction; within: boolean };
+export type Landing = { event: Event; position: number };
+export type Example = Landing & {
+  origin: Instruction | undefined;
+  dest: Instruction;
+  within: boolean;
+};
 
-function context(origin: Instruction, dest: Instruction) {
+function context(origin: Instruction | undefined, dest: Instruction) {
   return [
-    origin.kind,
+    origin?.kind ?? "call",
     "slot" in dest.expr ? "slot" : "op" in dest.expr ? "op" : "literal",
-    String(origin.kind === "set" && "slot" in dest.expr && origin.slot === dest.expr.slot),
+    String(origin?.kind === "set" && "slot" in dest.expr && origin.slot === dest.expr.slot),
   ];
 }
 
@@ -58,7 +62,7 @@ export function fitLandings(rows: Example[], offsets: boolean, mappedReturns: bo
     tables.set(key, options);
   }
   return function land(
-    origin: Instruction,
+    origin: Instruction | undefined,
     dest: Instruction,
     within: boolean,
   ): Landing | undefined {

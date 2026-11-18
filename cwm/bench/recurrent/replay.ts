@@ -1,4 +1,3 @@
-import { fitSites } from "../sites.ts";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { isDeepStrictEqual as equal } from "node:util";
@@ -6,11 +5,18 @@ import { readTraces, transitions, WorldModel, type Trace } from "../../cwm.ts";
 import { fitStructured } from "../../structured.ts";
 import { cache, collect, load } from "../collect.ts";
 import { readout } from "../score.ts";
+import { fitSites } from "../sites.ts";
+import { confirmation } from "./confirmation.ts";
 import { cases, type Split } from "./cases.ts";
 
-async function loadSplit(file: string, split: Split) {
+function manifestFor(split: Split | "confirm") {
+  return split === "confirm"
+    ? confirmation.map((program) => ({ program, family: program.entry, layout: "confirmation" }))
+    : cases(split);
+}
+async function loadSplit(file: string, split: Split | "confirm") {
   const traces = await Array.fromAsync(readTraces(file)),
-    manifest = cases(split);
+    manifest = manifestFor(split);
   assert.equal(traces.length, manifest.length);
   return traces.map((trace, i) => {
     const { frames: _frames, outcome: _outcome, ...p } = trace;
@@ -64,10 +70,10 @@ function compare(train: Trace[], held: Awaited<ReturnType<typeof loadSplit>>) {
   const syntax = fitSites("syntax+operands", train);
   const models: Record<string, Predict> = {
     syntax: (files, f) => syntax({ files, entry: f.stack[0]!.file, fn: "run", args: [] }, f),
-    learned: fitStructured(train).predict,
-    mapped: fitStructured(train, { mappedReturns: true }).predict,
-    offsets: fitStructured(train, { offsets: true }).predict,
-    permuted: fitStructured(train, { permuted: true }).predict,
+    learned: fitStructured(train, { entryEvidence: false }).predict,
+    mapped: fitStructured(train, { entryEvidence: false, mappedReturns: true }).predict,
+    offsets: fitStructured(train, { entryEvidence: false, offsets: true }).predict,
+    permuted: fitStructured(train, { entryEvidence: false, permuted: true }).predict,
     retrieval: (files, f) => base.predict(files, f),
     readout: (files, f) => readout({ files, entry: f.stack[0]!.file, fn: "run", args: [] }, f),
   };
@@ -117,18 +123,67 @@ function invocationCeiling(rows: Trace[]) {
     total: rows.length,
   };
 }
+function fromCall(train: Trace[], held: Trace[]) {
+  const withEntry = fitStructured(train),
+    adjacent = fitStructured(train, { entryEvidence: false });
+  const totals = () => ({
+    first: hits(),
+    callPaths: ratio(),
+    observedPaths: ratio(),
+    adjacentPaths: ratio(),
+  });
+  const total = totals(),
+    families: Record<string, ReturnType<typeof totals>> = {};
+  for (const { frames, outcome, ...call } of held) {
+    const index = frames.findIndex(
+      (f) => f.stack[0]?.fn === call.fn && f.stack[0].file === call.entry,
+    );
+    assert(index >= 0);
+    const start = withEntry.start(call),
+      truth = [...frames.slice(index + 1), outcome];
+    const first = !start ? "abstain" : equal(start, frames[index]) ? "exact" : "wrong";
+    function complete(model: typeof adjacent, f: typeof start) {
+      return !!f && equal([...model.rollout(call.files, f, 2048)], truth);
+    }
+    const observed = frames[index]!;
+    const callPath = first === "exact" && complete(withEntry, start),
+      current = complete(withEntry, observed),
+      old = complete(adjacent, observed);
+    for (const g of [total, (families[call.entry] ??= totals())]) {
+      g.first[first]++;
+      for (const [name, success] of [
+        ["callPaths", callPath],
+        ["observedPaths", current],
+        ["adjacentPaths", old],
+      ] as const) {
+        g[name].total++;
+        if (success) g[name].exact++;
+      }
+    }
+  }
+  return { total, families };
+}
 if (import.meta.main) {
   const [action, a, b, c] = process.argv.slice(2);
-  if (action === "collect" && (a === "fixed" || a === "varied" || a === "held") && b && c) {
+  if (
+    action === "collect" &&
+    (a === "fixed" || a === "varied" || a === "held" || a === "confirm") &&
+    b &&
+    c
+  ) {
     assert.equal(Bun.version, "1.4.4");
     assert.equal(Bun.spawnSync(["node", "-v"]).stdout.toString().trim(), "v24.19.0");
-    const inputs = cases(a).map((r) => r.program),
+    const inputs = manifestFor(a).map((r) => r.program),
       result = await collect(b, 4, inputs);
     assert.equal(result.failed, 0);
     const file = await cache(b);
     const rows = await Promise.all(inputs.map((p) => load(file(p), p)));
     await writeFile(c, rows.map((t) => JSON.stringify(t)).join("\n") + "\n", { flag: "wx" });
     console.log(JSON.stringify(result));
+  } else if (action === "confirm" && a && b) {
+    const train = (await loadSplit(a, "varied")).map((r) => r.trace),
+      held = (await loadSplit(b, "confirm")).map((r) => r.trace);
+    console.log(JSON.stringify(fromCall(train, held), null, 2));
   } else if (action === "score" && a && b && c) {
     const held = await loadSplit(c, "held");
     console.log(
@@ -158,6 +213,6 @@ if (import.meta.main) {
     );
   } else
     throw Error(
-      "Usage: collect fixed|varied|held CACHE NEW.jsonl | score FIXED.jsonl VARIED.jsonl HELD.jsonl",
+      "Usage: collect fixed|varied|held|confirm CACHE NEW.jsonl | score FIXED VARIED HELD | confirm VARIED CONFIRM",
     );
 }

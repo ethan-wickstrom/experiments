@@ -10,10 +10,15 @@ import {
 } from "./cwm.ts";
 import { compile, type Graph, type Instruction } from "./structured/graph.ts";
 import { fitGuards, type GuardRows } from "./structured/guards.ts";
-import { fitLandings, type Example } from "./structured/landing.ts";
+import { fitLandings, type Example, type Landing } from "./structured/landing.ts";
 import { fitValues, scalar, type Atom } from "./structured/scalar.ts";
 
-type Modes = { offsets?: boolean; mappedReturns?: boolean; permuted?: boolean };
+type Modes = {
+  entryEvidence?: boolean;
+  offsets?: boolean;
+  mappedReturns?: boolean;
+  permuted?: boolean;
+};
 function decode(g: Graph, frame: Frame) {
   const site = frame.stack[0];
   if (
@@ -45,7 +50,7 @@ function decode(g: Graph, frame: Frame) {
 // fall outside this supervision contract. A failed trace cannot silently become a missing edge.
 export function fitStructured(
   runs: Iterable<Trace>,
-  { mappedReturns = false, offsets = false, permuted = false }: Modes = {},
+  { entryEvidence = true, mappedReturns = false, offsets = false, permuted = false }: Modes = {},
 ) {
   const landings: Example[] = [],
     atoms: Atom[] = [],
@@ -69,6 +74,18 @@ export function fitStructured(
       !isDeepStrictEqual(last.value, t.outcome.result)
     )
       throw Error("Incomplete function trajectory in " + t.entry);
+    const first = states[0]!;
+    if (entryEvidence) {
+      if (!isDeepStrictEqual(first.store, t.args))
+        throw Error("Call arguments do not identify the entry store in " + t.entry);
+      landings.push({
+        origin: undefined,
+        dest: first.node,
+        within: false,
+        event: first.event,
+        position: first.pos,
+      });
+    }
     for (const [i, s] of states.entries()) {
       const n = s.node,
         t1 = states[i + 1];
@@ -109,25 +126,23 @@ export function fitStructured(
 
   // Bounded cache, keyed by source contents so edits and renamed exports invalidate it.
   let cached: { file: string; fn: string; source: string; graph?: Graph } | undefined;
-  function predict(files: Program["files"], f: Frame): Observation | undefined {
-    const site = f.stack[0];
-    if (
-      !site?.fn ||
-      f.stack.length !== 1 ||
-      Object.keys(files).length !== 1 ||
-      !Object.hasOwn(files, site.file)
-    )
-      return;
-    const source = files[site.file]!;
-    if (!cached || cached.file !== site.file || cached.fn !== site.fn || cached.source !== source) {
-      cached = { file: site.file, fn: site.fn, source };
+  function prepare(files: Program["files"], file: string, fn: string) {
+    if (!fn || Object.keys(files).length !== 1 || !Object.hasOwn(files, file)) return;
+    const source = files[file]!;
+    if (!cached || cached.file !== file || cached.fn !== fn || cached.source !== source) {
+      cached = { file, fn, source };
       try {
-        cached.graph = compile(site.file, site.fn, source, mappedReturns);
+        cached.graph = compile(file, fn, source, mappedReturns);
       } catch {
         return;
       }
     }
-    const g = cached.graph;
+    return cached.graph;
+  }
+  function predict(files: Program["files"], f: Frame): Observation | undefined {
+    const site = f.stack[0];
+    if (!site || f.stack.length !== 1) return;
+    const g = prepare(files, site.file, site.fn);
     if (!g) return;
     const s = decode(g, f);
     if (!s) return;
@@ -153,6 +168,9 @@ export function fitStructured(
     }
     if (!dest) return;
     const landing = land(n, dest, n.kind === "return");
+    return frame(g, dest, store, landing);
+  }
+  function frame(g: Graph, dest: Instruction, store: number[], landing: Landing | undefined) {
     if (!landing) return;
     const next: Frame = {
       kind: landing.event,
@@ -171,6 +189,14 @@ export function fitStructured(
   }
   return {
     predict,
+    start(call: Program) {
+      const g = prepare(call.files, call.entry, call.fn);
+      if (!entryEvidence || !g || call.args.length !== g.names.length || !call.args.every(scalar))
+        return;
+      const entry = g.nodes[g.entry];
+      if (!entry) return;
+      return frame(g, entry, call.args, land(undefined, entry, false));
+    },
     rollout: (files: Program["files"], start: Frame, budget: number) =>
       rollForward(predict, files, start, budget),
   };
