@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
 import { projects } from "./cases.ts";
-import { wire, type Action, type Event } from "../../project/protocol.ts";
+import { projectJson, wire, type Action, type Event } from "../../project/protocol.ts";
 
 type Check = { exit: number; stdout: string; stderr: string };
 async function check(dir: string, signal: AbortSignal): Promise<Check> {
@@ -77,7 +77,7 @@ async function collect(root: string, out: string, signal: AbortSignal) {
         family: p.name,
         task: "policy",
         prompt: wire(files, history),
-        target: JSON.stringify(action),
+        target: projectJson(action),
       });
       raw({ type: "action", action, observed: result, oracle });
       if (result !== undefined) history.push({ action, observed: result });
