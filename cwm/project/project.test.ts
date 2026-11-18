@@ -131,6 +131,16 @@ test("truncated directed source and multiple fenced files leave the workspace in
   }
 });
 
+test("directed edits disclose Bun-discovered underscore tests alongside dot tests", async () => {
+  const tests = { "rate_test.ts": "one", "nested/rate_SPEC.mts": "two", "base.test.tsx": "three" };
+  const files = new Map(Object.entries({ "rate.ts": "", "rate-test.ts": "helper", ...tests }));
+  const session = new ProjectSession({ files }, async (prompt) => {
+    expect(JSON.parse(prompt.split("\n")[1]!).tests).toEqual(tests);
+    return answer("", "length");
+  });
+  expect((await editFile(session, "rate.ts", "Revise the rate")).stop).toBe("incomplete");
+});
+
 test("forecast observes edits on disk without authorizing a replacement", async () => {
   const dir = await mkdtemp(join(tmpdir(), "cwm-forecast-"));
   try {
