@@ -11,42 +11,49 @@ import { createInterface } from "node:readline";
 import vm from "node:vm";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { Matrix, SingularValueDecomposition } from "ml-matrix";
-import { z } from "zod";
+import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 
-const jsonValue = z.json();
-const snapshotSchema = z.strictObject({ value: jsonValue, exact: z.boolean() });
-const siteSchema = z.strictObject({
-  file: z.string(),
-  line: z.int().positive(),
-  column: z.int().positive(),
-  fn: z.string(),
+function mutableStruct<const Fields extends Schema.Struct.Fields>(fields: Fields) {
+  return Schema.Struct(fields).mapFields(Struct.map(Schema.mutableKey));
+}
+
+const snapshotSchema = mutableStruct({ value: Schema.MutableJson, exact: Schema.Boolean });
+const coordinate = Schema.Int.check(Schema.isGreaterThan(0));
+const siteSchema = mutableStruct({
+  file: Schema.String,
+  line: coordinate,
+  column: coordinate,
+  fn: Schema.String,
 });
-const frameSchema = z
-  .strictObject({
-    kind: z.enum(["step", "return", "exception"]),
-    stack: z.array(siteSchema).min(1),
-    locals: z.record(z.string(), snapshotSchema),
-    value: snapshotSchema.optional(),
-  })
-  .refine((f) => (f.kind === "step") === (f.value === undefined), "Invalid event payload");
-const programSchema = z.strictObject({
-  files: z.record(z.string(), z.string()),
-  entry: z.string(),
-  fn: z.string(),
-  args: z.array(jsonValue),
+const frameSchema = mutableStruct({
+  kind: Schema.Literals(["step", "return", "exception"]),
+  stack: Schema.mutable(Schema.Array(siteSchema)).check(Schema.isMinLength(1)),
+  locals: Schema.Record(Schema.String, Schema.mutableKey(snapshotSchema)),
+  value: Schema.optional(snapshotSchema),
+}).check(
+  Schema.makeFilter(
+    (f) => (f.kind === "step") === (f.value === undefined) || "Invalid event payload",
+  ),
+);
+const programSchema = mutableStruct({
+  files: Schema.Record(Schema.String, Schema.mutableKey(Schema.String)),
+  entry: Schema.String,
+  fn: Schema.String,
+  args: Schema.mutable(Schema.Array(Schema.MutableJson)),
 });
-const executionSchema = z.strictObject({
-  frames: z.array(frameSchema),
-  outcome: z.strictObject({ kind: z.enum(["returned", "threw"]), result: snapshotSchema }),
+const executionSchema = mutableStruct({
+  frames: Schema.mutable(Schema.Array(frameSchema)),
+  outcome: mutableStruct({ kind: Schema.Literals(["returned", "threw"]), result: snapshotSchema }),
 });
-const traceSchema = programSchema.extend(executionSchema.shape);
-export type Json = z.infer<typeof jsonValue>;
-export type Snapshot = z.infer<typeof snapshotSchema>;
-export type Site = z.infer<typeof siteSchema>;
-export type Frame = z.infer<typeof frameSchema>;
-export type Program = z.infer<typeof programSchema>;
-export type Execution = z.infer<typeof executionSchema>;
-export type Trace = z.infer<typeof traceSchema>;
+const traceSchema = Schema.Struct({ ...programSchema.fields, ...executionSchema.fields });
+export type Json = Schema.MutableJson;
+export type Snapshot = typeof snapshotSchema.Type;
+export type Site = typeof siteSchema.Type;
+export type Frame = typeof frameSchema.Type;
+export type Program = typeof programSchema.Type;
+export type Execution = typeof executionSchema.Type;
+export type Trace = typeof traceSchema.Type;
 interface Compiled {
   file: string;
   code: string;
@@ -620,16 +627,17 @@ export function evaluate(model: WorldModel, heldOut: Iterable<Trace>) {
   return { total, predicted, correct };
 }
 
-async function* records<T>(input: NodeJS.ReadableStream, schema: z.ZodType<T>): AsyncGenerator<T> {
+async function* records<T>(
+  input: NodeJS.ReadableStream,
+  schema: Schema.Codec<T>,
+): AsyncGenerator<T> {
+  const decode = Schema.decodeUnknownSync(schema, { onExcessProperty: "error" });
   let index = 0;
   for await (const line of createInterface({ input, crlfDelay: Infinity })) {
     index++;
     if (!line.trim()) continue;
     try {
-      const data: unknown = JSON.parse(line);
-      // Validate without transforming JSON keys (e.g. a guest local named "__proto__").
-      schema.parse(data);
-      yield data as T;
+      yield decode(JSON.parse(line));
     } catch (cause) {
       throw new Error(`Invalid JSONL record at line ${index}`, { cause });
     }

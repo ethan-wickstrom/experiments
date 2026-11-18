@@ -7,10 +7,10 @@
     "format": "oxfmt --check ."
   },
   "dependencies": {
+    "effect": "4.1.4",
     "ml-matrix": "6.15.1",
     "oxc-parser": "0.159.0",
-    "oxc-transform": "0.159.0",
-    "zod": "4.6.7"
+    "oxc-transform": "0.159.0"
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
