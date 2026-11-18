@@ -103,3 +103,31 @@ test("unavailable selection, tests and missing declarations never receive a writ
   );
   await rejects(editBody(session, generate, "smoke.test.ts", "Change behavior"), /implementation/);
 });
+
+test("forecast errors are recorded independently and user cancellation still prevents the write", async () => {
+  for (const cancel of [false, true]) {
+    const { session, generate, files } = harness([["return 1; }", "eos"]], [1, 0]);
+    const controller = new AbortController();
+    const run = editBody(
+      session,
+      async (query) => {
+        if (query.limit !== 8) return generate(query);
+        if (cancel) controller.abort();
+        throw Error("context limit");
+      },
+      path,
+      "change",
+      { name: "result", signal: controller.signal },
+    );
+    if (cancel) {
+      await rejects(run);
+      expect(files.get(path)).toBe(src);
+    } else {
+      const result = await run;
+      expect(result.stop).toBe("tested");
+      expect(result.writes[0]?.prediction).toBeNull();
+      expect(result.writes[0]?.forecastFailure?.error).toContain("context limit");
+      expect(files.get(path)).not.toBe(src);
+    }
+  }
+});
