@@ -8,14 +8,6 @@ export type Example = Landing & {
   within: boolean;
 };
 
-function context(origin: Instruction | undefined, dest: Instruction) {
-  return [
-    origin?.kind ?? "call",
-    "slot" in dest.expr ? "slot" : "op" in dest.expr ? "op" : "literal",
-    String(origin?.kind === "set" && "slot" in dest.expr && origin.slot === dest.expr.slot),
-  ];
-}
-
 function keys(row: Example, offsets: boolean, mappedReturns: boolean) {
   const { dest, event, position } = row;
   const anchors = offsets
@@ -31,7 +23,22 @@ const cell = (features: string[], mask: number) =>
 
 // Intersect (event kind, position expression) hypotheses within each context. Retain all
 // maximally covered partitions using the fewest features. Conflicted cells stay empty.
-export function fitLandings(rows: Example[], offsets: boolean, mappedReturns: boolean) {
+export function fitLandings(
+  rows: Example[],
+  offsets: boolean,
+  mappedReturns: boolean,
+  joinContext: boolean,
+) {
+  function context(origin: Instruction | undefined, dest: Instruction) {
+    const features = [
+      origin?.kind ?? "call",
+      "slot" in dest.expr ? "slot" : "op" in dest.expr ? "op" : "literal",
+      String(origin?.kind === "set" && "slot" in dest.expr && origin.slot === dest.expr.slot),
+    ];
+    if (joinContext) features.push(String(dest.predecessors > 1));
+    return features;
+  }
+
   const tables = new Map<string, { mask: number; groups: Map<string, Set<string>> }[]>();
   for (const [key, samples] of Map.groupBy(rows, (r) => bucket(r.dest, r.within))) {
     const options = [];

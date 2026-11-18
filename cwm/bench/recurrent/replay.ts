@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import { isDeepStrictEqual as equal } from "node:util";
@@ -6,15 +7,17 @@ import { fitStructured } from "../../structured.ts";
 import { cache, collect, load } from "../collect.ts";
 import { readout } from "../score.ts";
 import { fitSites } from "../sites.ts";
+import { repeated, targeted, junctionTest } from "./junctions.ts";
 import { confirmation } from "./confirmation.ts";
 import { cases, type Split } from "./cases.ts";
 
-function manifestFor(split: Split | "confirm") {
-  return split === "confirm"
-    ? confirmation.map((program) => ({ program, family: program.entry, layout: "confirmation" }))
-    : cases(split);
+const later = { confirm: confirmation, repeated, targeted, junction: junctionTest };
+type Dataset = Split | keyof typeof later;
+function manifestFor(split: Dataset) {
+  if (split === "fixed" || split === "varied" || split === "held") return cases(split);
+  return later[split].map((program) => ({ program, family: program.entry, layout: split }));
 }
-async function loadSplit(file: string, split: Split | "confirm") {
+async function loadSplit(file: string, split: Dataset) {
   const traces = await Array.fromAsync(readTraces(file)),
     manifest = manifestFor(split);
   assert.equal(traces.length, manifest.length);
@@ -70,10 +73,13 @@ function compare(train: Trace[], held: Awaited<ReturnType<typeof loadSplit>>) {
   const syntax = fitSites("syntax+operands", train);
   const models: Record<string, Predict> = {
     syntax: (files, f) => syntax({ files, entry: f.stack[0]!.file, fn: "run", args: [] }, f),
-    learned: fitStructured(train, { entryEvidence: false }).predict,
-    mapped: fitStructured(train, { entryEvidence: false, mappedReturns: true }).predict,
-    offsets: fitStructured(train, { entryEvidence: false, offsets: true }).predict,
-    permuted: fitStructured(train, { entryEvidence: false, permuted: true }).predict,
+    learned: fitStructured(train, { joinContext: false, entryEvidence: false }).predict,
+    mapped: fitStructured(train, { joinContext: false, entryEvidence: false, mappedReturns: true })
+      .predict,
+    offsets: fitStructured(train, { joinContext: false, entryEvidence: false, offsets: true })
+      .predict,
+    permuted: fitStructured(train, { joinContext: false, entryEvidence: false, permuted: true })
+      .predict,
     retrieval: (files, f) => base.predict(files, f),
     readout: (files, f) => readout({ files, entry: f.stack[0]!.file, fn: "run", args: [] }, f),
   };
@@ -124,8 +130,8 @@ function invocationCeiling(rows: Trace[]) {
   };
 }
 function fromCall(train: Trace[], held: Trace[]) {
-  const withEntry = fitStructured(train),
-    adjacent = fitStructured(train, { entryEvidence: false });
+  const withEntry = fitStructured(train, { joinContext: false }),
+    adjacent = fitStructured(train, { joinContext: false, entryEvidence: false });
   const totals = () => ({
     first: hits(),
     callPaths: ratio(),
@@ -167,7 +173,13 @@ if (import.meta.main) {
   const [action, a, b, c] = process.argv.slice(2);
   if (
     action === "collect" &&
-    (a === "fixed" || a === "varied" || a === "held" || a === "confirm") &&
+    (a === "fixed" ||
+      a === "varied" ||
+      a === "held" ||
+      a === "confirm" ||
+      a === "repeated" ||
+      a === "targeted" ||
+      a === "junction") &&
     b &&
     c
   ) {
@@ -180,6 +192,25 @@ if (import.meta.main) {
     const rows = await Promise.all(inputs.map((p) => load(file(p), p)));
     await writeFile(c, rows.map((t) => JSON.stringify(t)).join("\n") + "\n", { flag: "wx" });
     console.log(JSON.stringify(result));
+  } else if (action === "junctions" && a) {
+    const rows = async (split: Dataset) =>
+      (await loadSplit(join(a, split + ".jsonl"), split)).map((r) => r.trace);
+    const base = await rows("varied");
+    const scores = [];
+    for (const extra of ["repeated", "targeted"] as const) {
+      const train = [...base, ...(await rows(extra))];
+      for (const joinContext of [false, true]) {
+        const model = fitStructured(train, { joinContext });
+        for (const split of ["junction", "confirm", "held"] as const) {
+          const total = counts(),
+            families: Record<string, ReturnType<typeof counts>> = {};
+          for (const t of await rows(split))
+            measure(model.predict, t, [total, (families[t.entry] ??= counts())]);
+          scores.push({ extra, joinContext, split, total, families });
+        }
+      }
+    }
+    console.log(JSON.stringify(scores, null, 2));
   } else if (action === "confirm" && a && b) {
     const train = (await loadSplit(a, "varied")).map((r) => r.trace),
       held = (await loadSplit(b, "confirm")).map((r) => r.trace);
@@ -213,6 +244,6 @@ if (import.meta.main) {
     );
   } else
     throw Error(
-      "Usage: collect fixed|varied|held|confirm CACHE NEW.jsonl | score FIXED VARIED HELD | confirm VARIED CONFIRM",
+      "Usage: collect SPLIT CACHE NEW.jsonl | score FIXED VARIED HELD | confirm VARIED CONFIRM | junctions DIR",
     );
 }

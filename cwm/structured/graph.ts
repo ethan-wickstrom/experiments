@@ -13,6 +13,7 @@ export type Instruction = Flow & {
   expr: Expr;
   start: number;
   end: number;
+  predecessors: number;
   anchors: Record<string, number>;
 };
 
@@ -74,6 +75,7 @@ export function compile(file: string, fn: string, source: string, mapReturns = f
         expr: read(e),
         start: s.start,
         end,
+        predecessors: 0,
         anchors: {
           statement: s.start,
           lastCharacter: end - 1,
@@ -89,6 +91,21 @@ export function compile(file: string, fn: string, source: string, mapReturns = f
     return next;
   }
   const entry = block(statements, -1);
+  const reachable = new Set<number>();
+  const work = entry < 0 ? [] : [entry];
+  if (entry >= 0) nodes[entry]!.predecessors++; // invocation edge
+  while (work.length) {
+    const id = work.pop()!;
+    if (reachable.has(id)) continue;
+    reachable.add(id);
+    const n = nodes[id]!;
+    const targets = n.kind === "return" ? [] : n.kind === "set" ? [n.next] : [n.yes, n.no];
+    for (const to of new Set(targets))
+      if (to >= 0) {
+        nodes[to]!.predecessors++;
+        work.push(to);
+      }
+  }
   const starts = [
     0,
     ...Array.from(source.matchAll(/\r\n|[\r\n\u2028\u2029]/gu), (m) => m.index + m[0].length),

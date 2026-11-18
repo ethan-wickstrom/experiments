@@ -14,6 +14,7 @@ import { fitLandings, type Example, type Landing } from "./structured/landing.ts
 import { fitValues, scalar, type Atom } from "./structured/scalar.ts";
 
 type Modes = {
+  joinContext?: boolean;
   entryEvidence?: boolean;
   offsets?: boolean;
   mappedReturns?: boolean;
@@ -50,7 +51,13 @@ function decode(g: Graph, frame: Frame) {
 // fall outside this supervision contract. A failed trace cannot silently become a missing edge.
 export function fitStructured(
   runs: Iterable<Trace>,
-  { entryEvidence = true, mappedReturns = false, offsets = false, permuted = false }: Modes = {},
+  {
+    joinContext = true,
+    entryEvidence = true,
+    mappedReturns = false,
+    offsets = false,
+    permuted = false,
+  }: Modes = {},
 ) {
   const landings: Example[] = [],
     atoms: Atom[] = [],
@@ -122,7 +129,7 @@ export function fitStructured(
   }
   const values = fitValues(atoms, permuted ? "permuted" : "compose"),
     predicates = fitGuards(guards),
-    land = fitLandings(landings, offsets, mappedReturns);
+    land = fitLandings(landings, offsets, mappedReturns, joinContext);
 
   // Bounded cache, keyed by source contents so edits and renamed exports invalidate it.
   let cached: { file: string; fn: string; source: string; graph?: Graph } | undefined;
