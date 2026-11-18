@@ -85,7 +85,12 @@ export async function editBody(
     calls.push({ kind, query: q, reply, elapsedMs: Math.round(performance.now() - start) });
     return reply;
   }
-  const state = () => ({ goal, path, files, visibleTest: testObservation(run) });
+  const state = () => ({
+    goal,
+    path,
+    files: Object.entries(files).map(([path, text]) => ({ path, text })),
+    visibleTest: testObservation(run),
+  });
   if (selection === "model") {
     const names = candidates.map((c) => c.name);
     const reply = await query("select", {
@@ -102,16 +107,17 @@ export async function editBody(
   for (let attempt = 0; attempt < 2; attempt++) {
     const source = files[path]!;
     const target = targets(path, source).find((fn) => fn.name === selected)!;
+    const newline = /^(?:\r\n|\n)/.exec(source.slice(target.start + 1))?.[0] ?? "";
     const reply = await query("body", {
       user:
-        "Implement the request in the selected TypeScript function. Complete its body and close the function and code fence. Keep the API and behavior the request preserves.\n" +
+        "Write the selected TypeScript function for the goal. Reply with the complete function in one TypeScript code block.\n" +
         projectJson({ ...state(), selected }),
-      prefill: fence + "typescript\n" + target.declaration,
+      prefill: fence + "typescript\n" + target.declaration + newline,
       limit: 384,
       stop: ["\n" + fence],
     });
     if (!completed(reply)) return finish("incomplete");
-    const patch = spliceBody(path, source, target, reply.text);
+    const patch = spliceBody(path, source, target, newline + reply.text);
     if (!patch) return finish("invalid-body");
     const action = { op: "write" as const, path, text: patch.text };
     const snapshot = session.state();
@@ -128,7 +134,7 @@ export async function editBody(
       path,
       before: source,
       after: patch.text,
-      consumed: patch.consumed,
+      consumed: patch.consumed - newline.length,
       observed,
       prediction,
     };
