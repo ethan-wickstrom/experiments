@@ -6,15 +6,22 @@ export const DECIDE =
 export type Source = { path: string; text: string };
 export type Status = "unread" | "read" | "written" | "pass" | "fail";
 
+/** Both transformations operate inside JSON strings and preserve JSON.parse. */
+export function jsonState(value: object) {
+  return JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replace(/\/(?=(?:no_)?think)/g, "\\u002f");
+}
+
 function state(goal: string, path: string, files: readonly Source[]) {
   const ordered = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { goal, path, files: ordered.map((f) => ({ path: f.path, text: f.text })) };
 }
 
 export function edit(goal: string, path: string, files: readonly Source[]) {
-  return EDIT + "\n" + JSON.stringify(state(goal, path, files));
+  return EDIT + "\n" + jsonState(state(goal, path, files));
 }
 
 export function decide(goal: string, path: string, files: readonly Source[], status: Status) {
-  return DECIDE + "\n" + JSON.stringify({ ...state(goal, path, files), status });
+  return DECIDE + "\n" + jsonState({ ...state(goal, path, files), status });
 }
