@@ -13,8 +13,10 @@ import {
   repair,
   trace,
   transitions,
+  type Frame,
   type Json,
   type Program,
+  type Trace,
 } from "./cwm.ts";
 
 function program(source: string, args: Json[] = []): Program {
@@ -176,6 +178,45 @@ test("JSONL round-trips real traces and rejects corrupt input at its physical li
     expect(await Array.fromAsync(readTraces(path))).toEqual([run]);
     await Bun.write(path, JSON.stringify(run) + "\n\n{}\n");
     await rejects(Array.fromAsync(readTraces(path)), /line 3/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("trace JSONL preserves arbitrary keys and rejects invalid nested records", async () => {
+  const site = { file: "main.ts", line: 1, column: 1, fn: "run" };
+  const result = { exact: true, value: { ["__proto__"]: [null, true, 1, "text"] } };
+  const frame: Frame = { kind: "step", stack: [site], locals: { ["__proto__"]: result } };
+  const record: Trace = {
+    ...program("", [result.value]),
+    frames: [frame],
+    outcome: { kind: "returned", result },
+  };
+  const dir = await mkdtemp(join(tmpdir(), "cwm-schema-"));
+  try {
+    const path = join(dir, "trace.jsonl");
+    await Bun.write(path, JSON.stringify(record));
+    const [decoded] = await Array.fromAsync(readTraces(path));
+    expect(decoded).toStrictEqual(record);
+    for (const invalid of [
+      { ...record, extra: true },
+      { ...record, frames: [{ ...frame, extra: true }] },
+      { ...record, frames: [{ ...frame, stack: [] }] },
+      { ...record, frames: [{ ...frame, stack: [{ ...site, line: 0 }] }] },
+      { ...record, frames: [{ ...frame, stack: [{ ...site, column: 1.5 }] }] },
+      {
+        ...record,
+        frames: [{ ...frame, stack: [{ ...site, line: Number.MAX_SAFE_INTEGER + 1 }] }],
+      },
+      { ...record, frames: [{ ...frame, kind: "return" }] },
+      { ...record, frames: [{ ...frame, kind: "exception" }] },
+      { ...record, frames: [{ ...frame, value: result }] },
+      { ...record, frames: [{ ...frame, locals: [] }] },
+      { ...record, outcome: { kind: "returned", result: { ...result, extra: true } } },
+    ]) {
+      await Bun.write(path, "\n" + JSON.stringify(invalid));
+      await rejects(Array.fromAsync(readTraces(path)), /line 2/);
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
