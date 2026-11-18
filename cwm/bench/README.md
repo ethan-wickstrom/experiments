@@ -1,5 +1,7 @@
 # Can the predictor transfer to a different program?
 
+For a single write traced from TypeScript to raw V8 descriptors, see the [first-write counterexample](first-write/README.md).
+
 From `cwm/`, with the project's pinned dependencies installed:
 
 ```sh
