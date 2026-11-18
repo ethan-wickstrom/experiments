@@ -35,6 +35,22 @@ python prompt.py --source /tmp/mini-example.ts --current 'S,2,1,2,3'
 
 The loader pins the release revision shown above. The first call downloads approximately 2.16 GB of BF16 weights and loads them in FP32 for CPU inference. To use a downloaded copy, set `CWM_MODEL_PATH` to the local snapshot directory. Local loading copies the eight release files into a temporary directory, checks their digests there, and loads the tokenizer and model offline from those copies. Allow 2.2 GB of temporary disk space during loading. Use `CWM_THREADS` to change the default of eight CPU threads. Both coding and pause prompts use the same PEFT weights in `adapter/`.
 
+### Check the stock template and checkpoint
+
+With the verified snapshot on disk, run the integration tests from this directory. To include the server check, start [the b6602 Q8 server](../../PROMPTING.md#local-model-server) and set `CWM_TEMPLATE_SERVER=http://127.0.0.1:8080` in the environment. Without that variable the local Transformers checks still run.
+
+```sh
+CWM_MODEL_PATH=/path/to/MiniCPM5-1B HF_HUB_OFFLINE=1 python -m unittest -v test_template
+```
+
+The stock generation prefix with thinking disabled ends in `<|im_start|>assistant\n<think>\n\n</think>\n\n` (newlines shown as escapes). Rendering a completed assistant message with no reasoning omits the empty thinking block. Training uses the inference prefix followed by the target IDs and turn end. On the tested CSV, compact JSON, and unindented TypeScript answers this equals encoding the whole string. A target beginning with a newline can merge with the prefix's final newlines under BPE. The tests check the shifted label positions used for training.
+
+Under Transformers the stock template renders two assistant calls as ordered XML with CDATA for a multiline string containing `<` and `&`. It places consecutive tool results in separate `<tool_response>` elements of one user turn. It inserts string observations verbatim. Literal `</s>` and `<|im_end|>` in a quoted JSON string still encode to 1 and 130073. For project observation and action JSON, escape literal `<` and `/` in the serialized text as `\u003c` and `\u002f` before tokenization. JSON decoding restores the original Unicode text, line breaks and literal backslashes. Apply the same encoding in training and serving.
+
+The b6602 Q8 server matched Transformers' rendered text and token IDs for an ordinary exchange and a follow-up, including multiline Unicode, XML and literal control-token spellings. Its native `tools` request returned HTTP 500 on the release template's `tojson(ensure_ascii=False)` call. The ordinary JSON-in-message protocol works on that build.
+
+On the loaded FP32 model the input embedding and output head have separate storage. Each of the 16 query heads and two KV heads has dimension 128. A forced-token generation check exercises both EOS IDs, including the shared padding ID 1. Real tokens with ID 1 in the input remain attended, while positions added for batch padding have mask zero.
+
 ## Use the same adapter with llama.cpp
 
 Pass the checked-in FP32 adapter alongside a GGUF of the **openbmb/MiniCPM5-1B post-trained release**. Keep the runtime's base GGUF in its ordinary cache.
