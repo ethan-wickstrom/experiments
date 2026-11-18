@@ -2,7 +2,7 @@
 import json
 
 VARIANTS = {
-    "operator position": ("x = x + y;\ny = y - x;", "x = x - y;\ny = y + x;"),
+    "operator position": ("x = (x + y) * 2;\ny = y - x;", "x = (x - y) * 2;\ny = y + x;"),
     "operand order": ("y = (x - y) * x;", "y = (y - x) * x;"),
     "assignment destination": ("x = (x + y) * 2;", "y = (x + y) * 2;"),
 }
