@@ -42,8 +42,8 @@ class Editor:
     def __init__(self, arm, replacement_budget=96, max_input=4096):
         base, self.tok = load()
         self.model = base
-        if arm == "trained":
-            release = HERE / "model"
+        if arm != "base":
+            release = HERE / ("model" if arm == "trained" else "edit-only")
             pins = json.loads((release / "provenance.json").read_text())
             for name, sha in pins["files"].items():
                 if file_hash(release/name) != sha:
@@ -85,7 +85,7 @@ class Editor:
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--serve", action="store_true")
-    p.add_argument("--arm", choices=("trained","base"), default="trained")
+    p.add_argument("--arm", choices=("trained","edit-only","base"), default="trained")
     p.add_argument("--max-input", type=int, default=4096)
     p.add_argument("--replacement-budget", type=int, default=96)
     args = p.parse_args()
