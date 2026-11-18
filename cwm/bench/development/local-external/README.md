@@ -16,6 +16,8 @@ Joint and edit-only chose identical spans on all three paired first-turn inputs.
 
 When the reference replacement was applied at the predicted location, the three first-turn snapshots passed 0/3 for base, 1/3 for joint and 1/3 for edit-only. Both adapter passes were the gallery edit. Applying the model's already-generated replacement at the reference location passed 0/1 for base, 0/1 for joint and 0/3 for edit-only. A capped response has no completed payload for this second control. Independent strict project type checks passed all six fixed references and reported errors on two joint and four edit-only policy snapshots. These checks run after scoring.
 
+The external host uses the project observation formatter. It can include the failing Bun test name when the assertion has no Expected or Received lines. The interactive line editor uses the C2 formatter, which returns `fail\nbehavior check failed` in that case. Applying both formatters to the 18 archived pre-edit runs yields ten different feedback strings. These grades measure the external host. The CLI can receive a different prompt for the same files and goal.
+
 ## Seals and records
 
 The fixture and reference preflight were committed privately at `86a7e47` before weights were available. Edit-only was added at `59b546b` before held inference. All six reference predecessors failed their new visible and hidden behaviors. All six reference fixes passed cumulative visible and hidden checks. An exact-text comparison against 204 training edit episodes and 24 trainer holdout episodes found no matching goal, implementation snapshot or test. This comparison concerns the edit datasets and does not audit base-model pretraining.
