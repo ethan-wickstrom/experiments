@@ -45,7 +45,7 @@ export async function propose({
     ...(feedback ? ["Execution evidence for the current source: " + feedback] : []),
     "Current request: " + instructions.at(-1),
   ].join("\n\n");
-  const text = await complete(
+  const completion = await complete(
     [
       { role: "system", content: system },
       { role: "user", content: context },
@@ -53,6 +53,8 @@ export async function propose({
     0.25,
     1536,
   );
+  if (completion.finish !== "stop") throw Error("Incomplete language proposal");
+  const text = completion.text;
   const fenced = [...text.matchAll(/^```(?:typescript|ts)?[ \t]*\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)];
   if (fenced.length > 1) throw Error("Expected one source file, received several code blocks");
   const code = fenced[0]?.[1] ?? text;
@@ -105,9 +107,13 @@ async function complete(
     choices?: { message?: { content?: unknown }; finish_reason?: string }[];
   };
   const choice = body.choices?.[0];
-  if (choice?.finish_reason !== "stop" || typeof choice.message?.content !== "string")
+  if (
+    !choice ||
+    (choice.finish_reason !== "stop" && choice.finish_reason !== "length") ||
+    typeof choice.message?.content !== "string"
+  )
     throw Error("Incomplete model response");
-  return choice.message.content.trim();
+  return { text: choice.message.content.trim(), finish: choice.finish_reason };
 }
 
 /** The observation language is the one used to train the adapter. Preserve malformed answers for inspection. */

@@ -99,9 +99,17 @@ export async function chat(argv: string[]) {
             console.log("Structured CWM prediction", JSON.stringify(prediction));
             break;
           }
-          case "/resume":
-            console.log("Neural prediction (" + modelName + ")", await resume(draft, arg));
+          case "/resume": {
+            const answer = await resume(draft, arg);
+            feedback = JSON.stringify({
+              source: "neural prediction",
+              model: modelName,
+              current: arg,
+              ...answer,
+            });
+            console.log(feedback);
             break;
+          }
           case "/verify": {
             const args = parseArgs(arg),
               report = await verify(model, draft, args);
