@@ -1,6 +1,9 @@
 """Byte identities of the normalized oracle tapes, release and shipped adapter."""
 
 import hashlib
+import shutil
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 TRAIN_SHA = "96c458b2c043df456f0db53129d51beaedfed0b5c6164f5d6a2039b87d9972fb"
@@ -24,7 +27,14 @@ def file_hash(path):
         return hashlib.file_digest(f, "sha256").hexdigest()
 
 
-def verify_base(path):
-    for name, expected in BASE_FILES.items():
-        if file_hash(Path(path) / name) != expected:
-            raise ValueError(f"Base snapshot digest mismatch for {name}")
+@contextmanager
+def verified_base(path):
+    """Give the loaders only the release bytes whose digests were checked."""
+    with tempfile.TemporaryDirectory(prefix="cwm-minicpm-") as directory:
+        snapshot = Path(directory)
+        for name, expected in BASE_FILES.items():
+            target = snapshot / name
+            shutil.copyfile(Path(path) / name, target)
+            if file_hash(target) != expected:
+                raise ValueError(f"Base snapshot digest mismatch for {name}")
+        yield snapshot
