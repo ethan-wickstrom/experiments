@@ -47,9 +47,17 @@ test("resume validates the shard identity and never trains on failed attempts", 
         throw new Error("input source closed");
       },
     });
-    await rejects(collect(root, 2, inputs), /input source closed/);
+    let dispatched = false;
+    Object.defineProperty(inputs, 2, {
+      get() {
+        dispatched = true;
+        return queued;
+      },
+    });
+    await rejects(collect(root, 3, inputs), /input source closed/);
     expect(await Bun.file(path(next)).exists()).toBe(true);
     expect(await Bun.file(path(queued)).exists()).toBe(false);
+    expect(dispatched).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

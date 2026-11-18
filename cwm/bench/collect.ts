@@ -53,33 +53,37 @@ export async function collect(root: string, jobs: number, inputs: Iterable<Progr
     reused = 0,
     failed = 0;
   async function worker() {
-    while (!stopped) {
-      const item = queue.next();
-      if (item.done) return;
-      const program = item.value,
-        path = pathFor(program);
-      if (await Bun.file(path).exists()) {
-        await load(path, program);
-        reused++;
-        continue;
+    try {
+      while (!stopped) {
+        const item = queue.next();
+        if (item.done) return;
+        const program = item.value,
+          path = pathFor(program);
+        if (await Bun.file(path).exists()) {
+          await load(path, program);
+          reused++;
+          continue;
+        }
+        let run;
+        try {
+          run = await trace(program);
+        } catch (error) {
+          await publish(path + "." + randomUUID() + ".error", { program, error: String(error) });
+          failed++;
+          continue;
+        }
+        await publish(path, run);
+        collected++;
       }
-      let run;
-      try {
-        run = await trace(program);
-      } catch (error) {
-        await publish(path + "." + randomUUID() + ".error", { program, error: String(error) });
-        failed++;
-        continue;
-      }
-      await publish(path, run);
-      collected++;
+    } catch (error) {
+      stopped = true;
+      throw error;
     }
   }
   const workers = Array.from({ length: jobs }, worker);
   try {
     await Promise.all(workers);
   } catch (error) {
-    stopped = true;
     await Promise.allSettled(workers);
     throw error;
   }

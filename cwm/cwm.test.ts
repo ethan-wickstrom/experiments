@@ -98,6 +98,44 @@ test("snapshots never invoke object accessors and incomplete values cannot pass 
   ]);
 });
 
+test("inspecting Error locals leaves getter counts equal to plain Node", async () => {
+  for (const key of ["stack", "name", "message"]) {
+    const source = `export function run(){
+      let calls=0;
+      const error=new Error("x");
+      Object.defineProperty(error,${JSON.stringify(key)},{get(){calls++;return "observed";}});
+      const observed={error};
+      return calls;
+    }`;
+    const plain = Bun.spawnSync([
+      "node",
+      "--input-type=module",
+      "-e",
+      source + ";console.log(run())",
+    ]);
+    expect(plain.success).toBe(true);
+    const calls = JSON.parse(plain.stdout.toString());
+    expect(calls).toBe(0);
+    const traced = await trace(program(source));
+    expect(traced.outcome).toEqual({ kind: "returned", result: { value: calls, exact: true } });
+    expect(
+      traced.frames.some((f) => f.locals.error?.value === "<error>" && !f.locals.error.exact),
+    ).toBe(true);
+    expect(
+      traced.frames
+        .filter((f) => f.locals.calls?.exact)
+        .every((f) => f.locals.calls?.value === calls),
+    ).toBe(true);
+  }
+});
+
+test("an Error exposed by the pause itself cannot become an accepted episode", async () => {
+  const spec = program('export function run(){throw new Error("unsupported")}');
+  const [step] = (await episode(spec, ["run"], null)).steps;
+  expect(step && "error" in step && step.error).toContain("Cannot faithfully observe");
+  expect(step).not.toHaveProperty("execution");
+});
+
 test("replays a Unicode-offset mutation, does not count a helper return as a pass", async () => {
   const spec = program(
     'import { sum } from "./lib.ts"; const target = () => [8]; export function run(){ return [sum(target()[0]-2, 2)]; }',
