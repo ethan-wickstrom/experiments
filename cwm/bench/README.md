@@ -2,6 +2,8 @@
 
 For a single write traced from TypeScript to raw V8 descriptors, see the [first-write counterexample](first-write/README.md).
 
+For a small controlled test of which actions a site representation distinguishes, see [operators, literals and bindings](actions.md). It does not reuse the source holdout as new evidence.
+
 From `cwm/`, with the project's pinned dependencies installed:
 
 ```sh
