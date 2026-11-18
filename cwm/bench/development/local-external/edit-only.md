@@ -1,3 +1,5 @@
+The confirmed CLI labels are `base`, `trained`, and `edit-only`. Its default replacement limit is 96 tokens. A replacement cap can return the model's completed span. When the gold predecessor matches, this permits the gold-replacement-at-model-span control alone. Count the production response as incomplete and leave the unavailable replacement control null.
+
 # Matched edit-only control
 
 Before any model has been run against these fixtures, add the trainer's matched edit-only checkpoint to the base and joint arms. Use the trainer's released CLI arm name and record its revision and weights. The host, fixtures, one-request limit, feedback, cumulative trajectory and offline grading are identical for all three. The earlier transport smoke test used a fixed empty splice and no model.
