@@ -1,0 +1,14 @@
+{
+  "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+  "corpus": "3e444fef088156eb6dc86464ca0c78f6ba9988db61c16516f4d2c6ada31061a5",
+  "base_gguf_url": "https://huggingface.co/openbmb/MiniCPM5-1B-GGUF/resolve/5385560dd3e232bcc3577fd9442c332cad2facbd/MiniCPM5-1B-F16.gguf",
+  "base_gguf_sha256": "68c40b08b1242754a107b9510af89aa75b10c75843ca7844643c70956b7f1e3d",
+  "converter": "a300a9c33462f23d9d61e951650d249486f2b0f6",
+  "files": {
+    "peft/adapter_model.safetensors": "16576944ce670148ea84b611678335d02c42d983d695930dc0933d64da5d3220",
+    "peft/adapter_config.json": "a9bcd72a9eb66ea03aeae595ea9c641104e3c208d625080174060a22181f1391",
+    "adapter-f32.gguf": "59ca775a59293b551206d7f7ff500b9b2a403792e617076cdfb62a3900a0096b",
+    "state.pt": "e785b26ca36d600a07655f3635e5a1ff67f8d9d0100b72326f08f5a2f721bfc0",
+    "fit.json": "70aa5bded5233c2310b5fc7de5122cd079c19c58051ed71cd5b1e25be626a8c8"
+  }
+}

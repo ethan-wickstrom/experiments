@@ -1,0 +1,112 @@
+{
+  "recipe": {
+    "arm": "B2",
+    "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+    "corpus": "3e444fef088156eb6dc86464ca0c78f6ba9988db61c16516f4d2c6ada31061a5",
+    "rank": 32,
+    "alpha": 32,
+    "draws": "64 positions in cumulative ratio source:decision=9:2",
+    "cache_sha256": "ee214c22f2622910b1a779a03c1a9a080353ead63d000485d9a3532dd40ba9be",
+    "seed": 17,
+    "lr": 0.001,
+    "steps": 512,
+    "cache_version": 1
+  },
+  "step": 512,
+  "data_lengths": {
+    "source": {
+      "records": 60,
+      "target_tokens": 2233,
+      "prompt": [152, 175.0, 234],
+      "target": [21, 35.5, 67],
+      "total": [173, 206.0, 297]
+    },
+    "decision": {
+      "records": 300,
+      "target_tokens": 600,
+      "prompt": [57, 179.0, 242],
+      "target": [2, 2.0, 2],
+      "total": [59, 181.0, 244]
+    },
+    "forecast": {
+      "records": 140,
+      "target_tokens": 300,
+      "prompt": [93, 456.5, 947],
+      "target": [2, 2.0, 3],
+      "total": [96, 458.5, 949]
+    },
+    "execution": {
+      "records": 98,
+      "target_tokens": 1076,
+      "prompt": [95, 103.0, 105],
+      "target": [10, 10.0, 12],
+      "total": [105, 113.0, 117]
+    }
+  },
+  "history": [
+    {
+      "step": 32,
+      "batch_ce": 0.6072380542755127
+    },
+    {
+      "step": 64,
+      "batch_ce": 0.7358466982841492
+    },
+    {
+      "step": 96,
+      "batch_ce": 0.36155128479003906
+    },
+    {
+      "step": 128,
+      "batch_ce": 0.09506932646036148
+    },
+    {
+      "step": 160,
+      "batch_ce": 0.3814452290534973
+    },
+    {
+      "step": 192,
+      "batch_ce": 0.052554141730070114
+    },
+    {
+      "step": 224,
+      "batch_ce": 0.2403782159090042
+    },
+    {
+      "step": 256,
+      "batch_ce": 0.3055553734302521
+    },
+    {
+      "step": 288,
+      "batch_ce": 0.150093674659729
+    },
+    {
+      "step": 320,
+      "batch_ce": 0.09349194169044495
+    },
+    {
+      "step": 352,
+      "batch_ce": 0.09144709259271622
+    },
+    {
+      "step": 384,
+      "batch_ce": 0.13248823583126068
+    },
+    {
+      "step": 416,
+      "batch_ce": 0.12879490852355957
+    },
+    {
+      "step": 448,
+      "batch_ce": 0.08696857839822769
+    },
+    {
+      "step": 480,
+      "batch_ce": 0.023758014664053917
+    },
+    {
+      "step": 512,
+      "batch_ce": 0.013117073103785515
+    }
+  ]
+}
