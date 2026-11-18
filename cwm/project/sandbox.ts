@@ -82,5 +82,9 @@ export function runTests(files: ReadonlyMap<string, string>, only?: string) {
   );
 }
 export function testObservation(run: ToolRun) {
-  return run.exit === 0 ? "pass" : "fail\n" + (run.stderr + "\n" + run.stdout).trim().slice(-1800);
+  if (run.exit === 0) return "pass";
+  const lines = (run.stdout + "\n" + run.stderr).split("\n");
+  const diagnostic = lines.filter((s) => /^(Expected|Received):/.test(s)).join("\n");
+  const failure = lines.find((s) => s.includes("(fail)"))?.replace(/ \[[\d.]+m?s\]$/, "");
+  return "fail\n" + (diagnostic || failure || run.stderr.trim() || run.stdout.trim()).slice(0, 240);
 }

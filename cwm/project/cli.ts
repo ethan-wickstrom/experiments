@@ -3,10 +3,11 @@ import { resolve } from "node:path";
 import { ProjectSession, endpoint } from "./agent.ts";
 import { openProject } from "./workspace.ts";
 import { decodeAction } from "./protocol.ts";
+import { editFile } from "./directed.ts";
 
 if (!process.argv[2] || process.argv.includes("--help")) {
   console.log(
-    "Usage: bun run project DIRECTORY\nEnter a development request, /forecast ACTION_JSON, or /quit. Writes update the project. Each turn allows eight actions.",
+    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project. Free-action turns allow eight actions. Directed edits allow two proposals with a test run after each write.",
   );
 } else {
   const project = await openProject(resolve(process.argv[2]));
@@ -43,6 +44,31 @@ if (!process.argv[2] || process.argv.includes("--help")) {
               answer: await session.predict(decodeAction(line.slice(10)), abort.signal),
             }),
           );
+        } else if (line.startsWith("/edit ")) {
+          const match = /^\/edit (\S+)\s+(.+)$/.exec(line);
+          if (!match) throw Error("Usage: /edit PATH REQUEST");
+          const result = await editFile(session, match[1]!, match[2]!, abort.signal, (event) => {
+            console.log(
+              JSON.stringify({
+                kind: "assistant",
+                text: event.reply.text,
+                finish: event.reply.finish,
+              }),
+            );
+            if (event.observed)
+              console.log(
+                JSON.stringify({
+                  kind: "observation",
+                  action: event.action,
+                  result: event.observed,
+                }),
+              );
+            if (event.run)
+              console.log(
+                JSON.stringify({ kind: "observation", action: { op: "test" }, result: event.run }),
+              );
+          });
+          console.log(JSON.stringify({ kind: "turn", stop: result.stop }));
         } else if (line.trim()) {
           const result = await session.turn(line, {
             signal: abort.signal,

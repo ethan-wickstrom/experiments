@@ -6,6 +6,8 @@ import { ProjectSession, endpoint, type Generate } from "../../project/agent.ts"
 import { wire, type Action, type Event } from "../../project/protocol.ts";
 import { runTests } from "../../project/sandbox.ts";
 import { held } from "./held.ts";
+import { directedHeld } from "./directed-held.ts";
+import { editFile } from "../../project/directed.ts";
 
 async function acceptance(files: Map<string, string>, tests: string[]) {
   const grades = [];
@@ -19,7 +21,10 @@ async function acceptance(files: Map<string, string>, tests: string[]) {
   return grades;
 }
 
-async function policy(project: (typeof held)[number], generate: Generate) {
+async function policy(
+  project: (typeof held)[number] | (typeof directedHeld)[number],
+  generate: Generate,
+) {
   const files = new Map(Object.entries(project.files));
   const session = new ProjectSession({ files }, generate);
   const turns = [];
@@ -27,7 +32,8 @@ async function policy(project: (typeof held)[number], generate: Generate) {
   for (const { goal, accept } of project.turns) {
     checks.push(accept);
     const start = performance.now();
-    const result = await session.turn(goal);
+    const result =
+      "path" in project ? await editFile(session, project.path, goal) : await session.turn(goal);
     const elapsedMs = Math.round(performance.now() - start);
     const grades = await acceptance(files, checks);
     turns.push({
@@ -106,17 +112,23 @@ async function counterfactuals(project: (typeof held)[number], generate: Generat
   };
 }
 if (import.meta.main) {
-  const [url, model, out] = process.argv.slice(2);
+  const [url, model, out, mode = "policy"] = process.argv.slice(2);
   if (!url || !model || !out)
-    throw Error("Usage: bun evaluate.ts CHAT_ENDPOINT MODEL FRESH_SCORES.json.gz");
+    throw Error(
+      "Usage: bun projects-evaluate.ts CHAT_ENDPOINT MODEL FRESH_SCORES.json.gz [directed|policy]",
+    );
+  if (!["directed", "policy"].includes(mode) || (await Bun.file(out).exists()))
+    throw Error("Expected a valid mode and fresh output path");
   const generate = endpoint(url, model);
   const results = [];
-  for (const project of held) {
+  for (const project of mode === "policy" ? held : directedHeld) {
     results.push({
       id: project.id,
       turns: await policy(project, generate),
-      alternatives: await counterfactuals(project, generate),
+      ...("alternatives" in project
+        ? { alternatives: await counterfactuals(project, generate) }
+        : {}),
     });
   }
-  await writeFile(out, gzipSync(JSON.stringify({ model, results }) + "\n"), { flag: "wx" });
+  await writeFile(out, gzipSync(JSON.stringify({ model, mode, results }) + "\n"), { flag: "wx" });
 }

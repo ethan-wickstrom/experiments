@@ -28,10 +28,15 @@ export function wire(files: string[], history: Event[], candidate?: Action) {
   const state = candidate ? { files, history, candidate } : { files, history };
   return (candidate ? FORECAST : POLICY) + "\n" + projectJson(state);
 }
-export function actionGrammar(unread: string[], tested: boolean) {
-  const schemas: Schema.Top[] = [writeSchema, doneSchema];
+export function permittedActions(unread: string[], tested: boolean, needsTest = false) {
+  const schemas: Schema.Top[] = [writeSchema];
+  if (!needsTest) schemas.push(doneSchema);
   if (!tested) schemas.push(testSchema);
   if (unread.length)
     schemas.push(Schema.Struct({ op: Schema.Literal("read"), path: Schema.Literals(unread) }));
-  return Schema.toJsonSchemaDocument(Schema.Union(schemas), strict).schema;
+  const schema = Schema.Union(schemas);
+  return {
+    grammar: Schema.toJsonSchemaDocument(schema, strict).schema,
+    accepts: Schema.is(schema),
+  };
 }

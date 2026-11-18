@@ -31,8 +31,7 @@ export function sourcePath(name: string) {
 export const maxFileBytes = 64 * 1024;
 export const maxFiles = 128;
 
-export async function openProject(directory: string) {
-  const root = await realpath(directory);
+async function snapshot(root: string) {
   const files = new Map<string, string>();
   async function visit(dir: string) {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -50,10 +49,22 @@ export async function openProject(directory: string) {
       if (!entry.isFile() || !sourcePath(name)) continue;
       if (files.size >= maxFiles || (await lstat(path)).size > maxFileBytes)
         throw Error("Project exceeds the small-project context budget: " + name);
-      files.set(name, await readFile(path, "utf8"));
+      const bytes = await readFile(path);
+      files.set(name, new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes));
     }
   }
   await visit(root);
+  return files;
+}
+
+export async function openProject(directory: string) {
+  const root = await realpath(directory);
+  const files = await snapshot(root);
+  async function refresh() {
+    const current = await snapshot(root);
+    files.clear();
+    for (const [path, source] of current) files.set(path, source);
+  }
   async function persist(path: string, text: string) {
     if (!sourcePath(path)) throw Error("Unsupported project path");
     const parts = path.split("/");
@@ -86,5 +97,5 @@ export async function openProject(directory: string) {
       await rm(temp, { force: true });
     }
   }
-  return { files, persist };
+  return { files, refresh, persist };
 }

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
+import { testObservation } from "../../project/sandbox.ts";
 import { projects } from "./cases.ts";
 import { projectJson, wire, type Action, type Event } from "../../project/protocol.ts";
 
@@ -27,15 +28,6 @@ async function check(dir: string, signal: AbortSignal): Promise<Check> {
     "Bun test failed outside an assertion",
   );
   return { exit, stdout, stderr };
-}
-function observed(check: Check) {
-  if (!check.exit) return "pass";
-  const diagnostic = (check.stdout + "\n" + check.stderr)
-    .split("\n")
-    .filter((s) => /^(Expected|Received):/.test(s));
-  const failure = check.stderr.split("\n").find((s) => s.includes("(fail)"));
-  assert(failure);
-  return "fail\n" + (diagnostic.join("\n") || failure.replace(/ \[[\d.]+m?s\]$/, "")).slice(0, 240);
 }
 type Project = (typeof projects)[number];
 function fixture(p: Project, expr: string) {
@@ -124,7 +116,7 @@ async function collect(root: string, out: string, signal: AbortSignal) {
       const before = await check(dir, signal);
       assert.equal(before.exit, 1);
       forecast(test, "fail", before);
-      policy(test, observed(before), before);
+      policy(test, testObservation(before), before);
       const saved = await readFile(join(dir, source), "utf8");
       const good = fixture(p, phase ? p.final : p.first);
       for (const text of [good, fixture(p, p.wrong), saved]) await trialWrite(text);
@@ -133,7 +125,7 @@ async function collect(root: string, out: string, signal: AbortSignal) {
       const after = await check(dir, signal);
       assert.equal(after.exit, 0);
       forecast(test, "pass", after);
-      policy(test, observed(after), after);
+      policy(test, testObservation(after), after);
       policy({ op: "done" });
     }
   }
