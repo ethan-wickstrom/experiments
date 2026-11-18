@@ -3,6 +3,10 @@ import { decide, edit, type Status } from "../bench/development/c2/wire.ts";
 import { type ProjectSession, type TurnEvent } from "./agent.ts";
 import { sourcePath } from "./workspace.ts";
 
+export function completeSource(path: string, text: string) {
+  return !!text.trim() && !/^\s*\x60{3}/.test(text) && !parseSync(path, text).errors.length;
+}
+
 /** Host selects a file. Both the next action and its source payload use the serving checkpoint. */
 export async function workFile(
   session: ProjectSession,
@@ -68,12 +72,7 @@ export async function workFile(
     if (Buffer.byteLength(prompt) > 32000) return finish("context-limit");
     const event = await query(prompt, 384, true);
     const text = event.reply.text;
-    if (
-      event.reply.finish !== "stop" ||
-      !text.trim() ||
-      /^\s*\x60{3}/.test(text) ||
-      parseSync(path, text).errors.length
-    ) {
+    if (event.reply.finish !== "stop" || !completeSource(path, text)) {
       onEvent?.(event);
       return finish(event.reply.finish !== "stop" ? "incomplete" : "invalid");
     }
