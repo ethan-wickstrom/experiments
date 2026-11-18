@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
 import { projects } from "./cases.ts";
-import { wire, type Action, type Event } from "./contract.ts";
+import { wire, type Action, type Event } from "../../project/protocol.ts";
 
 type Check = { exit: number; stdout: string; stderr: string };
 async function check(dir: string, signal: AbortSignal): Promise<Check> {
