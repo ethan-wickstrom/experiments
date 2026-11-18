@@ -14,11 +14,7 @@ REVISION = "ac83f813ba7da263c51a9f3ec37c2072597e54af"
 DIRECTORY = Path(__file__).resolve().parent
 ADAPTER = DIRECTORY / "adapter"
 TRAIN = DIRECTORY.parent / "recurrent/data/fixed.jsonl.gz"
-INSTRUCTION = (
-    "Predict the next V8 pause after resume. Reply with one CSV row only. "
-    "S,line,column,x,y for a step or R,line,column,x,y,value for a return. "
-    "Lines and columns start at 1."
-)
+TEMPLATE = (DIRECTORY / "resume.txt").read_text(encoding="utf8").rstrip("\n")
 
 
 def load():
@@ -32,7 +28,7 @@ def load():
 
 
 def prompt(source, current):
-    return f"{INSTRUCTION}\n{source}\nCurrent: {current}\nAction: resume"
+    return TEMPLATE.format(source=source, current=current)
 
 
 def chat_ids(tok, user):
