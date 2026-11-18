@@ -5,10 +5,11 @@ import { openProject } from "./workspace.ts";
 import { decodeAction } from "./protocol.ts";
 import { workFile } from "./work.ts";
 import { editFile } from "./directed.ts";
+import { editReturn } from "./return.ts";
 
 if (!process.argv[2] || process.argv.includes("--help")) {
   console.log(
-    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /forecast ACTION_JSON, or /quit. Writes update the project. Free-action turns allow eight actions. Directed edits allow two proposals with a test run after each write.",
+    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /return PATH FUNC REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project. Free-action turns allow eight actions. Directed edits allow two proposals. Return edits allow one 96-token expression. Each accepted return edit runs the tests.",
   );
 } else {
   const project = await openProject(resolve(process.argv[2]));
@@ -45,9 +46,12 @@ if (!process.argv[2] || process.argv.includes("--help")) {
               answer: await session.predict(decodeAction(line.slice(10)), abort.signal),
             }),
           );
-        } else if (line.startsWith("/edit ") || line.startsWith("/work ")) {
-          const match = /^\/(?:edit|work) (\S+)\s+(.+)$/.exec(line);
-          if (!match) throw Error("Usage: /edit PATH REQUEST");
+        } else if (/^\/(?:edit|work|return)\b/.test(line)) {
+          const match = /^\/(edit|work|return)\s+(\S+)\s+(.+)$/.exec(line);
+          if (!match)
+            throw Error(
+              "Usage: /edit PATH REQUEST, /work PATH REQUEST, or /return PATH FUNC REQUEST",
+            );
           const show = (event: import("./agent.ts").TurnEvent) => {
             console.log(
               JSON.stringify({
@@ -69,9 +73,18 @@ if (!process.argv[2] || process.argv.includes("--help")) {
                 JSON.stringify({ kind: "observation", action: { op: "test" }, result: event.run }),
               );
           };
-          const result = line.startsWith("/work ")
-            ? await workFile(session, match[1]!, match[2]!, { signal: abort.signal, onEvent: show })
-            : await editFile(session, match[1]!, match[2]!, abort.signal, show);
+          const [, command, path, request] = match;
+          let result;
+          if (command === "return") {
+            const args = /^(\S+)\s+(.+)$/.exec(request!);
+            if (!args) throw Error("Usage: /return PATH FUNC REQUEST");
+            result = await editReturn(session, path!, args[1]!, args[2]!, abort.signal, show);
+          } else if (command === "work") {
+            result = await workFile(session, path!, request!, {
+              signal: abort.signal,
+              onEvent: show,
+            });
+          } else result = await editFile(session, path!, request!, abort.signal, show);
           console.log(JSON.stringify({ kind: "turn", stop: result.stop }));
         } else if (line.trim()) {
           const result = await session.turn(line, {

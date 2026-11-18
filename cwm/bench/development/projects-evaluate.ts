@@ -9,7 +9,7 @@ import { held } from "./held.ts";
 import { directedHeld } from "./directed-held.ts";
 import { editFile } from "../../project/directed.ts";
 
-async function acceptance(files: Map<string, string>, tests: string[]) {
+export async function acceptance(files: Map<string, string>, tests: string[]) {
   const grades = [];
   for (const [i, source] of tests.entries()) {
     const copy = new Map(files);
