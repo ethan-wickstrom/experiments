@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { cache, collect, load } from "../collect.ts";
-import { score } from "../score.ts";
-import { WorldModel, type Trace } from "../../cwm.ts";
-import { cases, example } from "./cases.ts";
+import { empty, readout, score } from "../score.ts";
+import { fitSites } from "../sites.ts";
+import { isDeepStrictEqual as equal } from "node:util";
+import type { Trace } from "../../cwm.ts";
+import { boundary, cases, example } from "./cases.ts";
 import { digest, type Example } from "./types.ts";
 
 const [cacheDir, dest] = process.argv.slice(2);
@@ -60,28 +62,30 @@ const save = (name: string, data: unknown) =>
 await save("train", training);
 await save("inputs", inputs);
 await save("labels", { digest: digest(inputs), states: heldout.map((e) => e.after) });
-const source = new WorldModel().fit(train);
-const init = () => ({
-  runs: 0,
-  transitions: 0,
-  correct: 0,
-  wrong: 0,
-  abstained: 0,
-  correctNonterminal: 0,
-  exactRollouts: 0,
-});
-const raw = { production: init(), readout: init() };
-for (const t of test) {
-  score((p, f) => source.predict(p.files, f), t, raw.production);
-  score(
-    (p, f) =>
-      f.kind === "return" && f.stack.length === 1 && f.stack[0]?.fn === p.fn && f.value?.exact
-        ? { kind: "returned", result: f.value }
-        : undefined,
-    t,
-    raw.readout,
-  );
+const paired = test.map((t) => ({ t, ...boundary(t) }));
+for (const group of Map.groupBy(paired, (row) =>
+  digest([{ ...row.example.input, signal: null }]),
+).values()) {
+  assert.equal(group.length, 2);
+  assert.deepEqual(group[0]!.pre, group[1]!.pre, "Raw pre-write frames must be indistinguishable");
 }
+const raw = Object.fromEntries(
+  (["source", "filename-blind", "syntax", "syntax+operands", "readout"] as const).map((name) => {
+    const predict = name === "readout" ? readout : fitSites(name, train),
+      counts = empty(),
+      atWrite = { arraysCorrect: 0, frameCorrect: 0, wrongArrays: 0, abstained: 0 };
+    for (const { t, pre, post } of paired) {
+      score(predict, t, counts);
+      const next = predict({ files: t.files, fn: t.fn, entry: t.entry, args: [] }, pre);
+      if (!next) atWrite.abstained++;
+      else if ("locals" in next && ["a", "b"].every((k) => equal(next.locals[k], post.locals[k])))
+        atWrite.arraysCorrect++;
+      else atWrite.wrongArrays++;
+      if (equal(next, post)) atWrite.frameCorrect++;
+    }
+    return [name, { ...counts, atWrite }];
+  }),
+);
 await save("oracle", {
   train: train.length,
   test: test.length,

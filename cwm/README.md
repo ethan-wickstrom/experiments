@@ -2,6 +2,8 @@
 
 Given a paused TypeScript program, what will its next observable state be? The **oracle** runs the program once to collect labels. The **model** learns from those labels and predicts without running the program. These are separate operations. This is a small, CPU-only testbed inspired by [Meta's CWM](https://github.com/facebookresearch/cwm), not its weights, tokenizer, or benchmark results.
 
+For the experimental design and measured results beyond the raw-frame baseline, see [Learning compositional updates under partial observation](RESEARCH.md).
+
 ## Run
 
 Use Bun 1.4+ and Node 24.11+ on PATH. Bun runs the library, CLI and tests. Node is only the debuggee: a worker connects to its [V8 inspector](https://nodejs.org/api/inspector.html#support-of-breakpoints) without opening a network port.

@@ -115,7 +115,7 @@ function arrays(f: Frame) {
 }
 
 /** One adjacent V8 pause pair; the successor is a label, not an input. */
-export function example(t: Trace): Example {
+export function boundary(t: Trace) {
   const { setup, write, phase } = layout(t);
   const start = t.frames.findIndex((f) => f.stack[0]?.fn === t.fn);
   assert(start >= 0, "Missing entry pause");
@@ -154,5 +154,11 @@ export function example(t: Trace): Example {
     assert.deepEqual(after[1], after[0], "Unexpected change on b");
   assert.deepEqual(t.outcome, { kind: "returned", result: { exact: true, value: 7 } });
   assert.deepEqual(frames.at(-1)!.value, t.outcome.result);
-  return { input: { setup, write, signal, index, before }, after };
+  return {
+    example: { input: { setup, write, signal, index, before }, after },
+    pre,
+    post: frames[next]!,
+  };
 }
+
+export const example = (t: Trace): Example => boundary(t).example;

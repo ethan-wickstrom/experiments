@@ -5,7 +5,7 @@ import { cache, load } from "./collect.ts";
 import { fitSites } from "./sites.ts";
 
 type Predict = (p: Program, f: Frame) => Observation | undefined;
-const empty = () => ({
+export const empty = () => ({
   runs: 0,
   transitions: 0,
   correct: 0,
@@ -15,6 +15,10 @@ const empty = () => ({
   exactRollouts: 0,
 });
 type Counts = ReturnType<typeof empty>;
+export const readout: Predict = (p, f) =>
+  f.kind === "return" && f.stack.length === 1 && f.stack[0]?.fn === p.fn && f.value?.exact
+    ? { kind: "returned", result: f.value }
+    : undefined;
 
 export function score(predict: Predict, t: Trace, c: Counts) {
   c.runs++;
@@ -62,13 +66,7 @@ if (import.meta.main) {
     "syntax+operands",
     "readout",
   ] as const) {
-    const predict: Predict =
-      name === "readout"
-        ? (p, f) =>
-            f.kind === "return" && f.stack.length === 1 && f.stack[0]?.fn === p.fn && f.value?.exact
-              ? { kind: "returned", result: f.value }
-              : undefined
-        : fitSites(name, train);
+    const predict: Predict = name === "readout" ? readout : fitSites(name, train);
     for (const [family, rows] of Map.groupBy(test, (r) => r.family)) {
       const counts = empty();
       for (const { t } of rows) score(predict, t, counts);
