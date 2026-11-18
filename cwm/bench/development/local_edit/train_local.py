@@ -1,5 +1,6 @@
 """Fit attention/MLP LoRA on exact frozen-prefix replay and export standard PEFT."""
 import argparse
+import hashlib
 import json
 import math
 import random
@@ -45,7 +46,7 @@ def learning_rate(step):
     return 0.00008 + 0.00016 * (1+math.cos(math.pi*phase))
 
 
-def fit(cache_path, out, checkpoint=None):
+def fit(cache_path, out, checkpoint=None, arm="trained"):
     examples = training()
     data = torch.load(cache_path, weights_only=True)
     if (data["blocks"], data["revision"], data["corpus"], digest(examples)) != (BLOCKS, REVISION, CORPUS, CORPUS):
@@ -56,6 +57,10 @@ def fit(cache_path, out, checkpoint=None):
     model = adapt(base, BLOCKS)
     params = {k:p for k,p in model.named_parameters() if p.requires_grad}
     assert sum(p.numel() for p in params.values()) == 1081344
+    initial = hashlib.sha256()
+    for name, p in sorted(params.items()):
+        initial.update(name.encode())
+        initial.update(p.detach().numpy().tobytes())
     colon, = tok.encode(":", add_special_tokens=False)
     stop = tok.convert_tokens_to_ids("<|im_end|>")
     optimizer = torch.optim.AdamW(params.values(), lr=0.0004)
@@ -64,7 +69,7 @@ def fit(cache_path, out, checkpoint=None):
     history = []
     if checkpoint and checkpoint.exists():
         saved = torch.load(checkpoint, weights_only=True)
-        if (saved["corpus"], saved["cache_sha"], saved["plan"]) != (CORPUS, cache_sha, plan):
+        if (saved["arm"], saved["corpus"], saved["cache_sha"], saved["plan"]) != (arm, CORPUS, cache_sha, plan):
             raise ValueError("Resume recipe mismatch")
         with torch.no_grad():
             for name, p in params.items():
@@ -83,18 +88,19 @@ def fit(cache_path, out, checkpoint=None):
         pos = torch.arange(f["first"], len(f["hidden"]))
         assert len(labels) == len(pos)
         optimizer.param_groups[0]["lr"] = learning_rate(step)
-        optimizer.zero_grad()
-        logits = top_logits(base, f["hidden"], pos, BLOCKS)
-        losses = F.cross_entropy(logits, labels, reduction="none")
-        if task == "locate":
-            weights = torch.where((labels == colon) | (labels == stop), 0.25, 1.0)
-            loss = (losses * weights).sum() / weights.sum()
-        else:
-            loss = losses.mean()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(params.values(), 1.0)
-        optimizer.step()
-        totals[task].append(float(loss.detach()))
+        if arm == "trained" or task in ("locate", "fill"):
+            optimizer.zero_grad()
+            logits = top_logits(base, f["hidden"], pos, BLOCKS)
+            losses = F.cross_entropy(logits, labels, reduction="none")
+            if task == "locate":
+                weights = torch.where((labels == colon) | (labels == stop), 0.25, 1.0)
+                loss = (losses * weights).sum() / weights.sum()
+            else:
+                loss = losses.mean()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(params.values(), 1.0)
+            optimizer.step()
+            totals[task].append(float(loss.detach()))
         if step % 128 == 0:
             summary = {k:sum(v)/len(v) for k,v in totals.items()}
             history.append(dict(step=step, mean_loss=summary))
@@ -102,7 +108,7 @@ def fit(cache_path, out, checkpoint=None):
             totals.clear()
         if checkpoint and step % 256 == 0:
             tmp = checkpoint.with_suffix(".partial")
-            torch.save(dict(step=step, weights={k:p.detach() for k,p in params.items()},
+            torch.save(dict(arm=arm, step=step, weights={k:p.detach() for k,p in params.items()},
                        optimizer=optimizer.state_dict(), rng=torch.get_rng_state(), corpus=CORPUS, cache_sha=cache_sha,
                        plan=plan, history=history), tmp)
             tmp.replace(checkpoint)
@@ -119,7 +125,11 @@ def fit(cache_path, out, checkpoint=None):
     config.base_model_name_or_path, config.revision = MODEL_ID, REVISION
     model.save_pretrained(out/"peft", save_embedding_layers=False)
     (out/"peft/README.md").unlink(missing_ok=True)
-    report = dict(revision=REVISION, seed=SEED, steps=STEPS, blocks=BLOCKS, coefficients=1081344,
+    edit_plan = [(s,i) for s,i in enumerate(plan, 1) if examples[i]["task"] in ("locate","fill")]
+    report = dict(arm=arm, revision=REVISION, seed=SEED, steps=STEPS, blocks=BLOCKS, coefficients=1081344,
+                  optimizer_steps=STEPS if arm=="trained" else len(edit_plan),
+                  initial_sha256=initial.hexdigest(),
+                  edit_plan_sha256=hashlib.sha256(json.dumps(edit_plan,separators=(",",":")).encode()).hexdigest(),
                   corpus=CORPUS, cache_sha256=cache_sha, peft_sha256=file_hash(out/"peft/adapter_model.safetensors"),
                   history=history)
     (out/"fit.json").write_text(json.dumps(report, indent=2)+"\n")
@@ -129,6 +139,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("cache", type=Path)
     p.add_argument("out", type=Path)
+    p.add_argument("--arm", choices=["trained","edit-only"], default="trained")
     p.add_argument("--checkpoint", type=Path)
     a = p.parse_args()
-    fit(a.cache, a.out, a.checkpoint)
+    fit(a.cache, a.out, a.checkpoint, a.arm)

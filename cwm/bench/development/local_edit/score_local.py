@@ -38,5 +38,5 @@ def evaluate(arm):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("arm", choices=["base","trained"])
+    p.add_argument("arm", choices=["base","trained","edit-only"])
     print(json.dumps(evaluate(p.parse_args().arm), separators=(",", ":")))
