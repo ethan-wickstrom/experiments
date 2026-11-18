@@ -37,7 +37,11 @@ test("resume validates the shard identity and never trains on failed attempts", 
     expect(await Bun.file(path(bad)).exists()).toBe(false);
     expect((await readdir(dirname(path(bad)))).filter((n) => n.endsWith(".error"))).toHaveLength(1);
     await copyFile(path(p), path(bad));
-    await rejects(collect(root, 1, [bad]), /Unexpected trace/);
+    const next = { ...p, args: [17, 5] },
+      queued = { ...p, args: [18, 5] };
+    await rejects(collect(root, 2, [bad, next, queued]), /Unexpected trace/);
+    expect(await Bun.file(path(next)).exists()).toBe(true);
+    expect(await Bun.file(path(queued)).exists()).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -48,11 +48,14 @@ export async function collect(root: string, jobs: number, inputs: Iterable<Progr
   if (!Number.isSafeInteger(jobs) || jobs < 1 || jobs > 32) throw new Error("jobs must be 1..32");
   const pathFor = await cache(root);
   const queue = inputs[Symbol.iterator]();
+  let stopped = false;
   let collected = 0,
     reused = 0,
     failed = 0;
   async function worker() {
-    for (let item = queue.next(); !item.done; item = queue.next()) {
+    while (!stopped) {
+      const item = queue.next();
+      if (item.done) return;
       const program = item.value,
         path = pathFor(program);
       if (await Bun.file(path).exists()) {
@@ -72,7 +75,14 @@ export async function collect(root: string, jobs: number, inputs: Iterable<Progr
       collected++;
     }
   }
-  await Promise.all(Array.from({ length: jobs }, worker));
+  const workers = Array.from({ length: jobs }, worker);
+  try {
+    await Promise.all(workers);
+  } catch (error) {
+    stopped = true;
+    await Promise.allSettled(workers);
+    throw error;
+  }
   return { collected, reused, failed };
 }
 
