@@ -5,7 +5,7 @@ import { Session } from "node:inspector/promises";
 import { SourceMap, type SourceMapPayload } from "node:module";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isDeepStrictEqual } from "node:util";
+import { isDeepStrictEqual, types } from "node:util";
 import { json } from "node:stream/consumers";
 import { Readable } from "node:stream";
 import { createInterface } from "node:readline";
@@ -71,63 +71,71 @@ interface Job {
   maxFrames: number;
 }
 
-async function properties(session: Session, ref: Runtime.RemoteObject) {
-  if (!ref.objectId) throw new Error("Inspector did not supply an object handle");
-  const reply = await session.post("Runtime.getProperties", {
-    objectId: ref.objectId,
-    ownProperties: true,
-  });
-  if (reply.exceptionDetails) throw new Error("Inspector could not read properties");
-  return reply.result;
-}
-
-// Read debugger descriptors, never evaluate guest expressions or call toJSON/getters.
-async function snapshot(session: Session, root?: Runtime.RemoteObject): Promise<Snapshot> {
-  let exact = true;
-  let remaining = 256;
-  function omitted(reason: string) {
-    exact = false;
-    return `<${reason}>`;
-  }
-  async function read(ref: Runtime.RemoteObject | undefined, depth: number): Promise<Json> {
-    if (!ref) return omitted("unavailable");
-    if (--remaining < 0 || depth > 6) return omitted("limit");
-    if (ref.unserializableValue) return omitted(ref.unserializableValue);
-    if (ref.subtype === "null") return null;
-    if (ref.type === "string" && ref.value.length > 4096) return omitted("long string");
-    if (["boolean", "number", "string"].includes(ref.type)) return ref.value;
-    const array = ref.subtype === "array";
-    if (!array && (ref.subtype || ref.className !== "Object")) {
-      const label = ref.subtype === "error" ? ref.description?.split("\n", 1)[0] : undefined;
-      return omitted(label?.slice(0, 512) ?? ref.subtype ?? ref.className ?? ref.type);
-    }
-    const props = await properties(session, ref);
-    if (array) {
-      const length: number = props.find((p) => p.name === "length")?.value?.value;
-      if (!Number.isSafeInteger(length) || length > remaining) return omitted("array limit");
-      const indices = new Map(props.map((p) => [p.name, p]));
-      const values: Json[] = [];
-      for (let i = 0; i < length; i++)
-        values.push(await read(indices.get(String(i))?.value, depth + 1));
-      if (props.length !== length + 1) exact = false;
-      return values;
-    }
-    const fields: Record<string, Json> = Object.create(null);
-    for (const p of props) {
-      if (remaining <= 0) {
-        exact = false;
-        break;
+// Runs in the host realm, over actual values, before CDP can format their descriptions.
+// Only arrays and ordinary records are projected; never inspect the target of a Proxy.
+function project(value: unknown, scope: boolean, plainProto: object): string {
+  function snapshot(root: unknown, unavailable = false): Snapshot {
+    let exact = true,
+      remaining = 256;
+    const omit = (why: string) => {
+      exact = false;
+      return `<${why}>`;
+    };
+    function read(v: unknown, depth: number): Json {
+      if (--remaining < 0 || depth > 6) return omit("limit");
+      if (v === null || typeof v === "boolean") return v;
+      if (typeof v === "number")
+        return Number.isFinite(v) && !Object.is(v, -0)
+          ? v
+          : omit(Object.is(v, -0) ? "-0" : String(v));
+      if (typeof v === "string") return v.length <= 4096 ? v : omit("long string");
+      if (typeof v !== "object") return omit(typeof v);
+      if (types.isProxy(v)) return omit("proxy");
+      if (types.isNativeError(v)) return omit("error");
+      if (types.isModuleNamespaceObject(v)) return omit("module namespace");
+      function field(k: PropertyKey) {
+        const d = Object.getOwnPropertyDescriptor(v, k);
+        return d && "value" in d ? read(d.value, depth + 1) : omit("unavailable");
       }
-      if (p.symbol || !p.enumerable) {
-        exact = false;
-        continue;
+      if (Array.isArray(v)) {
+        const length = Object.getOwnPropertyDescriptor(v, "length")!.value as number;
+        if (length > remaining) return omit("array limit");
+        const items = Array.from({ length }, (_, i) => field(String(i)));
+        if (Reflect.ownKeys(v).length !== length + 1) exact = false;
+        return items;
       }
-      fields[p.name] = await read(p.value, depth + 1);
+      const proto = Object.getPrototypeOf(v);
+      if (proto !== null && proto !== plainProto) return omit("object");
+      const fields: Record<string, Json> = Object.create(null);
+      for (const k of Reflect.ownKeys(v)) {
+        if (remaining <= 0) {
+          exact = false;
+          break;
+        }
+        if (typeof k !== "string" || !Object.prototype.propertyIsEnumerable.call(v, k)) {
+          exact = false;
+          continue;
+        }
+        fields[k] = field(k);
+      }
+      return fields;
     }
-    return fields;
+    const value = unavailable ? omit("unavailable") : read(root, 0);
+    return { value, exact };
   }
-  const value = await read(root, 0);
-  return { value, exact };
+  if (!scope) return JSON.stringify(snapshot(value));
+  const locals: Frame["locals"] = Object.create(null);
+  for (const key of Object.getOwnPropertyNames(value)) {
+    let d;
+    // V8's synthetic scope mirror throws for uninitialized lexical bindings.
+    try {
+      d = Object.getOwnPropertyDescriptor(value, key);
+    } catch (error) {
+      if (!types.isNativeError(error)) throw error;
+    }
+    locals[key] = snapshot(d?.value, !d || !("value" in d));
+  }
+  return JSON.stringify(locals);
 }
 
 const completionScript = "cwm:completion";
@@ -160,20 +168,54 @@ async function observe(job: Job) {
   }
   const frames: Frame[] = [];
   let result: Snapshot | undefined;
+  let projector: string | undefined;
+  async function inspect(ref: Runtime.RemoteObject, scope: true): Promise<Frame["locals"]>;
+  async function inspect(ref: Runtime.RemoteObject, scope: false): Promise<Snapshot>;
+  async function inspect(ref: Runtime.RemoteObject, scope: boolean) {
+    const { objectId, value, unserializableValue } = ref;
+    const reply = await session.post("Runtime.callFunctionOn", {
+      objectId: projector!,
+      functionDeclaration: "function(v, scope) { return this(v, scope); }",
+      arguments: [
+        objectId ? { objectId } : unserializableValue ? { unserializableValue } : { value },
+        { value: scope },
+      ],
+      returnByValue: true,
+      silent: true,
+    });
+    if (reply.exceptionDetails || reply.result.type !== "string")
+      throw new Error("Inspector projection failed");
+    return JSON.parse(reply.result.value);
+  }
   async function paused(p: Debugger.PausedEventDataType) {
     const top = p.callFrames[0]!;
+    // V8 already constructed these descriptions while delivering the pause. On
+    // affected engines a native Error here may already have run guest code.
+    if (
+      (p.data as Runtime.RemoteObject | undefined)?.subtype === "error" ||
+      p.callFrames.some((f) => f.this.subtype === "error" || f.returnValue?.subtype === "error")
+    )
+      throw new Error("Cannot faithfully observe a debugger pause exposing a native Error");
     if (top.location.scriptId === completionId) {
-      const bindings = await properties(session, top.scopeChain[0]!.object);
-      result = await snapshot(session, bindings.find((v) => v.name === "result")?.value);
+      if (!projector) {
+        // Retain the first checkpoint's trusted receiver beyond this backtrace.
+        const fn = top.this;
+        if (!fn.objectId || fn.type !== "function") throw new Error("Missing snapshot helper");
+        const kept = await session.post("Runtime.callFunctionOn", {
+          objectId: fn.objectId,
+          functionDeclaration: "function(){return this}",
+          objectGroup: "cwm",
+        });
+        projector = kept.result.objectId;
+        if (!projector) throw new Error("Cannot retain snapshot helper");
+      } else result = (await inspect(top.scopeChain[0]!.object, true)).result;
     } else if (site(top)) {
       if (frames.length >= job.maxFrames) throw new Error("Trace frame limit exceeded");
       const locals: Frame["locals"] = Object.create(null);
       for (const scope of top.scopeChain) {
         if (!["block", "local", "closure", "catch"].includes(scope.type)) continue;
-        for (const binding of await properties(session, scope.object)) {
-          if (!Object.hasOwn(locals, binding.name))
-            locals[binding.name] = await snapshot(session, binding.value);
-        }
+        for (const [name, binding] of Object.entries(await inspect(scope.object, true)))
+          if (!Object.hasOwn(locals, name)) locals[name] = binding;
       }
       const exception = p.reason === "exception" || p.reason === "promiseRejection";
       const returned = top.returnValue;
@@ -183,10 +225,7 @@ async function observe(job: Job) {
         locals,
       };
       if (exception || returned)
-        frame.value = await snapshot(
-          session,
-          exception ? (p.data as Runtime.RemoteObject) : returned,
-        );
+        frame.value = await inspect((exception ? p.data : returned) as Runtime.RemoteObject, false);
       frames.push(frame);
     }
     await session.post("Debugger.resume");
@@ -243,16 +282,25 @@ async function execute(job: Job): Promise<Execution> {
     filename: completionScript,
   });
   const args = vm.runInContext(`JSON.parse(${JSON.stringify(JSON.stringify(job.args))})`, context);
+  // Link/configuration errors are not observations of a guest exception.
+  if (!Object.getOwnPropertyNames(entry.namespace).includes(job.fn))
+    throw new Error(`Missing export: ${job.fn}`);
   const worker = new Worker(new URL(import.meta.url), { workerData: { cwmObserver: true, job } });
   try {
     const [ready] = await once(worker, "message");
     if (ready !== "ready") throw new Error("Observer failed to initialize");
     const report = once(worker, "message");
+    const helper = vm.compileFunction(
+      "return project(value,scope,plainProto);",
+      ["value", "scope"],
+      {
+        parsingContext: context,
+        contextExtensions: [{ project, plainProto: vm.runInContext("Object.prototype", context) }],
+      },
+    );
+    Reflect.apply(complete, helper, []);
     let kind: Execution["outcome"]["kind"] = "returned";
     let value: unknown;
-    // Link/configuration errors are not observations of a guest exception.
-    if (!Object.getOwnPropertyNames(entry.namespace).includes(job.fn))
-      throw new Error(`Missing export: ${job.fn}`);
     try {
       await entry.evaluate();
     } catch (error) {
@@ -261,7 +309,10 @@ async function execute(job: Job): Promise<Execution> {
     }
     if (kind !== "threw") {
       const fn = (entry.namespace as Record<string, unknown>)[job.fn];
-      if (typeof fn !== "function") throw new Error(`Export is not callable: ${job.fn}`);
+      if (typeof fn !== "function") {
+        await worker.terminate();
+        throw new Error(`Export is not callable: ${job.fn}`);
+      }
       try {
         value = await Reflect.apply(fn, undefined, args);
       } catch (error) {

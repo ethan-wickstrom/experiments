@@ -36,10 +36,11 @@ Change **only** the index to `1-(Math.abs(n)%2)`. Both versions visit one even a
 
 ## Replay
 
-From the repository root, use Bun 1.4.4 and Node 24.19.0 on PATH. Use a fresh output path; the runner refuses to overwrite evidence.
+From the repository root, use Bun 1.4.4 and Node 24.19.0 on PATH. Replay the frozen oracle revision, not the later scope-projection implementation. Use fresh paths:
 
 ```sh
-cd cwm
+git worktree add --detach ../cwm-first-write-replay 59aac3b64660dd50e343c77b90f991d0ad8539da
+cd ../cwm-first-write-replay/cwm
 bun install --frozen-lockfile
 bun bench/first-write/replay.ts first-write-evidence
 ```
