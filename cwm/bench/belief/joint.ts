@@ -27,7 +27,7 @@ function softmax(rows: Matrix) {
 }
 
 /** Same observed inputs, but one joint softmax over entire observed delta tensors. */
-export function fitJoint(train: Example[], seed: number): Forecast {
+export function fitJoint(train: Example[], seed: number, updates = 600): Forecast {
   if (!train.length) return () => [];
   const vocabulary = new Map<string, number>(),
     labels = new Map<string, number>(),
@@ -72,7 +72,7 @@ export function fitJoint(train: Example[], seed: number): Forecast {
     bias = Matrix.zeros(1, labels.size);
   const forward = (hidden: Matrix) => softmax(hidden.mmul(V).addRowVector(bias));
   const XT = X.transpose();
-  for (let t = 0; t < 600; t++) {
+  for (let t = 0; t < updates; t++) {
     const H = X.mmul(W).tanh(),
       D = forward(H);
     for (const [i, k] of target.entries()) D.set(i, k, D.get(i, k) - 1);

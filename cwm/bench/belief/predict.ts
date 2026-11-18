@@ -55,6 +55,7 @@ export function forecasts(train: Example[], inputs: Input[]) {
     const joint = fitJoint(train, seed);
     record("mlp-" + seed, joint);
     record("mlp-masked-" + seed, joint, true);
+    record("mlp-10x-" + seed, fitJoint(train, seed, 6000));
   }
   return { digest: digest(inputs), models };
 }
