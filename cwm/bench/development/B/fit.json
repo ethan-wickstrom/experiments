@@ -1,0 +1,110 @@
+{
+  "recipe": {
+    "arm": "B",
+    "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+    "corpus": "c0f61edeeb8370079dedfafd3100b363a1e0bb4389558779c6b41d6372f23354",
+    "rank": 16,
+    "alpha": 16,
+    "draws": {
+      "policy": 48
+    },
+    "seed": 17,
+    "lr": 0.001,
+    "steps": 256,
+    "cache_version": 1
+  },
+  "step": 256,
+  "data_lengths": {
+    "forecast": {
+      "records": 66,
+      "target_tokens": 138,
+      "prompt": {
+        "min": 93,
+        "median": 258.0,
+        "max": 459
+      },
+      "target": {
+        "min": 2,
+        "median": 2.0,
+        "max": 3
+      },
+      "total": {
+        "min": 96,
+        "median": 260.0,
+        "max": 461
+      }
+    },
+    "policy": {
+      "records": 66,
+      "target_tokens": 1002,
+      "prompt": {
+        "min": 83,
+        "median": 281.0,
+        "max": 486
+      },
+      "target": {
+        "min": 6,
+        "median": 6.0,
+        "max": 57
+      },
+      "total": {
+        "min": 94,
+        "median": 291.0,
+        "max": 492
+      }
+    },
+    "execution": {
+      "records": 98,
+      "target_tokens": 1076,
+      "prompt": {
+        "min": 95,
+        "median": 103.0,
+        "max": 105
+      },
+      "target": {
+        "min": 10,
+        "median": 10.0,
+        "max": 12
+      },
+      "total": {
+        "min": 105,
+        "median": 113.0,
+        "max": 117
+      }
+    }
+  },
+  "history": [
+    {
+      "step": 32,
+      "batch_ce": 0.4986865520477295
+    },
+    {
+      "step": 64,
+      "batch_ce": 0.05406048893928528
+    },
+    {
+      "step": 96,
+      "batch_ce": 0.07625177502632141
+    },
+    {
+      "step": 128,
+      "batch_ce": 0.18560890853405
+    },
+    {
+      "step": 160,
+      "batch_ce": 0.1678152233362198
+    },
+    {
+      "step": 192,
+      "batch_ce": 0.2128097265958786
+    },
+    {
+      "step": 224,
+      "batch_ce": 0.09967110306024551
+    },
+    {
+      "step": 256,
+      "batch_ce": 0.202524796128273
+    }
+  ]
+}
