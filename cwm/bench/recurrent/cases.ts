@@ -22,27 +22,66 @@ const held = {
 };
 type Layout = "plain" | "varied" | "packed" | "wrapped";
 function render(body: string, layout: Layout) {
-  const [a, b] = {
-    plain: ["x", "y"], varied: ["counter", "increment"], packed: ["distance", "stride"],
-    wrapped: ["remaining", "δ"],
-  }[layout]!;
-  const text = body.replaceAll(/\bA\b/g, a!).replaceAll(/\bB\b/g, b!);
+  const [a, b] = (
+    {
+      plain: ["x", "y"],
+      varied: ["counter", "increment"],
+      packed: ["distance", "stride"],
+      wrapped: ["remaining", "δ"],
+    } as const
+  )[layout];
+  const text = body.replaceAll(/\bA\b/g, a).replaceAll(/\bB\b/g, b);
   const lines = text.split("\n");
-  if (layout === "packed") return `export function run(${a}:number,${b}:number){ /* 🧮 */ ${lines.join(" ")} }`;
-  const spaced = lines.map(l => (layout === "plain" ? "" : "   ") + l.replaceAll("return ", layout === "plain" ? "return " : "return    "));
+  if (layout === "packed")
+    return `export function run(${a}:number,${b}:number){ /* 🧮 */ ${lines.join(" ")} }`;
+  const spaced = lines.map(
+    (l) =>
+      (layout === "plain" ? "" : "   ") +
+      l.replaceAll("return ", layout === "plain" ? "return " : "return    "),
+  );
   return `export function run(${a}:number, ${b}:number) {\n${spaced.join(layout === "wrapped" ? "\r\n\n" : "\n")}\n}`;
 }
 export type Split = "fixed" | "varied" | "held";
 export function cases(split: Split) {
-  const rows: {family: string; layout: Layout; program: Program}[] = [];
+  const rows: { family: string; layout: Layout; program: Program }[] = [];
   for (const [family, body] of Object.entries(split === "held" ? held : train)) {
-    const folds = split === "held" ? [[[1,4],[6,6],[9,2],[15,3]], [[1,4],[6,6],[9,2],[15,3]]] :
-      [[[1,2],[3,3],[5,2]], [[2,4],[4,4],[7,3]]];
+    const heldInputs = [
+      [1, 4],
+      [6, 6],
+      [9, 2],
+      [15, 3],
+    ];
+    const folds =
+      split === "held"
+        ? [heldInputs, heldInputs]
+        : [
+            [
+              [1, 2],
+              [3, 3],
+              [5, 2],
+            ],
+            [
+              [2, 4],
+              [4, 4],
+              [7, 3],
+            ],
+          ];
     for (const [i, argsList] of folds.entries()) {
-      const layout = split === "held" ? (i ? "wrapped" : "packed") : split === "varied" && i ? "varied" : "plain";
+      const layout =
+        split === "held"
+          ? i
+            ? "wrapped"
+            : "packed"
+          : split === "varied" && i
+            ? "varied"
+            : "plain";
       const entry = `${family}-${layout}.ts`;
       for (const args of argsList)
-        rows.push({family, layout, program: {entry, fn:"run", args, files:{[entry]:render(body, layout)}}});
+        rows.push({
+          family,
+          layout,
+          program: { entry, fn: "run", args, files: { [entry]: render(body, layout) } },
+        });
     }
   }
   return rows;

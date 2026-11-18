@@ -1,48 +1,11 @@
-import { parseSync, type Expression } from "oxc-parser";
+import { entryFunction, expressions, type Expr } from "../../structured/scalar.ts";
+export { entryFunction, expressions, scalar, type Expr } from "../../structured/scalar.ts";
 
-export type Expr = { slot: number } | { literal: number } | { op: string; l: Expr; r: Expr };
 export interface Plan {
   names: string[];
   params: number;
   code: { line: number; expr: Expr; returns: boolean }[];
 }
-export function scalar(n: unknown): n is number {
-  return typeof n === "number" && Number.isSafeInteger(n) && !Object.is(n, -0);
-}
-
-export function entryFunction(file: string, source: string) {
-  const syntax = parseSync(file, source);
-  const [top] = syntax.program.body;
-  const f = top?.type === "ExportNamedDeclaration" ? top.declaration : null;
-  if (
-    syntax.errors.length ||
-    syntax.program.body.length !== 1 ||
-    f?.type !== "FunctionDeclaration" ||
-    f.id?.name !== "run" ||
-    f.async ||
-    f.generator ||
-    !f.body
-  )
-    throw new Error("Expected a single synchronous exported run function");
-  const names: string[] = [];
-  for (const p of f.params) {
-    if (p.type !== "Identifier" || names.includes(p.name)) throw new Error("Invalid parameter");
-    names.push(p.name);
-  }
-  return { names, statements: f.body.body };
-}
-
-export function expressions(names: readonly string[]) {
-  return function read(e: Expression): Expr {
-    if (e.type === "ParenthesizedExpression") return read(e.expression);
-    if (e.type === "Literal" && scalar(e.value)) return { literal: e.value };
-    if (e.type === "Identifier" && names.includes(e.name)) return { slot: names.indexOf(e.name) };
-    if (e.type === "BinaryExpression" && e.left.type !== "PrivateIdentifier")
-      return { op: e.operator, l: read(e.left), r: read(e.right) };
-    throw new Error("Unsupported expression: " + e.type);
-  };
-}
-
 // Static scaffolding, not a learned part: lexical slots and straight-line sequencing.
 export function plan(source: string): Plan {
   const { names, statements } = entryFunction("input.ts", source),

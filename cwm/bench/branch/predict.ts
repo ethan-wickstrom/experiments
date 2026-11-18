@@ -1,3 +1,4 @@
+import { fitGuards, unique } from "../../structured/guards.ts";
 import type { Statement } from "oxc-parser";
 import type { Site } from "../../cwm.ts";
 import { fit, type Atom } from "../composition/model.ts";
@@ -71,19 +72,6 @@ export type Mode = "learned" | "majority" | "flipped" | "untrained";
 export type Pause = { site: Site; kind: string; store: number[] };
 export type Demo = { g: Graph; states: State[]; raw: Pause[]; end: { returned: number } };
 
-const predicates: Record<string, (a: number, b: number) => boolean> = {
-  never: () => false,
-  always: () => true,
-  lt: (a, b) => a < b,
-  le: (a, b) => a <= b,
-  gt: (a, b) => a > b,
-  ge: (a, b) => a >= b,
-  eq: (a, b) => a === b,
-  ne: (a, b) => a !== b,
-};
-function unique<T>(values: T[]): T | undefined {
-  return values.length && values.every((v) => v === values[0]) ? values[0] : undefined;
-}
 const phaseKey = (n: Node, raw: Pause) => [n.kind, raw.kind, raw.site.column - n.col].join("/");
 export function train(demos: Demo[]) {
   const atoms: Atom[] = [],
@@ -134,12 +122,7 @@ export function train(demos: Demo[]) {
     }
   }
   const values = fit(atoms),
-    rules = new Map(
-      [...guards].map(([token, rs]) => [
-        token,
-        Object.keys(predicates).filter((k) => rs.every((r) => predicates[k]!(r.x, r.y) === r.arm)),
-      ]),
-    );
+    { rules, decide } = fitGuards(guards);
   function next(g: Graph, s: State, mode: Mode): Boundary | undefined {
     const n = g.nodes.get(s.pc);
     if (!n || s.store.length !== g.names.length || !s.store.every(scalar)) return;
@@ -154,7 +137,7 @@ export function train(demos: Demo[]) {
         const x = values.evaluate(e.l, s.store),
           y = values.evaluate(e.r, s.store);
         if (x === undefined || y === undefined) return;
-        arm = unique(rules.get(e.op)!.map((k) => predicates[k]!(x, y)));
+        arm = decide(e.op, x, y);
         if (arm === undefined) return;
         if (mode === "flipped") arm = !arm;
       }
