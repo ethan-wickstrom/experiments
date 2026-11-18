@@ -8,6 +8,8 @@ In a separate prospective paired decision test, disclose the goal, current files
 
 ## Live results
 
+The frozen blind full-context decision run disclosed all visible file bytes on the opening `unread` decision. All 60 training decisions at that status disclosed an empty file list. Initial `done` choices on that run therefore measure behavior under a changed observation contract. Direct source generation used the complete visible project in training and evaluation.
+
 All three arms failed both the initial request and the cumulative follow-up on each free-action project (offline task board, Unicode editor and asynchronous sample reader). All three also failed both requests on each directed project (invoice totals and delimited export). The cumulative graders ran 9 individual checks per arm for policy and 6 for directed editing. Every grader ran and failed. Each transcript includes the final source and separate raw test output. [Transcripts](results)
 
 | Arm | Free-action turns accepted | Generated decisions | Writes applied | Actual tests in policy | Budget exits | Input / output tokens | Directed turns accepted | Directed calls | Directed input / output |
