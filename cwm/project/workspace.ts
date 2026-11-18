@@ -31,6 +31,9 @@ export function sourcePath(name: string) {
 export const maxFileBytes = 64 * 1024;
 export const maxFiles = 128;
 
+/** Bun's default test filename suffixes among supported TypeScript workspace files. */
+export const testPath = (name: string) => /[._](?:test|spec)\.(?:[cm]?ts|tsx)$/i.test(name);
+
 async function snapshot(root: string) {
   const files = new Map<string, string>();
   async function visit(dir: string) {

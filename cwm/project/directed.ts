@@ -1,7 +1,7 @@
 import { parseSync } from "oxc-parser";
 import { type ProjectSession, type TurnEvent } from "./agent.ts";
 import { projectJson, type Action } from "./protocol.ts";
-import { sourcePath } from "./workspace.ts";
+import { sourcePath, testPath } from "./workspace.ts";
 
 function replacement(path: string, reply: string) {
   const valid = (source: string) => !!source.trim() && !parseSync(path, source).errors.length;
@@ -31,7 +31,7 @@ export async function editFile(
   const { files } = session.project;
   const tests: Record<string, string> = {};
   for (const name of [...files.keys()].sort()) {
-    if (name === path || !/\.(test|spec)\.[cm]?tsx?$/.test(name)) continue;
+    if (name === path || !testPath(name)) continue;
     tests[name] = (await session.act({ op: "read", path: name }, signal)).observed;
   }
   if (files.has(path)) await session.act({ op: "read", path }, signal);

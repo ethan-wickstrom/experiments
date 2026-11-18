@@ -1,7 +1,7 @@
 import { parseSync } from "oxc-parser";
 import { type ProjectSession, type TurnEvent } from "./agent.ts";
 import { projectJson } from "./protocol.ts";
-import { sourcePath } from "./workspace.ts";
+import { sourcePath, testPath } from "./workspace.ts";
 
 // Oxc's JavaScript spans index UTF-16 code units, as does String.slice().
 function selection(path: string, source: string, name: string) {
@@ -41,7 +41,7 @@ export async function editReturn(
   if (!current) throw Error("Expected a named exported function with one return expression");
   const tests: Record<string, string> = {};
   for (const file of session.state().files) {
-    if (file !== path && /\.(?:spec|test)\.[cm]?tsx?$/.test(file))
+    if (file !== path && testPath(file))
       tests[file] = (await session.act({ op: "read", path: file }, signal)).observed;
   }
   const requests = session.history.flatMap((event) => ("user" in event ? [event.user] : []));
