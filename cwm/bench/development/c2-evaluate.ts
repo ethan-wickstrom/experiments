@@ -11,7 +11,9 @@ function passed(run: ToolRun) {
   return run.exit === 0 && /^\s*[1-9]\d* pass$/m.test(run.stderr);
 }
 
-async function evaluate(url: string, model: string, sourceOnly: boolean) {
+type Mode = "aligned" | "full-context" | "policy" | "source";
+
+async function evaluate(url: string, model: string, mode: Mode) {
   const runs = [];
   const generate = endpoint(url, model);
   for (const p of c2Held) {
@@ -20,7 +22,10 @@ async function evaluate(url: string, model: string, sourceOnly: boolean) {
     const turns = [];
     for (const [i, { goal }] of p.turns.entries()) {
       const start = performance.now();
-      const result = await workFile(session, p.path, goal, { sourceOnly });
+      const result = await workFile(session, p.path, goal, {
+        sourceOnly: mode === "source",
+        visibility: mode === "aligned" ? "training-aligned" : "full-context",
+      });
       const elapsedMs = Math.round(performance.now() - start);
       const visible = await Effect.runPromise(runTests(files));
       const hidden = [];
@@ -54,12 +59,14 @@ if (import.meta.main) {
     !url ||
     !model ||
     !["A", "B2", "C2"].includes(arm ?? "") ||
-    (mode !== "policy" && mode !== "source") ||
+    (mode !== "aligned" && mode !== "full-context" && mode !== "policy" && mode !== "source") ||
     !out
   )
-    throw Error("Usage: bun c2-evaluate.ts ENDPOINT MODEL A|B2|C2 policy|source FRESH.json.gz");
+    throw Error(
+      "Usage: bun c2-evaluate.ts ENDPOINT MODEL A|B2|C2 aligned|full-context|source FRESH.json.gz",
+    );
   if (await Bun.file(out).exists()) throw Error("Output exists");
-  const runs = await evaluate(url, model, mode === "source");
+  const runs = await evaluate(url, model, mode);
   await writeFile(out, gzipSync(JSON.stringify({ arm, mode, model, runs }, null, 2) + "\n"), {
     flag: "wx",
   });
