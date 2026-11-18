@@ -3,7 +3,7 @@ import { type ProjectSession } from "./agent.ts";
 import { type BodyGenerate, type BodyQuery, type BodyReply } from "./body-completion.ts";
 import { projectJson, wire } from "./protocol.ts";
 import { testObservation, type ToolRun } from "./sandbox.ts";
-import { sourcePath } from "./workspace.ts";
+import { sourcePath, testPath } from "./workspace.ts";
 
 const fence = "\x60\x60\x60";
 type Target = { name: string; declaration: string; start: number; end: number };
@@ -47,6 +47,7 @@ type Write = {
   consumed: number;
   observed: string;
   prediction: string | null;
+  forecastFailure?: { query: BodyQuery; error: string; elapsedMs: number };
   run?: ToolRun;
 };
 const completed = (r: BodyReply) => !r.truncated && (r.finish === "eos" || r.finish === "word");
@@ -59,11 +60,7 @@ export async function editBody(
   goal: string,
   { name, signal }: { name?: string; signal?: AbortSignal } = {},
 ) {
-  if (
-    !sourcePath(path) ||
-    !/\.(?:[cm]?ts|tsx)$/i.test(path) ||
-    /\.(?:spec|test)\.[cm]?tsx?$/i.test(path)
-  )
+  if (!sourcePath(path) || !/\.(?:[cm]?ts|tsx)$/i.test(path) || testPath(path))
     throw Error("Expected an implementation TypeScript path");
   await session.begin(goal);
   const files: Record<string, string> = Object.create(null);
@@ -121,14 +118,26 @@ export async function editBody(
     if (!patch) return finish("invalid-body");
     const action = { op: "write" as const, path, text: patch.text };
     const snapshot = session.state();
-    const forecast = await query("forecast", {
+    const forecastQuery = {
       user: wire(snapshot.files, snapshot.history, action),
       prefill: "",
       limit: 8,
-    });
-    const word = forecast.text.trim();
-    const prediction =
-      completed(forecast) && ["pass", "fail", "rejected"].includes(word) ? word : null;
+    };
+    let prediction: string | null = null;
+    let forecastFailure: Write["forecastFailure"];
+    const forecastStart = performance.now();
+    try {
+      const forecast = await query("forecast", forecastQuery);
+      const word = forecast.text.trim();
+      if (completed(forecast) && ["pass", "fail", "rejected"].includes(word)) prediction = word;
+    } catch (error) {
+      forecastFailure = {
+        query: forecastQuery,
+        error: String(error),
+        elapsedMs: Math.round(performance.now() - forecastStart),
+      };
+    }
+    signal?.throwIfAborted();
     const observed = (await session.act(action, signal)).observed;
     const write: Write = {
       path,
@@ -137,6 +146,7 @@ export async function editBody(
       consumed: patch.consumed - newline.length,
       observed,
       prediction,
+      forecastFailure,
     };
     writes.push(write);
     if (observed !== "written") return finish("rejected");
