@@ -1,0 +1,489 @@
+[
+  {
+    "name": "outline",
+    "fn": "headings",
+    "args": "lines: string[]",
+    "initial": "return lines;",
+    "turns": [
+      {
+        "call": "[\"# Title\",\"memo\",\"## End\"]",
+        "goals": ["Keep only heading lines.", "Keep only non-heading lines."],
+        "bodies": [
+          "return lines.filter(s => s.startsWith(\"#\"));",
+          "return lines.filter(s => !s.startsWith(\"#\"));"
+        ],
+        "expected": [["# Title", "## End"], ["memo"]]
+      },
+      {
+        "call": "[\"# Title\",\"memo\",\"## End\"]",
+        "goals": ["Strip the hash prefix from each heading.", "Report each heading's hash depth."],
+        "bodies": [
+          "return lines.filter(s => s.startsWith(\"#\")).map(s => s.replace(/^#+ /, \"\"));",
+          "return lines.filter(s => s.startsWith(\"#\")).map(s => s.match(/^#+/)![0].length);"
+        ],
+        "expected": [
+          ["Title", "End"],
+          [1, 2]
+        ]
+      },
+      {
+        "call": "[\"# Title\",\"memo\",\"## End\"]",
+        "goals": ["Return just top-level heading names.", "Return just nested heading names."],
+        "bodies": [
+          "return lines.filter(s => s.startsWith(\"# \")).map(s => s.slice(2));",
+          "return lines.filter(s => /^##+ /.test(s)).map(s => s.replace(/^#+ /, \"\"));"
+        ],
+        "expected": [["Title"], ["End"]]
+      }
+    ]
+  },
+  {
+    "name": "agenda",
+    "fn": "slots",
+    "args": "rows: number[][]",
+    "initial": "return rows;",
+    "turns": [
+      {
+        "call": "[[2,4],[6,9],[1,3]]",
+        "goals": ["Sort intervals by ascending start.", "Sort intervals by descending start."],
+        "bodies": [
+          "return rows.slice().sort((a, b) => a[0] - b[0]);",
+          "return rows.slice().sort((a, b) => b[0] - a[0]);"
+        ],
+        "expected": [
+          [
+            [1, 3],
+            [2, 4],
+            [6, 9]
+          ],
+          [
+            [6, 9],
+            [2, 4],
+            [1, 3]
+          ]
+        ]
+      },
+      {
+        "call": "[[2,4],[6,9],[1,3]]",
+        "goals": [
+          "Report durations in the original input order.",
+          "Report each interval's midpoint."
+        ],
+        "bodies": [
+          "return rows.map(([a, b]) => b - a);",
+          "return rows.map(([a, b]) => (b + a) / 2);"
+        ],
+        "expected": [
+          [2, 3, 2],
+          [3, 7.5, 2]
+        ]
+      },
+      {
+        "call": "[[2,4],[6,9],[1,3]]",
+        "goals": [
+          "Return the longest duration, zero if empty.",
+          "Return total duration, zero if empty."
+        ],
+        "bodies": [
+          "return Math.max(0, ...rows.map(([a, b]) => b - a));",
+          "return rows.reduce((n, [a, b]) => n + b - a, 0);"
+        ],
+        "expected": [3, 7]
+      }
+    ]
+  },
+  {
+    "name": "mailbox",
+    "fn": "messages",
+    "args": "items: string[]",
+    "initial": "return items.join(\",\");",
+    "turns": [
+      {
+        "call": "[\"x\",\"y\",\"x\",\"z\"]",
+        "goals": [
+          "List unique messages in first-seen order.",
+          "List only repeated messages, once each."
+        ],
+        "bodies": [
+          "return [...new Set(items)];",
+          "return [...new Set(items.filter((s, i) => items.indexOf(s) !== i))];"
+        ],
+        "expected": [["x", "y", "z"], ["x"]]
+      },
+      {
+        "call": "[\"x\",\"y\",\"x\",\"z\"]",
+        "goals": ["Return the last two unique messages.", "Return the first two unique messages."],
+        "bodies": [
+          "return [...new Set(items)].slice(-2);",
+          "return [...new Set(items)].slice(0, 2);"
+        ],
+        "expected": [
+          ["y", "z"],
+          ["x", "y"]
+        ]
+      },
+      {
+        "call": "[\"x\",\"y\",\"x\",\"z\"]",
+        "goals": [
+          "Join the last two unique messages with a vertical bar.",
+          "Join the last two unique messages with one blank."
+        ],
+        "bodies": [
+          "return [...new Set(items)].slice(-2).join(\"|\");",
+          "return [...new Set(items)].slice(-2).join(\" \");"
+        ],
+        "expected": ["y|z", "y z"]
+      }
+    ]
+  },
+  {
+    "name": "receipt",
+    "fn": "render",
+    "args": "record: Record<string, string>",
+    "initial": "return Object.keys(record);",
+    "turns": [
+      {
+        "call": "{z:\"one\", a:\"two\"}",
+        "goals": [
+          "Make key=value lines in insertion order.",
+          "Make value:key lines in insertion order."
+        ],
+        "bodies": [
+          "return Object.entries(record).map(([k, v]) => k + \"=\" + v);",
+          "return Object.entries(record).map(([k, v]) => v + \":\" + k);"
+        ],
+        "expected": [
+          ["z=one", "a=two"],
+          ["one:z", "two:a"]
+        ]
+      },
+      {
+        "call": "{m:\"cat\", z:\"one\", a:\"two\"}",
+        "goals": [
+          "Render key=value lines sorted by key ascending.",
+          "Render key=value lines sorted by key descending."
+        ],
+        "bodies": [
+          "return Object.keys(record).sort().map(k => k + \"=\" + record[k]);",
+          "return Object.keys(record).sort().reverse().map(k => k + \"=\" + record[k]);"
+        ],
+        "expected": [
+          ["a=two", "m=cat", "z=one"],
+          ["z=one", "m=cat", "a=two"]
+        ]
+      },
+      {
+        "call": "{z:\"one\",a:\"two\"}",
+        "goals": [
+          "Join sorted key=value lines with newlines.",
+          "Join sorted key=value lines with semicolons."
+        ],
+        "bodies": [
+          "return Object.keys(record).sort().map(k => k + \"=\" + record[k]).join(\"\\n\");",
+          "return Object.keys(record).sort().map(k => k + \"=\" + record[k]).join(\";\");"
+        ],
+        "expected": ["a=two\nz=one", "a=two;z=one"]
+      }
+    ]
+  },
+  {
+    "name": "weave",
+    "fn": "pair",
+    "args": "left: string[], right: string[]",
+    "initial": "return left.concat(right);",
+    "turns": [
+      {
+        "call": "[\"a\",\"b\",\"c\"], [\"x\",\"y\"]",
+        "goals": [
+          "Return matched pairs as left then right; discard unmatched entries.",
+          "Return matched pairs as right then left; discard unmatched entries."
+        ],
+        "bodies": [
+          "return left.slice(0, right.length).map((s, i) => [s, right[i]]);",
+          "return left.slice(0, right.length).map((s, i) => [right[i], s]);"
+        ],
+        "expected": [
+          [
+            ["a", "x"],
+            ["b", "y"]
+          ],
+          [
+            ["x", "a"],
+            ["y", "b"]
+          ]
+        ]
+      },
+      {
+        "call": "[\"a\",\"b\",\"c\"], [\"x\",\"y\"]",
+        "goals": [
+          "Join each left/right pair with a slash.",
+          "Join each left/right pair with a colon."
+        ],
+        "bodies": [
+          "return left.slice(0, right.length).map((s, i) => s + \"/\" + right[i]);",
+          "return left.slice(0, right.length).map((s, i) => s + \":\" + right[i]);"
+        ],
+        "expected": [
+          ["a/x", "b/y"],
+          ["a:x", "b:y"]
+        ]
+      },
+      {
+        "call": "[\"a\",\"b\",\"c\"], [\"x\",\"y\"]",
+        "goals": ["Return the unmatched left tail.", "Return the unmatched right tail."],
+        "bodies": ["return left.slice(right.length);", "return right.slice(left.length);"],
+        "expected": [["c"], []]
+      }
+    ]
+  },
+  {
+    "name": "stanza",
+    "fn": "paragraphs",
+    "args": "text: string",
+    "initial": "return text;",
+    "turns": [
+      {
+        "call": "\"A\\nB\\n\\nC\"",
+        "goals": [
+          "Split on blank lines, preserving interior newlines.",
+          "Split into individual nonempty lines."
+        ],
+        "bodies": ["return text.split(/\\n\\n+/);", "return text.split(\"\\n\").filter(Boolean);"],
+        "expected": [
+          ["A\nB", "C"],
+          ["A", "B", "C"]
+        ]
+      },
+      {
+        "call": "\"Ax\\nB\\n\\nCD\"",
+        "goals": [
+          "Report each paragraph's character count.",
+          "Report each paragraph's line count."
+        ],
+        "bodies": [
+          "return text.split(/\\n\\n+/).map(p => p.length);",
+          "return text.split(/\\n\\n+/).map(p => p.split(\"\\n\").length);"
+        ],
+        "expected": [
+          [4, 2],
+          [2, 1]
+        ]
+      },
+      {
+        "call": "\"Ax\\nB\\n\\nCD\"",
+        "goals": ["Return longest paragraph length or zero.", "Count nonempty paragraphs."],
+        "bodies": [
+          "return Math.max(0, ...text.split(/\\n\\n+/).map(p => p.length));",
+          "return text.split(/\\n\\n+/).filter(Boolean).length;"
+        ],
+        "expected": [4, 2]
+      }
+    ]
+  },
+  {
+    "name": "inventory",
+    "fn": "lookup",
+    "args": "pairs: [string, number][]",
+    "initial": "return pairs;",
+    "turns": [
+      {
+        "call": "[[\"pen\",2],[\"pad\",1],[\"pen\",4]]",
+        "goals": [
+          "Index items by name; last quantity wins.",
+          "Index items by name; first quantity wins."
+        ],
+        "bodies": [
+          "return Object.fromEntries(pairs);",
+          "return Object.fromEntries(pairs.slice().reverse());"
+        ],
+        "expected": [
+          {
+            "pen": 4,
+            "pad": 1
+          },
+          {
+            "pen": 2,
+            "pad": 1
+          }
+        ]
+      },
+      {
+        "call": "[[\"pen\",2],[\"pad\",1],[\"pen\",4]]",
+        "goals": [
+          "Sum quantities of duplicate items.",
+          "Take the smaller quantity for duplicates."
+        ],
+        "bodies": [
+          "const out: Record<string, number> = {};\nfor (const [k, n] of pairs) out[k] = (out[k] ?? 0) + n;\nreturn out;",
+          "const out: Record<string, number> = {};\nfor (const [k, n] of pairs) out[k] = Math.min(out[k] ?? n, n);\nreturn out;"
+        ],
+        "expected": [
+          {
+            "pen": 6,
+            "pad": 1
+          },
+          {
+            "pen": 2,
+            "pad": 1
+          }
+        ]
+      },
+      {
+        "call": "[[\"pen\",2],[\"pad\",1],[\"pen\",4]]",
+        "goals": ["List unique names in sorted order.", "List unique names in first seen order."],
+        "bodies": [
+          "return [...new Set(pairs.map(([k]) => k))].sort();",
+          "return [...new Set(pairs.map(([k]) => k))];"
+        ],
+        "expected": [
+          ["pad", "pen"],
+          ["pen", "pad"]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "playback",
+    "fn": "seek",
+    "args": "queue: string[], at: number",
+    "initial": "return queue;",
+    "turns": [
+      {
+        "call": "[\"a\",\"b\",\"c\"], 4",
+        "goals": [
+          "Select a track by wrapping the index.",
+          "Clamp the index to the ends of the playlist."
+        ],
+        "bodies": [
+          "return queue[((at % queue.length) + queue.length) % queue.length];",
+          "return queue[Math.max(0, Math.min(at, queue.length - 1))];"
+        ],
+        "expected": ["b", "c"]
+      },
+      {
+        "call": "[\"a\",\"b\",\"c\"], 2",
+        "goals": [
+          "Return the current and next track, wrapping forward.",
+          "Return the previous and current track, wrapping backward."
+        ],
+        "bodies": [
+          "const get = (i: number) => queue[((i % queue.length) + queue.length) % queue.length];\nreturn [get(at), get(at + 1)];",
+          "const get = (i: number) => queue[((i % queue.length) + queue.length) % queue.length];\nreturn [get(at - 1), get(at)];"
+        ],
+        "expected": [
+          ["c", "a"],
+          ["b", "c"]
+        ]
+      },
+      {
+        "call": "[\"a\",\"b\",\"c\"], 2",
+        "goals": [
+          "Rotate the playlist to start at the wrapped index.",
+          "Reverse the rotated playlist after starting at the wrapped index."
+        ],
+        "bodies": [
+          "const i = ((at % queue.length) + queue.length) % queue.length;\nreturn [...queue.slice(i), ...queue.slice(0, i)];",
+          "const i = ((at % queue.length) + queue.length) % queue.length;\nreturn [...queue.slice(i), ...queue.slice(0, i)].reverse();"
+        ],
+        "expected": [
+          ["c", "a", "b"],
+          ["b", "a", "c"]
+        ]
+      }
+    ]
+  },
+  {
+    "name": "composer",
+    "fn": "labels",
+    "args": "keys: string[]",
+    "initial": "return keys[0];",
+    "turns": [
+      {
+        "call": "[\"a_b\",\"CC_D\"]",
+        "goals": [
+          "Replace underscores by hyphens in each key.",
+          "Replace underscores by spaces in each key."
+        ],
+        "bodies": [
+          "return keys.map(k => k.replaceAll(\"_\", \"-\"));",
+          "return keys.map(k => k.replaceAll(\"_\", \" \"));"
+        ],
+        "expected": [
+          ["a-b", "CC-D"],
+          ["a b", "CC D"]
+        ]
+      },
+      {
+        "call": "[\"a_b\",\"CC_D\"]",
+        "goals": ["Lowercase all hyphenated labels.", "Uppercase all hyphenated labels."],
+        "bodies": [
+          "return keys.map(k => k.replaceAll(\"_\", \"-\").toLowerCase());",
+          "return keys.map(k => k.replaceAll(\"_\", \"-\").toUpperCase());"
+        ],
+        "expected": [
+          ["a-b", "cc-d"],
+          ["A-B", "CC-D"]
+        ]
+      },
+      {
+        "call": "[\"a_b\",\"CC_D\"]",
+        "goals": [
+          "Join normalized lowercase labels as a slash path.",
+          "Join normalized lowercase labels as a dotted name."
+        ],
+        "bodies": [
+          "return keys.map(k => k.replaceAll(\"_\", \"-\").toLowerCase()).join(\"/\");",
+          "return keys.map(k => k.replaceAll(\"_\", \"-\").toLowerCase()).join(\".\");"
+        ],
+        "expected": ["a-b/cc-d", "a-b.cc-d"]
+      }
+    ]
+  },
+  {
+    "name": "brush",
+    "fn": "grid",
+    "args": "lines: string[]",
+    "initial": "return lines.join(\"\");",
+    "turns": [
+      {
+        "call": "[\"AB\",\"CD\"]",
+        "goals": ["Mirror every row horizontally.", "Mirror row order vertically."],
+        "bodies": [
+          "return lines.map(s => [...s].reverse().join(\"\"));",
+          "return lines.slice().reverse();"
+        ],
+        "expected": [
+          ["BA", "DC"],
+          ["CD", "AB"]
+        ]
+      },
+      {
+        "call": "[\"AB\",\"CD\"]",
+        "goals": [
+          "Rotate a square grid one quarter turn clockwise.",
+          "Rotate a square grid one quarter turn counterclockwise."
+        ],
+        "bodies": [
+          "return Array.from(lines[0] ?? \"\", (_, j) => lines.map(s => s[j]).reverse().join(\"\"));",
+          "return Array.from(lines[0] ?? \"\", (_, j) => lines.map(s => s[lines.length - j - 1]).join(\"\"));"
+        ],
+        "expected": [
+          ["CA", "DB"],
+          ["BD", "AC"]
+        ]
+      },
+      {
+        "call": "[\"AB\",\"CD\"]",
+        "goals": [
+          "Return the main diagonal as a string.",
+          "Return the opposite diagonal as a string."
+        ],
+        "bodies": [
+          "return lines.map((s, i) => s[i]).join(\"\");",
+          "return lines.map((s, i) => s[s.length - i - 1]).join(\"\");"
+        ],
+        "expected": ["AD", "BC"]
+      }
+    ]
+  }
+]
