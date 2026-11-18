@@ -34,6 +34,8 @@ bun cwm.ts score train.jsonl held-out.jsonl
 
 Report correct, wrong (`predicted - correct`), and abstained (`total - predicted`) together. These eight small families share source between splits; they diagnose arithmetic, coupled inputs, branches, array mutation and recursion, not general TypeScript reasoning. Scoring reads held-out traces one record at a time.
 
+For a larger experiment, run the [1,024-run source-transfer benchmark](bench/README.md). It includes a resumable four-process collector, a whole-program holdout, and a control that can get terminal observations right without predicting a single instruction.
+
 ## Predict multiple steps
 
 ```ts
