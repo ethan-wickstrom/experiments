@@ -48,6 +48,24 @@ CWM_PYTHON=/path/to/training/bin/python CWM_MODEL_PATH=/path/to/MiniCPM5-1B \
 
 A request runs the visible tests and passes their diagnostic, the current files and the goal to MiniCPM5. The model chooses the line boundaries and writes the replacement. The host independently reconstructs the splice, parses the complete file and tests each changed write. Follow-ups start from the actual edited project. Use `/local src/other.ts REQUEST` to switch focus. Use `/forecast {"op":"test"}` to query the same loaded weights about the consequences without executing the tests. A forecast requires a stopped, recognized answer. The default arm is `trained`. Set `CWM_LOCAL_ARM=base` or `CWM_LOCAL_ARM=edit-only` for the controls. Other explicit editing commands retain their documented model endpoints.
 
+For a reproducible first session, materialize the first training example into a fresh directory. The script prints its actual request and selected filename.
+
+```sh
+demo=$(mktemp -d)
+python - "$demo" <<'PY'
+import gzip, json, pathlib, sys
+with gzip.open("bench/development/local_edit/data/train.jsonl.gz", "rt") as records:
+    example = json.loads(next(records))
+root = pathlib.Path(sys.argv[1])
+(root / example["path"]).write_bytes(example["before"].encode())
+(root / "checks.test.ts").write_bytes(example["check"].encode())
+print(example["path"], example["goal"], sep="\n")
+PY
+bun run project "$demo" --local palette.ts
+```
+
+Export the same `CWM_PYTHON` and `CWM_MODEL_PATH` as above before starting the command. In the verified training replay, Bun initially received `" red "` where the assertion expected `"RED"`. The joint checkpoint replaced line range `[3, 4)` with `return s.trim().toUpperCase();` at the original indentation. The persisted file passed Bun. A subsequent test forecast from that checkpoint returned `pass` with the earlier actual result visible in history. For forecasts made before observing the candidate outcome and coding attempts on unfamiliar projects, see the [independent measurements](bench/development/evaluation.md).
+
 ## Write and revise a function
 
 From `cwm/`, install dependencies with `bun install --frozen-lockfile`. Use Bun 1.4+ and Node 24.11+ on your PATH. To enable natural language and neural next-pause queries, start the local server below. Then run `bun run chat` in a second terminal. Paste these lines one at a time:

@@ -6,6 +6,8 @@ To write and revise a function with the trace-trained MiniCPM5 checkpoint, simul
 
 To work against a directory with a MiniCPM5 derivative trained on edits, tool observations and execution, see [project chat](PROMPTING.md#work-on-a-project). The [controlled comparison](bench/development/evaluation.md) includes the weights, independent acceptance results and transcripts. All three original checkpoints failed the ten project requests.
 
+The [learned line editor](PROMPTING.md#use-the-learned-line-editor) accepts a goal and the current workspace, chooses a source range, and generates its replacement using a two-block adapter. Its interactive walkthrough replays a real edit with Bun and lets you query the loaded checkpoint about consequences. [Training data, control and weights](bench/development/local_edit/README.md)
+
 For the experimental design and measured results beyond the raw-frame baseline, see [Learning compositional updates under partial observation](RESEARCH.md).
 
 The [recurrent raw-frame experiment](bench/recurrent/README.md) adds a source-held-out predictor for scalar assignments, branches and loops. It includes frozen oracle observations and commands to replay training, controls and independent falsification.
