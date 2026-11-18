@@ -97,5 +97,5 @@ export async function openProject(directory: string) {
       await rm(temp, { force: true });
     }
   }
-  return { files, refresh, persist };
+  return { files, refresh, persist, snapshot: () => snapshot(root) };
 }

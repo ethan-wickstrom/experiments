@@ -24,8 +24,13 @@ export function projectJson(value: unknown) {
     .replaceAll("<", "\\u003c")
     .replace(/\/(?=(?:no_)?think)/g, "\\u002f");
 }
-export function wire(files: string[], history: Event[], candidate?: Action) {
-  const state = candidate ? { files, history, candidate } : { files, history };
+export function wire(
+  files: string[],
+  history: Event[],
+  candidate?: Action,
+  externalChanges?: { path: string; text: string | null }[],
+) {
+  const state = candidate ? { files, history, externalChanges, candidate } : { files, history };
   return (candidate ? FORECAST : POLICY) + "\n" + projectJson(state);
 }
 export function permittedActions(unread: string[], tested: boolean, needsTest = false) {

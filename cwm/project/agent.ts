@@ -51,6 +51,7 @@ export function endpoint(url: string, model: string): Generate {
 }
 export type Workspace = {
   files: Map<string, string>;
+  snapshot?: () => Promise<Map<string, string>>;
   refresh?: () => Promise<void>;
   persist?: (path: string, text: string) => Promise<void>;
 };
@@ -132,8 +133,16 @@ export class ProjectSession {
   async predict(candidate: Action, signal?: AbortSignal) {
     if (candidate.op !== "write" && candidate.op !== "test")
       throw Error("Forecast a write followed by tests, or the current tests");
-    const { files, history } = this.state();
-    const reply = await this.generate(wire(files, history, candidate), 8, signal);
+    const current = (await this.project.snapshot?.()) ?? this.project.files;
+    const files = [...current.keys()].sort();
+    const changed = [...new Set([...files, ...this.project.files.keys()])]
+      .sort()
+      .filter((path) => current.get(path) !== this.project.files.get(path))
+      .map((path) => ({ path, text: current.get(path) ?? null }));
+    const prompt = wire(files, this.history, candidate, changed.length ? changed : undefined);
+    if (Buffer.byteLength(prompt) > 32000)
+      throw Error("Forecast exceeds the project context budget");
+    const reply = await this.generate(prompt, 8, signal);
     return {
       ...reply,
       prediction:

@@ -131,6 +131,30 @@ test("truncated directed source and multiple fenced files leave the workspace in
   }
 });
 
+test("forecast observes edits on disk without authorizing a replacement", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cwm-forecast-"));
+  try {
+    const file = join(dir, "a.test.ts");
+    await writeFile(file, "before");
+    const project = await openProject(dir);
+    await writeFile(file, "changed");
+    const session = new ProjectSession(project, async (prompt) => {
+      expect(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)).externalChanges).toEqual([
+        { path: "a.test.ts", text: "changed" },
+      ]);
+      return answer("fail");
+    });
+    expect((await session.predict({ op: "test" })).prediction).toBe("fail");
+    expect(session.history).toEqual([]);
+    expect(
+      (await session.act({ op: "write", path: "a.test.ts", text: "overwritten" })).observed,
+    ).toBe("rejected");
+    expect(await readFile(file, "utf8")).toBe("changed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("reading after a factorized edit preserves the pending test across turns", async () => {
   const raw = " export const rate = 2;\n";
   const replies = ["read", "edit", raw, "read", "done", "done", "test", "done"];
