@@ -12,7 +12,7 @@ code. Start at the first function frame with observed parameters. Each
 declaration adds one observable local and advances the statement index.
 Use the first observed store at the subsequent statement, and the oracle
 outcome at return. No labels for expression microsteps. A nonterminal hit
-requires the exact whole store *and* next index after a declaration; count
+requires the exact whole store _and_ next index after a declaration; count
 wrong and abstained too. A complete rollout must self-feed from entry
 through every store and final value without an oracle restart. Report raw
 V8 adjacent frames as a separate, unsupported target, not implied hits.

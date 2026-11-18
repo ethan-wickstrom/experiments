@@ -1,9 +1,17 @@
 export const trainInputs = [
-  [1, 1], [1, 2], [2, 1], [2, 2], [-3, 4], [5, -2],
+  [1, 1],
+  [1, 2],
+  [2, 1],
+  [2, 2],
+  [-3, 4],
+  [5, -2],
 ] as const;
 
 export const freshInputs = [
-  [-7, 3], [3, -5], [11, 2], [4, 9],
+  [-7, 3],
+  [3, -5],
+  [11, 2],
+  [4, 9],
 ] as const;
 
 export interface Spec {
