@@ -19,7 +19,10 @@ if (!process.argv[2] || process.argv.includes("--help")) {
     process.env.CWM_PROJECT_URL ?? "http://127.0.0.1:8082/v1/chat/completions",
     model,
   );
-  const session = new ProjectSession(project, generate);
+  const format = process.env.CWM_PROJECT_FORMAT ?? "project";
+  if (format !== "project" && format !== "c2")
+    throw Error("Expected CWM_PROJECT_FORMAT=project or c2");
+  const session = new ProjectSession(project, generate, undefined, format);
   const abort = new AbortController();
   const lines = createInterface({
     input: process.stdin,

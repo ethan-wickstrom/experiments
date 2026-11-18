@@ -60,7 +60,7 @@ export async function editReturn(
   };
   if (reply.finish !== "stop") return finish("incomplete");
   const expression = reply.text.trim();
-  if (!expression || /^\s*\x60{3}/m.test(expression)) return finish("invalid");
+  if (!expression || /^\x60{3}/.test(expression)) return finish("invalid");
   const span = current.expression;
   const text = source.slice(0, span.start) + expression + source.slice(span.end);
   const replaced = selection(path, text, name)?.expression;

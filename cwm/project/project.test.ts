@@ -131,6 +131,30 @@ test("truncated directed source and multiple fenced files leave the workspace in
   }
 });
 
+test("forecast observes edits on disk without authorizing a replacement", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "cwm-forecast-"));
+  try {
+    const file = join(dir, "a.test.ts");
+    await writeFile(file, "before");
+    const project = await openProject(dir);
+    await writeFile(file, "changed");
+    const session = new ProjectSession(project, async (prompt) => {
+      expect(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)).externalChanges).toEqual([
+        { path: "a.test.ts", text: "changed" },
+      ]);
+      return answer("fail");
+    });
+    expect((await session.predict({ op: "test" })).prediction).toBe("fail");
+    expect(session.history).toEqual([]);
+    expect(
+      (await session.act({ op: "write", path: "a.test.ts", text: "overwritten" })).observed,
+    ).toBe("rejected");
+    expect(await readFile(file, "utf8")).toBe("changed");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("reading after a factorized edit preserves the pending test across turns", async () => {
   const raw = " export const rate = 2;\n";
   const replies = ["read", "edit", raw, "read", "done", "done", "test", "done"];
@@ -153,4 +177,38 @@ test("reading after a factorized edit preserves the pending test across turns", 
   expect((await workFile(session, "a.ts", "check it")).stop).toBe("done");
   expect(session.untestedChanges).toBe(false);
   expect(replies).toEqual([]);
+});
+
+test("C2 forecast prefixes replay the training diagnostic for array diffs", async () => {
+  const session = new ProjectSession(
+    { files: new Map() },
+    async (prompt) => {
+      expect(JSON.parse(prompt.slice(prompt.indexOf("\n") + 1)).history.at(-1).observed).toBe(
+        "fail\nbehavior check failed",
+      );
+      return answer("fail");
+    },
+    async () => ({ exit: 1, stdout: "", stderr: "- [1]\n+ [2]\n(fail) visible behavior [1.2ms]" }),
+    "c2",
+  );
+  const actual = await session.act({ op: "test" });
+  expect(actual.run?.stderr).toContain("(fail) visible behavior");
+  expect((await session.predict({ op: "test" })).prediction).toBe("fail");
+});
+
+test("Markdown inside valid source survives raw and single-block editing", async () => {
+  const text = "/* docs\n```ts\nconst x = 1;\n```\n*/\nexport const fence = '```';\n";
+  for (const wrapped of [true, false]) {
+    const files = new Map<string, string>();
+    const session = new ProjectSession(
+      { files },
+      async () => answer(wrapped ? "```ts\n" + text + "```" : text),
+      async () => ({ exit: 0, stdout: "", stderr: "1 pass" }),
+    );
+    const turn = wrapped
+      ? await editFile(session, "a.ts", "document it")
+      : await workFile(session, "a.ts", "document it", { sourceOnly: true });
+    expect(turn.stop).toBe("tested");
+    expect(files.get("a.ts")).toBe(text);
+  }
 });
