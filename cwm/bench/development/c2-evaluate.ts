@@ -53,11 +53,11 @@ if (import.meta.main) {
   if (
     !url ||
     !model ||
-    !["A", "C2"].includes(arm ?? "") ||
+    !["A", "B2", "C2"].includes(arm ?? "") ||
     (mode !== "policy" && mode !== "source") ||
     !out
   )
-    throw Error("Usage: bun c2-evaluate.ts ENDPOINT MODEL A|C2 policy|source FRESH.json.gz");
+    throw Error("Usage: bun c2-evaluate.ts ENDPOINT MODEL A|B2|C2 policy|source FRESH.json.gz");
   if (await Bun.file(out).exists()) throw Error("Output exists");
   const runs = await evaluate(url, model, mode === "source");
   await writeFile(out, gzipSync(JSON.stringify({ arm, mode, model, runs }, null, 2) + "\n"), {

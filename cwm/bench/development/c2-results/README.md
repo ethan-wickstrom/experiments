@@ -2,12 +2,12 @@
 
 A (released MiniCPM5-1B) and C2 each passed **0/4** cumulative requests with learned action choice and **0/4** with direct source generation on two previously unseen projects. Both policies answered `done` on the first decision four times. Direct generation also failed every initial request and follow-up. With two lineages and one greedy attempt, these observations describe this suite.
 
-| Arm and mode | Cumulative passes | Visible passes | Writes accepted | Model calls | Prompt tokens | Generated tokens | Turn time, sum | Turn time, median |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [A policy](A-policy.json.gz) | 0/4 | 0/4 | 0 | 4 | 937 | 8 | 6.02 s | 1.44 s |
-| [C2 policy](C2-policy.json.gz) | 0/4 | 0/4 | 0 | 4 | 937 | 8 | 8.33 s | 2.10 s |
-| [A source](A-source.json.gz) | 0/4 | 0/4 | 4 | 4 | 926 | 154 | 13.12 s | 3.20 s |
-| [C2 source](C2-source.json.gz) | 0/4 | 0/4 | 2 | 4 | 901 | 482 | 36.99 s | 4.89 s |
+| Arm and mode                   | Cumulative passes | Visible passes | Writes accepted | Model calls | Prompt tokens | Generated tokens | Turn time, sum | Turn time, median |
+| ------------------------------ | ----------------: | -------------: | --------------: | ----------: | ------------: | ---------------: | -------------: | ----------------: |
+| [A policy](A-policy.json.gz)   |               0/4 |            0/4 |               0 |           4 |           937 |                8 |         6.02 s |            1.44 s |
+| [C2 policy](C2-policy.json.gz) |               0/4 |            0/4 |               0 |           4 |           937 |                8 |         8.33 s |            2.10 s |
+| [A source](A-source.json.gz)   |               0/4 |            0/4 |               4 |           4 |           926 |              154 |        13.12 s |            3.20 s |
+| [C2 source](C2-source.json.gz) |               0/4 |            0/4 |               2 |           4 |           901 |              482 |        36.99 s |            4.89 s |
 
 On the temperature log, both A edits still overwrote the file with one reading. C2's first reply repeated `edit` until the token cap, leaving the seed file intact. Its second returned an object without writing a file. On station departures, A returned the first qualifying clock time in input order on both turns. C2 first generated a syntax error at `Math.min(..., now)`, then wrote a function returning `null`. All six post-turn hidden suite runs failed in each mode and arm. Each gzip includes raw requests and replies, finish reasons, token use, elapsed times, actions, workspace snapshots, and isolated visible and hidden command output.
 
