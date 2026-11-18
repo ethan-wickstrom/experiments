@@ -129,6 +129,19 @@ test("inspecting Error locals leaves getter counts equal to plain Node", async (
   }
 });
 
+test("a live namespace with an uninitialized export is opaque", async () => {
+  const t = await trace(
+    program(
+      'import * as self from "./main.ts"; function init(ns){return 1;} export const later=init(self); export function run(){return later;}',
+    ),
+  );
+  expect(t.outcome).toEqual({ kind: "returned", result: { value: 1, exact: true } });
+  expect(t.frames.find((f) => f.stack[0]?.fn === "init")?.locals.ns).toEqual({
+    value: "<module namespace>",
+    exact: false,
+  });
+});
+
 test("an Error exposed by the pause itself cannot become an accepted episode", async () => {
   const spec = program('export function run(){throw new Error("unsupported")}');
   const [step] = (await episode(spec, ["run"], null)).steps;

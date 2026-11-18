@@ -92,6 +92,7 @@ function project(value: unknown, scope: boolean, plainProto: object): string {
       if (typeof v !== "object") return omit(typeof v);
       if (types.isProxy(v)) return omit("proxy");
       if (types.isNativeError(v)) return omit("error");
+      if (types.isModuleNamespaceObject(v)) return omit("module namespace");
       function field(k: PropertyKey) {
         const d = Object.getOwnPropertyDescriptor(v, k);
         return d && "value" in d ? read(d.value, depth + 1) : omit("unavailable");
