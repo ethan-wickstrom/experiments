@@ -1,0 +1,10 @@
+{
+  "catalog": {
+    "call": "[{title:\"Elm\",starred:false},{title:\"Pine\",starred:true},{title:\"Birch\",starred:false}]",
+    "expected": [["Pine"], ["Elm", "Birch"], 1, 2]
+  },
+  "ticket": {
+    "call": "\"  AZ-031  \"",
+    "expected": ["AZ", "031", 31, "az"]
+  }
+}

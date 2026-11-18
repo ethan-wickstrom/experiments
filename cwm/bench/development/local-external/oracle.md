@@ -1,0 +1,7 @@
+# Reference-span FILL diagnostic
+
+The parent requested this diagnostic after base and joint free-location collection and before the edit-only free-location results. Collect all three free-location trajectories and publish the prospective comparison independently. Then score joint and edit-only on all six canonical predecessors. These runs answer how each checkpoint fills a correct location on the intended project trajectory.
+
+Obtain the selected source and numeric span from the sealed preflight capture at `86a7e47`. Check that the span still reconstructs the reference from the original fixture. The follow-up predecessor includes the previous turn's reference edit, even when the free-location policy failed on turn one. Reuse the actual visible pre-edit observation recorded in that capture. Send the selected path, goal, sorted current visible files, observed feedback, and two integers to a separate model process. The current turn's reference replacement and all hidden checks stay in the grader process.
+
+Use the released editor's own FILL prompt and greedy generation method with its default 96-token replacement cap. Bypass the location call. Apply each returned replacement with the same syntax and splice validation and grade the snapshot under the cumulative visible and hidden suites. Each new case starts at its own canonical predecessor. Report this diagnostic separately from both the prospective policy and the offline hybrids that reuse an already-generated payload.

@@ -2,6 +2,88 @@
 
 Start from the question you want answered. A coding request needs a draft and an intended behavior. A simulation needs source and a call. A next-pause question needs source and the state the debugger currently shows. The CLI keeps those inputs distinct and lets you move between them in one session.
 
+## Work on a project
+
+From the `cwm` directory, install the locked dependencies, build the disposable Bun test image, and serve the joint coding and execution adapter. Download the official base once using the [local server instructions](#local-model-server). This setup uses Docker, Bun 1.4.4 and llama.cpp b6602.
+
+```sh
+bun install --frozen-lockfile
+docker build -f project/Dockerfile -t cwm-bun-project:1.4.4 .
+base="$HOME/.cache/typescript-cwm/MiniCPM5-1B-Q8_0.gguf"
+llama-server -m "$base" --lora bench/development/C/adapter-f32.gguf \
+  --alias minicpm5-joint --jinja -c 16384 -t 4 -tb 4 --parallel 1 \
+  --host 127.0.0.1 --port 8082
+```
+
+In a second terminal open a small project. Use a dedicated working copy. Writes change its TypeScript files immediately. The workspace assumes a single writer during each turn. It refreshes at the next request, checks for stale bytes before replacing a file, and uses an atomic rename. Concurrent mutation of files or directory entries during those checks is outside the persistence guarantee.
+
+```sh
+bun run project /path/to/project
+```
+
+Type a goal such as `Make the board restore its saved lanes from the local JSON file.` Then give a follow-up such as `Keep persistence working and fix the duplicate task after a move.` The policy chooses from reads, writes, tests and done, with eight decisions per turn. The JSON action grammar limits repeated reads and tests. The tool returns file bytes, a write acknowledgment, or the actual test status and a bounded diagnostic. Hidden benchmark suites live outside the project supplied to the model.
+
+- `/edit board.ts REQUEST` selects the file explicitly and asks the checkpoint for complete replacement source. After a failing real test it gets one repair attempt.
+- `/work board.ts REQUEST` starts each request with the selected path, goal and an empty file list. A model decision of `read` observes the visible project in sorted path order. Subsequent decision and source calls receive those bytes, updated after accepted writes. A test supplies a pass/fail status to the decision and records a bounded diagnostic in history. To try it, use the server command above with `bench/development/c2/C2/adapter-f32.gguf` in place of the rank-16 adapter. [Blind evaluation and historical full-context ablation](bench/development/c2-results/README.md)
+- `/body PATH * REQUEST` edits one named exported function declaration in the selected file. For example, enter `/body outline.ts * Keep only heading lines.` Use `/body outline.ts headings REQUEST` to choose the function yourself. With `*`, the model chooses among multiple declarations. The runner tests the current files, shows the model the observed result, prefills the selected declaration through its opening brace, and writes the first complete generated body. It records a separate forecast before the write and runs the actual tests after it. A visible failure permits one more attempt on the same function. Each accepted edit persists, including an edit that fails its tests.
+
+  For this command, serve the [pinned F16 release and C2 adapter](bench/development/c2/README.md) with b6602, `--jinja -c 4096 --alias minicpm5-joint-c2`. Set `CWM_PROJECT_MODEL=minicpm5-joint-c2` and `CWM_PROJECT_URL=http://127.0.0.1:8080/v1/chat/completions` when launching the CLI. The command calls the llama-server template, tokenizer and raw completion endpoints on that origin. Import `editBody` from `project/body.ts` and `bodyEndpoint` from `project/body-completion.ts` to use the same operation with a `ProjectSession`.
+
+- `/splice PATH REQUEST` samples localized TypeScript expression changes and tests each distinct valid candidate on a private workspace copy. It persists the first changed candidate passing the visible tests, then tests the persisted file. [Supported locations and budgets](bench/development/splice-results/PROTOCOL.md)
+- `/return PATH EXPORT REQUEST` asks for a replacement expression in a named function containing a single return.
+- `/plan PATH REQUEST` samples a greedy and a seeded alternative with C2. For two distinct parseable proposals it runs the local learned head. Set `CWM_PYTHON` to the pinned training interpreter and `CWM_MODEL_PATH` to the verified Transformers snapshot. The selected write runs in the real sandbox. Set `CWM_PROJECT_FORMAT=c2` when using C2 for project forecasts. [Ranker setup](bench/development/ranking/README.md)
+- `/forecast {"op":"test"}` asks the same checkpoint to predict the current tests. A candidate `write` asks about replacing a file and then running the tests. This command neither writes nor executes.
+- `/quit` closes the project session. The server in the first terminal has its own lifetime. Set `CWM_PROJECT_URL` and `CWM_PROJECT_MODEL` to address another local instance.
+
+The sandbox sends project bytes into a fresh unprivileged container with no host mounts or network. It provides Bun and the installed Effect package. The workspace supports up to 128 UTF-8 source, JSON and Markdown files, each at most 64 KiB. Writes are limited to TypeScript. A model's `done` and a visible test pass each have their own meaning. Check the changed source and independent behavior before relying on it. [Held project transcripts and limits](bench/development/evaluation.md)
+
+## Use the learned line editor
+
+With the [pinned Python environment and Transformers snapshot](bench/development/local_edit/README.md), select an existing implementation file in a small project and start typing requests. This mode needs the Bun Docker image and loads the checkpoint once on CPU.
+
+```sh
+CWM_PYTHON=/path/to/training/bin/python CWM_MODEL_PATH=/path/to/MiniCPM5-1B \
+  bun run project /path/to/project --local src/settings.ts
+```
+
+A request runs the visible tests and passes their diagnostic, the current files and the goal to MiniCPM5. The model chooses the line boundaries and writes the replacement. The host independently reconstructs the splice, parses the complete file and tests each changed write. Follow-ups start from the actual edited project. Use `/local src/other.ts REQUEST` to switch focus. Use `/forecast {"op":"test"}` to query the same loaded weights about the consequences without executing the tests. A forecast requires a stopped, recognized answer. The default arm is `trained`. Set `CWM_LOCAL_ARM=base` or `CWM_LOCAL_ARM=edit-only` for the controls. Other explicit editing commands retain their documented model endpoints.
+
+To try a held behavior edit, start from the locker library and its visible check. This example was selected after scoring the 24 held edits. Export `CWM_PYTHON` and `CWM_MODEL_PATH` as above, then run from `cwm/`.
+
+```sh
+locker=$(mktemp -d)
+python - "$locker" <<'PYEXAMPLE'
+import gzip, json, pathlib, sys
+goal = "Allow fractional and zero locker capacity."
+with gzip.open("bench/development/local_edit/data/holdout.jsonl.gz", "rt") as records:
+    example = next(row for row in map(json.loads, records) if row["goal"] == goal)
+root = pathlib.Path(sys.argv[1])
+(root / example["path"]).write_bytes(example["before"].encode())
+(root / "checks.test.ts").write_bytes(example["check"].encode())
+PYEXAMPLE
+CWM_LOCAL_ARM=edit-only bun run project "$locker" --local locker.ts
+```
+
+Enter `Allow fractional and zero locker capacity.` In the verified session the visible assertion received 2 for an input of 1.2. The model selected lines `[7, 8)` and changed the implementation to `return n;`. The persisted source matched the held reference and passed a separate check for zero capacity and the other exports. Across all eight held behavior requests, this was the only edit-only output that compiled and passed both suites. [All held results](bench/development/local_edit/README.md#frozen-local-results)
+
+For a training replay, materialize the first training example into a fresh directory. The script prints its actual request and selected filename.
+
+```sh
+demo=$(mktemp -d)
+python - "$demo" <<'PY'
+import gzip, json, pathlib, sys
+with gzip.open("bench/development/local_edit/data/train.jsonl.gz", "rt") as records:
+    example = json.loads(next(records))
+root = pathlib.Path(sys.argv[1])
+(root / example["path"]).write_bytes(example["before"].encode())
+(root / "checks.test.ts").write_bytes(example["check"].encode())
+print(example["path"], example["goal"], sep="\n")
+PY
+bun run project "$demo" --local palette.ts
+```
+
+Export the same `CWM_PYTHON` and `CWM_MODEL_PATH` as above before starting the command. In the verified training replay, Bun initially received `" red "` where the assertion expected `"RED"`. The joint checkpoint replaced line range `[3, 4)` with `return s.trim().toUpperCase();` at the original indentation. The persisted file passed Bun. A subsequent test forecast from that checkpoint returned `pass` with the earlier actual result visible in history. A forecast can also be the first command in local mode and sees the current source. On six independent requests the joint editor changed three workspaces and passed zero cumulative hidden checks. [Independent measurements](bench/development/evaluation.md#multi-file-editing-with-a-learned-span)
+
 ## Write and revise a function
 
 From `cwm/`, install dependencies with `bun install --frozen-lockfile`. Use Bun 1.4+ and Node 24.11+ on your PATH. To enable natural language and neural next-pause queries, start the local server below. Then run `bun run chat` in a second terminal. Paste these lines one at a time:

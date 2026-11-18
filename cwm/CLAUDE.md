@@ -4,6 +4,10 @@ Keep the oracle (what happened), the predictor (what might happen), and the edit
 
 For the interactive coding loop, read [PROMPTING.md](PROMPTING.md). The CLI uses the structured predictor for self-fed rollouts and the [MiniCPM5 adapter](bench/minicpm/README.md) for direct next-pause prompts and code proposals. Keep expected behavior outside the forecast and preserve partial forecasts on abstention.
 
+Project chat uses [the shared protocol](project/protocol.ts) and [isolated Bun runner](project/sandbox.ts). Read the [development experiment](bench/development/README.md) and [independent evaluation](bench/development/evaluation.md) before changing the model, action availability, tool observations or held tasks. Use `CWM_TEST_DOCKER=1 bun test project/sandbox.test.ts` to exercise actual cancellation and time limits with the sandbox image installed.
+
+For the line editor, use [the frozen training and inference protocol](bench/development/local_edit/README.md). The [external free-location transcripts](bench/development/local-external/README.md) and [fixed-location diagnostic](bench/development/local-external/oracle-results/README.md) are evaluation data. Preserve them outside training and model selection. Files and visible diagnostics cross the NDJSON boundary. The caller validates spans on the same observed source and independently runs tests. For candidate ranking and AST editing, preserve the order of model selection, real sandbox execution and hidden grading specified by each experiment. [Project CLI](PROMPTING.md) · [Independent diagnostics](bench/development/evaluation.md)
+
 From this directory with Bun 1.4+ and Node 24.11+ on PATH:
 
 ```sh

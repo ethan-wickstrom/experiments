@@ -1,0 +1,20 @@
+{
+  "B": {
+    "peft/adapter_config.json": "47f6916f52174ecb35dfe91f9d834f5482c63414fb01ce85905d5a71cbda078c",
+    "peft/adapter_model.safetensors": "2091bd881d2bcd3f2351960a556c7a30891e0c0012386ca77a545b0074d4a762",
+    "adapter-f32.gguf": "efcf2f4e8e4eca754be8925c2b9908fd28868a482fe1fa32aeab11466d56c844",
+    "state.pt": "8a57acbc4120a532f0a7e0f7e57f0b2bf8b306e6eb3a7b20faef53d5bed3ee1e",
+    "fit.json": "903d2b99dfa3db8f7ee4ed0f89350466c18ef725fd6738a26193d48ccb929bd8"
+  },
+  "C": {
+    "peft/adapter_config.json": "47f6916f52174ecb35dfe91f9d834f5482c63414fb01ce85905d5a71cbda078c",
+    "peft/adapter_model.safetensors": "ee7add1d8f4427eeb8355caa6eda208998ee06dc739c6498670762ef84517e40",
+    "adapter-f32.gguf": "99d2d0bf53bc288fab6b6d09fd21e25236d9b070a7fbb801b5396bf649c3d9c2",
+    "state.pt": "04678f20b82d269dfd7b16d6e35275f582c557a2cbb92283f4e8dfa169a1f367",
+    "fit.json": "07c6621b3b67bfe5bbab25280f31d2a3805efb28650cc7347de3513a3c77c77a"
+  },
+  "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+  "freeze_commit": "a1567c15b30cf004834473a2a1d49c544ca43913",
+  "training_uncompressed": "c0f61edeeb8370079dedfafd3100b363a1e0bb4389558779c6b41d6372f23354",
+  "retention_uncompressed": "d65abb2ea0e354314414567a119d98a192387619212b03433c685227161c6ba3"
+}

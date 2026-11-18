@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "chat": "bun chat.ts",
+    "project": "bun project/cli.ts",
     "lint": "oxlint --deny-warnings --type-aware --type-check .",
     "format": "oxfmt --check ."
   },
