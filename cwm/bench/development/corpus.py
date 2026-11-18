@@ -9,7 +9,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "minicpm"))
 from model import TRAIN, examples, prompt
-from provenance import TRAIN_SHA
+from provenance import TRAIN_SHA, file_hash
 
 DATA = HERE / "data"
 PROJECT_SHA = "ef845e3a376181ae0aafab3c93a09731c3391a0c4d9e8fd56c97d65bd3df0425"
@@ -37,6 +37,13 @@ def corpus():
 
 def canonical(rows):
     return "".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) + "\n" for r in rows).encode()
+
+
+def verify_arm(arm, root=HERE):
+    pins = json.loads((root / "artifacts.json").read_text())
+    for name, digest in pins[arm].items():
+        if file_hash(root / arm / name) != digest:
+            raise ValueError(f"Changed {arm} artifact: {name}")
 
 
 if __name__ == "__main__":

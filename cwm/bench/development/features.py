@@ -10,7 +10,7 @@ from pathlib import Path
 
 import torch
 
-from corpus import HERE, canonical, corpus
+from corpus import canonical, corpus
 from model import REVISION, chat_ids, load, target_ids
 
 CACHE_VERSION = 1

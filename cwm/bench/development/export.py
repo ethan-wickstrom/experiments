@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from safetensors.numpy import load_file
 
-from corpus import HERE
+import corpus  # initializes the shared pinned MiniCPM module path
 from provenance import verified_base
 
 CONVERTER_REV = "a300a9c33462f23d9d61e951650d249486f2b0f6"
