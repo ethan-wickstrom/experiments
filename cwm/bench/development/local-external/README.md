@@ -24,12 +24,12 @@ The 18-row index in `results/diagnostics/turns.jsonl` contains the goal, actual 
 
 ## Reproduction
 
-Use the CWM dependencies and sandbox image documented in the parent development benchmark. Check out the released editor at `5579d0558153fc4f77a0817042df436c47e74358` in a separate tree. Run from this directory with the verified release snapshot and pinned Python environment. Each output directory must be fresh.
+Use the CWM dependencies and sandbox image documented in the parent development benchmark. Run from this directory in the integrated checkout. It contains the same eight inference files and both adapter releases pinned in `results/provenance.json`. The original trainer revision is recorded there for provenance. Use the verified base snapshot and pinned Python environment. Each output directory must be fresh.
 
 ```sh
 export CWM_MODEL_PATH=/path/to/minicpm5-snapshot CWM_THREADS=8 HF_HUB_OFFLINE=1
 export PYTHON=/path/to/venv/bin/python TOKENIZERS_PARALLELISM=false
-editor=/path/to/editor-checkout
+editor=$(git rev-parse --show-toplevel)
 out=$(mktemp -d)
 bun preflight.ts "$out/preflight.json.gz"
 for arm in base trained edit-only; do
