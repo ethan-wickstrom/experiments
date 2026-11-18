@@ -10,7 +10,7 @@ import { planFile } from "./plan.ts";
 
 if (!process.argv[2] || process.argv.includes("--help")) {
   console.log(
-    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /return PATH FUNC REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project. Free-action turns allow eight actions. Directed edits allow two proposals. Return edits allow one 96-token expression. Each accepted return edit runs the tests.",
+    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /plan PATH REQUEST (two proposals with C2 ranking), /return PATH FUNC REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project.",
   );
 } else {
   const project = await openProject(resolve(process.argv[2]));
@@ -54,7 +54,7 @@ if (!process.argv[2] || process.argv.includes("--help")) {
           const match = /^\/(edit|work|return|plan)\s+(\S+)\s+(.+)$/.exec(line);
           if (!match)
             throw Error(
-              "Usage: /edit PATH REQUEST, /work PATH REQUEST, or /return PATH FUNC REQUEST",
+              "Usage: /edit PATH REQUEST, /work PATH REQUEST, /plan PATH REQUEST, or /return PATH FUNC REQUEST",
             );
           const show = (event: import("./agent.ts").TurnEvent) => {
             console.log(

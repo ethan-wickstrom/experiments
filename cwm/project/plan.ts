@@ -12,7 +12,9 @@ const decision = Schema.Struct({
   scores: Schema.Tuple([Schema.Finite, Schema.Finite]),
   choice: Schema.Union([Schema.Literal(0), Schema.Literal(1), Schema.Null]),
 });
-type Decision = typeof decision.Type;
+const result = Schema.Union([decision, Schema.Struct({ error: Schema.String })]);
+const decode = Schema.decodeUnknownSync(Schema.fromJsonString(result));
+type Decision = typeof result.Type;
 type Rank = (pair: Pair, signal?: AbortSignal) => Promise<Decision>;
 
 /** One local model load can score a batch. Only visible files and proposed writes cross stdin. */
@@ -32,7 +34,7 @@ export async function rankPairs(pairs: Pair[], arm = "C2", signal?: AbortSignal)
     if ((await child.exited) !== 0) throw Error("Consequence ranker failed");
     const lines = raw.trimEnd().split("\n");
     if (lines.length !== pairs.length) throw Error("Incomplete ranking batch");
-    return lines.map((line) => Schema.decodeUnknownSync(Schema.fromJsonString(decision))(line));
+    return lines.map((line) => decode(line));
   } finally {
     child.kill();
     await child.exited;
@@ -80,6 +82,7 @@ export async function planFile(
       { goal, path, files, candidates: [selected.action, proposals[1]!.action] },
       signal,
     );
+    if ("error" in prediction) return finish("ranking-error");
     if (prediction.choice === null) return finish("tie");
     selected = proposals[prediction.choice]!;
   }

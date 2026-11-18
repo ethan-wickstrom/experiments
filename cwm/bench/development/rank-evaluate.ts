@@ -68,7 +68,8 @@ if (import.meta.main) {
       actual.push(run);
     }
     assert.equal(actual.filter((r) => r.exit === 0).length, 1);
-    const consistent = score.choice !== null && swapped.choice === 1 - score.choice;
+    const choice = "choice" in score ? score.choice : null;
+    const consistent = choice !== null && "choice" in swapped && swapped.choice === 1 - choice;
     rows.push({
       id,
       input,
@@ -76,7 +77,7 @@ if (import.meta.main) {
       swapped,
       actual,
       consistent,
-      selectedPass: consistent && score.choice !== null ? actual[score.choice]!.exit === 0 : null,
+      selectedPass: consistent && choice !== null ? actual[choice]!.exit === 0 : null,
     });
   }
   await writeFile(out, gzipSync(JSON.stringify({ arm, elapsedMs, rows }) + "\n"), { flag: "wx" });
