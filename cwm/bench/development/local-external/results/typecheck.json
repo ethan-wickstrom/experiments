@@ -1,0 +1,182 @@
+{
+  "compiler": "TypeScript 7.0.2",
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "target": "esnext",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["bun"],
+    "noEmit": true
+  },
+  "snapshots": [
+    {
+      "project": "contact-sheet",
+      "turn": 1,
+      "arm": "reference",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "contact-sheet",
+      "turn": 1,
+      "arm": "base",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "contact-sheet",
+      "turn": 1,
+      "arm": "trained",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "contact-sheet",
+      "turn": 1,
+      "arm": "edit-only",
+      "exit": 1,
+      "output": "sheet.ts(4,10): error TS2448: Block-scoped variable 'rows' used before its declaration.\nsheet.ts(4,10): error TS2454: Variable 'rows' is used before being assigned.\nsheet.ts(6,40): error TS2304: Cannot find name 'ids'.\nsheet.ts(7,15): error TS2304: Cannot find name 'ids'.\n"
+    },
+    {
+      "project": "contact-sheet",
+      "turn": 2,
+      "arm": "reference",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "contact-sheet",
+      "turn": 2,
+      "arm": "base",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "contact-sheet",
+      "turn": 2,
+      "arm": "trained",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "contact-sheet",
+      "turn": 2,
+      "arm": "edit-only",
+      "exit": 1,
+      "output": "sheet.ts(4,10): error TS2448: Block-scoped variable 'rows' used before its declaration.\nsheet.ts(4,10): error TS2454: Variable 'rows' is used before being assigned.\nsheet.ts(6,40): error TS2304: Cannot find name 'ids'.\nsheet.ts(7,15): error TS2304: Cannot find name 'ids'.\n"
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 1,
+      "arm": "reference",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 1,
+      "arm": "base",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 1,
+      "arm": "trained",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 1,
+      "arm": "edit-only",
+      "exit": 1,
+      "output": "redeem.ts(9,10): error TS2304: Cannot find name 'tickets'.\nredeem.ts(9,25): error TS7006: Parameter 't' implicitly has an 'any' type.\n"
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 2,
+      "arm": "reference",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 2,
+      "arm": "base",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 2,
+      "arm": "trained",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "parcel-locker",
+      "turn": 2,
+      "arm": "edit-only",
+      "exit": 1,
+      "output": "redeem.ts(9,3): error TS2322: Type 'string' is not assignable to type 'boolean'.\n"
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 1,
+      "arm": "reference",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 1,
+      "arm": "base",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 1,
+      "arm": "trained",
+      "exit": 1,
+      "output": "narration.ts(4,16): error TS2304: Cannot find name 'language'.\nnarration.ts(4,35): error TS2304: Cannot find name 'language'.\n"
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 1,
+      "arm": "edit-only",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 2,
+      "arm": "reference",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 2,
+      "arm": "base",
+      "exit": 0,
+      "output": ""
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 2,
+      "arm": "trained",
+      "exit": 1,
+      "output": "narration.ts(4,16): error TS2304: Cannot find name 'language'.\n"
+    },
+    {
+      "project": "gallery-audio",
+      "turn": 2,
+      "arm": "edit-only",
+      "exit": 0,
+      "output": ""
+    }
+  ]
+}

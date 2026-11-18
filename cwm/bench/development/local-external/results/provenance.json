@@ -1,0 +1,80 @@
+{
+  "fixtureSeal": "86a7e47054b0baa71ba1e58265b626e69e18356b",
+  "editOnlySeal": "59b546b4cceee9b7422c4a19610f60894b9ac3e4",
+  "evaluatorRevision": "872b046",
+  "fixtureArtifacts": {
+    "projects.json": "0018ea9ea84c520e93a2a7c290f4d483d2255bd152fe396b033a5b8c6f70da06",
+    "protocol.md": "fd5ed4c486587fd598927c3ec920ce4caeadefe8e3aa3f024d23c1239779d880",
+    "preflight.json.gz": "fda0cb2f1968a899bf336a22d2093d83a1f04f6670dab603f5d54f2a9109f057",
+    "edit-only.md": "f61eada3ccd88a246b55ea23bf8cd1f2cf0ed1b4d5cb45df0c4642e268f2e03d"
+  },
+  "editorRevisions": {
+    "base": "ea19a44743a5bc64f60b097b6be26a56c54146dc",
+    "trained": "aeefb1936c495cfc56dd7a37590e38ade593d3aa",
+    "edit-only": "5579d0558153fc4f77a0817042df436c47e74358"
+  },
+  "inferenceFiles": {
+    "cwm/bench/development/local_edit/edit.py": "45fda93240399691549f6e126e34d5d25a48b2bedb79fc39ab26580abe4142c1",
+    "cwm/bench/development/local_edit/backbone.py": "eec746903ab39fc8501738baf53fe9a9d2c76827b4e09462b11bc192899f5e51",
+    "cwm/bench/development/local_edit/wire.py": "d56fc66968f1d102803a05249c506ef0d50e0eaf47dd521d6794a4f08297b794",
+    "cwm/bench/development/c2/data.py": "d03960c53b7d2f0d42c2fc8a18c75ab4dd52773921a212445c6fc154a25a3679",
+    "cwm/bench/development/corpus.py": "7c439f280b4b69c0ae0fb9e7067b7b9259a6ad9be6c5ff4317afa8f5fd733299",
+    "cwm/bench/minicpm/model.py": "73de27d2e3916d5c5dba8507b91bc368541f4ff97b04ab328becb5f81c073074",
+    "cwm/bench/minicpm/provenance.py": "b179c0281f37d1b1c3e86660c46e4beab716b3d0e833454428f2ad0f973d3bb7",
+    "cwm/bench/minicpm/resume.txt": "80dd3b32ed23e440f0fa30bf24534a1b0ab0ee1fb1aed95569dd1badabd17a66"
+  },
+  "baseModel": "openbmb/MiniCPM5-1B",
+  "baseRevision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+  "baseFiles": {
+    "model-00000-of-00001.safetensors": "7ab8fd86563125929be78aeec8cb3969c7ed2ead3be1ab9d3ec0a9fa69c8660d",
+    "model.safetensors.index.json": "162add042e75abc3d571c4a8679523fa4f1ffc55d1fea25fc6658a19d6e957ee",
+    "config.json": "6a6509b646cb3169616c5ffc3196e7ccaf9d4d6bc17b266581d241a31c217714",
+    "tokenizer_config.json": "094efb3cf1ff412284cc5945fc99dff58673a912760d04483a04aa1c716f66fd",
+    "tokenizer.json": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
+    "special_tokens_map.json": "82d96d7a9e6ced037f12394b7ea6a5b02e6ca87e0d11edaa8d60d9be857ce7db",
+    "chat_template.jinja": "7451a05cf1e28a79d97d7c0bc951028c0b1915119bf9046acd06a0e3d931f47c",
+    "generation_config.json": "92afd6424501426eddcf7e1542f013d19e5987544977b4ee7bd26359bd5fd2ab"
+  },
+  "adapters": {
+    "trained": {
+      "arm": "trained",
+      "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+      "train_sha256": "926eac2be9ae6e2f6023cc4d19ff6ec1f12d57b4e7ff30058bc25581d78763c0",
+      "corpus_sha256": "40aa5b7f1138fcd6890629483c5908ad0ce2ab71b1f3a55c99b18c62e87b1587",
+      "files": {
+        "fit.json": "abf30f3f14620292fd1c112126b4c1022beeb9b76a631c6932f25a49a04bc145",
+        "peft/adapter_config.json": "a0cc0dd3ec52d1401cc37ad12ea30edf94c45b5b296051c5c17d475a68c2fa77",
+        "peft/adapter_model.safetensors": "207d2cf93e7a6695f99ece3300599edc29d04a8a02883a6117882ccad49aace9"
+      }
+    },
+    "edit-only": {
+      "arm": "edit-only",
+      "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+      "train_sha256": "926eac2be9ae6e2f6023cc4d19ff6ec1f12d57b4e7ff30058bc25581d78763c0",
+      "corpus_sha256": "40aa5b7f1138fcd6890629483c5908ad0ce2ab71b1f3a55c99b18c62e87b1587",
+      "files": {
+        "fit.json": "991462e7d1e78c00fdc52023f17676294804b12659c111d62441868c368e92cb",
+        "peft/adapter_config.json": "ab5d745a0f8b1fc8f7c96aa350b4cccdbffa71f7e2f8518937d695c216be7711",
+        "peft/adapter_model.safetensors": "452f0fac3dd033363b42feaa9ed2e9226c063fc12eabd616fc1d5a126f97d48d"
+      }
+    }
+  },
+  "python": "3.11.15",
+  "packages": {
+    "torch": "2.10.0+cpu",
+    "transformers": "5.6.2",
+    "peft": "0.19.1",
+    "safetensors": "0.8.0",
+    "tokenizers": "0.22.2"
+  },
+  "bun": "1.4.4",
+  "node": "24.19.0",
+  "sandboxImage": "sha256:2069b9963e33df7a969aa38259827a797c9987e469cbacc9ffa950fdf56a72f2",
+  "torchThreads": 8,
+  "device": "cpu",
+  "maxInputTokens": 4096,
+  "maxLocationTokens": 16,
+  "maxReplacementTokens": 96,
+  "queryTiming": "Host wall time from writing an NDJSON line to reading the response. First call in each arm includes remaining startup time.",
+  "perTurnIndexSha256": "c909007878486fc8d7f4b721f02fdbcd58277d885bc1eb288f52b874153de3fc"
+}
