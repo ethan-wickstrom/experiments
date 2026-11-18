@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What a week of coding agents adds to a Mac</title>
+<link rel="canonical" href="https://getsizewise.app/dev-week">
+<meta name="description" content="A sample developer’s home folder on Monday and on Friday, mapped by Sizewise: worktrees, build folders, simulators, model downloads and Docker, and what each added.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sizewise">
+<meta property="og:url" content="https://getsizewise.app/dev-week">
+<meta property="og:title" content="What a week of coding agents adds to a Mac">
+<meta property="og:description" content="A sample developer’s home folder on Monday and on Friday, mapped by Sizewise.">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:image" content="https://getsizewise.app/images/share-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<link rel="modulepreload" href="map.js">
+<link rel="modulepreload" href="explorer.js">
+<link rel="modulepreload" href="demo-dev-week.js">
+<link rel="stylesheet" href="site.css">
+<meta name="text-scale" content="scale">
+<link rel="expect" href="#top" blocking="render">
+<style>
+#window { --legend-block: 32px; }
+#facts { min-block-size: 1lh; }
+@container window (inline-size < 40rem) { #window:empty::before { --legend-block: 32px; } }
+.counts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-block-start: 14px; font-size: var(--text-sm); color: var(--text-muted); }
+.counts b { color: var(--text); font-variant-numeric: tabular-nums; }
+.note { color: var(--text-muted); font-size: var(--text-sm); max-inline-size: 52em; }
+.modes { display: inline-flex; gap: 2px; padding: 3px; margin-block-end: 10px; border-radius: 10px; background: var(--fill-control); box-shadow: inset 0 0 0 0.5px var(--border-control); }
+.modes button { border: 0; background: none; padding: 5px 12px; border-radius: 7px; font-size: var(--text-xs); cursor: pointer; }
+.modes button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 0 0 0.5px var(--border-control), 0 1px 2px oklch(0% 0 0 / 8%); font-weight: 600; }
+.stories { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 21.25rem), 1fr)); align-items: start; gap: var(--space-3); margin-block: 6px 26px; padding: 0; list-style: none; }
+.stories li { border-radius: var(--radius-l); background: var(--surface-window); box-shadow: inset 0 0 0 0.5px var(--border-control); padding: 14px 16px 15px; display: grid; gap: var(--space-1); align-content: start; }
+.stories .row { display: flex; gap: 14px; align-items: baseline; margin-block-start: 2px; }
+.stories button { border: 0; background: none; padding: 4px 0; min-block-size: 24px; font-size: var(--text-xs); color: var(--link); cursor: pointer; }
+.stories a { font-size: var(--text-xs); text-decoration: none; }
+@media (hover: hover) { .stories :is(button, a):hover { text-decoration: underline; } }
+.stories .size { font-size: 1.625rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stories .what { font-weight: 600; }
+.stories .why { color: var(--text-muted); font-size: var(--text-sm); }
+.changes { margin-block: var(--space-12) 26px; }
+.changes h2 { margin-block-end: var(--space-1); font-size: var(--text-xl); letter-spacing: -0.015em; }
+.changes .note { margin-block-end: 14px; }
+.change-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18.75rem), 1fr)); gap: var(--space-2) var(--space-7); line-height: var(--leading-snug); }
+.change-lists h3 { margin-block-end: var(--space-1); font-size: var(--text-xs); color: var(--text-muted); font-weight: 600; }
+.change-lists ol { list-style: none; margin: 0; padding: 0; }
+.change-lists :is(button, .gone) { inline-size: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); border: 0; background: none; padding: 5px var(--space-2); border-radius: 7px; font-size: var(--text-xs); text-align: start; }
+.change-lists button { cursor: pointer; }
+@media (hover: hover) { .change-lists button:hover { background: var(--fill-pressed); } }
+.change-lists i { inline-size: 10px; block-size: 10px; border-radius: 2.5px; }
+.change-lists .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.change-lists .size { font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.change-lists .empty { padding: 5px var(--space-2); font-size: var(--text-xs); color: var(--text-muted); }
+</style>
+</head>
+<body>
+<header class="site-nav">
+  <a class="brand" href="/"><img src="/icon.svg" width="28" height="28" alt="">Sizewise</a>
+  <nav aria-label="Sizewise"><a href="/try">Try it</a><a class="get" href="/#download">Get Sizewise</a></nav>
+</header>
+<main class="explorer">
+
+  <header id="top" class="intro">
+    <h1>What a week of coding agents adds to a Mac</h1>
+    <p class="lede">A sample developer’s home folder on Monday and on Friday, mapped by Sizewise. The projects are made up; the folders are where the tools put them, and their sizes are typical, not measured. The bigger the file, the bigger its rectangle.</p>
+    <p class="counts" id="facts"></p>
+  </header>
+
+  <div class="modes" id="modes" role="group" aria-label="Color the map by">
+    <button id="byChange" type="button" aria-pressed="true">What changed since Monday</button>
+    <button id="byKind" type="button" aria-pressed="false">Kinds of files</button>
+  </div>
+
+  <div class="layout">
+    <div id="window" class="window"></div>
+    <section class="items" aria-labelledby="items-title">
+      <h2 id="items-title">In this folder, largest first</h2>
+      <ol id="items"></ol>
+    </section>
+  </div>
+
+  <section class="changes" id="changes" aria-labelledby="changes-title">
+    <h2 id="changes-title"></h2>
+    <p class="note" id="changes-note">On your own Mac, scan a folder again and Sizewise shows the same thing: Show Changes colors what grew, what shrank and what’s new, and the status bar names the places where the space went.</p>
+    <div class="change-lists">
+      <div><h3>Grew the most</h3><ol id="grew"></ol></div>
+      <div><h3>New</h3><ol id="added"></ol></div>
+      <div><h3>Removed</h3><ol id="removed"></ol></div>
+    </div>
+  </section>
+
+  <ul class="stories" id="stories" aria-label="Where the space went"></ul>
+
+  <div class="more">
+    <section>
+      <h2>How this was made</h2>
+      <p class="note">This map is generated in your browser from a fixed recipe, the same on every visit, so no one’s files are in it. Folder names follow the tools that make them: git worktrees a coding agent keeps inside a project, Cargo’s target folder, Xcode’s DerivedData and simulator devices, Docker Desktop’s disk image, Playwright’s browsers, and the Hugging Face cache. Sizes are typical of what developers report, not measured on one Mac.</p>
+    </section>
+    <section>
+      <h2>See your own Mac this way</h2>
+      <p>Sizewise scans any folder or disk on your Mac and draws every file in it, with the same map, search and zoom.</p>
+      <p>Scanning is free, with no account. A license, $12.99 once, adds Move to Trash, Show Changes and Compare with Saved Scan.</p>
+      <a class="button" href="/#download">Get Sizewise</a>
+    </section>
+  </div>
+  <noscript><p>Turn on JavaScript to see the map.</p></noscript>
+</main>
+<footer class="site-footer">
+  <nav aria-label="More about Sizewise"><a href="/release-notes.html">Release notes</a><a href="/macos">What macOS puts on your Mac</a><a href="/system-data">What’s in System Data</a><a href="/storage-full">When your Mac is full</a><a href="/compare">Compare disk apps</a><a href="/press.html">Press</a><a href="/privacy.html">Privacy</a><a href="/terms.html">Terms</a><a href="mailto:support@getsizewise.app">Contact</a></nav>
+  <p>Polar sells Sizewise for Tallied, Inc.</p>
+</footer>
+<script type="module">
+import { STEPS, prepare, compare, step, fmt, count, kindText } from './map.js';
+import { explorer } from './explorer.js';
+import { makeDevWeek } from './demo-dev-week.js';
+
+const el = (id) => document.getElementById(id);
+const { before, after } = makeDevWeek();
+prepare(before);
+prepare(after);
+const removed = compare({ tree: after }, { tree: before });
+
+const at = (path) => path.split('/').filter(Boolean).reduce((n, part) => n?.children?.find((c) => c.name === part), after);
+const was = (path) => path.split('/').filter(Boolean).reduce((n, part) => n?.children?.find((c) => c.name === part), before);
+const grewBy = (path) => (at(path)?.size ?? 0) - (was(path)?.size ?? 0);
+
+// Something too small to draw on Monday's map counts as new here, as the lists say.
+const stepOf = (n) => (n.old === 0 ? 7 : step(n));
+const changeColor = (item) => STEPS[stepOf(item)][1];
+const change = (n) => {
+  if (!n.old) return 'New since Monday';
+  const d = n.size - n.old;
+  if (Math.abs(d) < 1e6) return 'About the same';
+  return `${d > 0 ? 'Grew' : 'Shrank'} ${fmt(Math.abs(d))} from ${fmt(n.old)}`;
+};
+let mode = 'change';
+
+const view = explorer(el('window'), {
+  root: after, shortcuts: true, address: true,
+  label: 'Map of a sample developer’s home folder on Friday',
+  list: { ol: el('items'), title: el('items-title') },
+  colorOf: changeColor,
+  detailOf: (n) => (mode === 'change' && n.parent ? change(n) : kindText(n)),
+  legendOf: (v) => (mode === 'change' ? changeLegend(v.root) : null),
+});
+const showMap = () => view.host.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
+
+// How many bytes of the zoomed folder fall in each step of change.
+function changeLegend(root) {
+  const bytes = new Array(STEPS.length).fill(0);
+  const tally = (n) => { if (n.children) n.children.forEach(tally); else bytes[stepOf(n)] += n.size; };
+  root.children.forEach(tally);
+  return STEPS.map(([name, color], i) => ({ name, color, size: bytes[i] })).filter((s) => s.size > 0);
+}
+
+function setMode(next) {
+  mode = next;
+  view.colorOf = mode === 'change' ? changeColor : null;
+  if (mode === 'change') view.setKind(null);
+  el('byChange').setAttribute('aria-pressed', String(mode === 'change'));
+  el('byKind').setAttribute('aria-pressed', String(mode === 'kind'));
+  view.redraw();
+}
+el('byChange').onclick = () => setMode('change');
+el('byKind').onclick = () => setMode('kind');
+
+const fact = (label, value) => { const s = document.createElement('span'); const b = document.createElement('b'); b.textContent = value; s.append(label + ' ', b); el('facts').append(s); };
+fact('Monday', fmt(before.size));
+fact('Friday', fmt(after.size));
+fact('Items on Friday', count(after.items));
+
+// Where the week's space went, measured from the two maps. Each opens its folder on the map.
+const worktrees = 'Code/app/.claude/worktrees';
+const stories = [
+  { size: at(worktrees).size, what: `${at(worktrees).children.length} worktrees, each with its own dependencies`, open: worktrees,
+    why: `A git worktree is a separate checkout, so each one a coding agent makes installs its own node_modules and builds its own .next folder. Monday’s one worktree was ${fmt(was(worktrees).size)}. git worktree remove deletes a worktree’s folder.` },
+  { size: grewBy('Code/api/target'), what: 'Rust builds, kept', open: 'Code/api/target', grew: true,
+    why: `Cargo keeps every debug and release build in target, with its incremental state, and doesn’t clean it on its own. Here it went from ${fmt(was('Code/api/target').size)} to ${fmt(at('Code/api/target').size)}. cargo clean deletes it, and the next build starts from scratch.` },
+  { size: grewBy('.cache/huggingface/hub'), what: 'A model downloaded to try', open: '.cache/huggingface/hub', grew: true,
+    why: 'The Hugging Face cache keeps every model you download until you delete it, and a 30-billion-parameter model is about 17 GB even at 4 bits.' },
+  { size: grewBy('Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw'), what: 'Docker’s disk image, larger', open: 'Library/Containers/com.docker.docker/Data/vms/0/data', grew: true,
+    why: 'Docker Desktop keeps every image and container in one disk image, which grows as you pull and build.', link: ['/docker-disk', 'Why Docker.raw is so big'] },
+  { size: grewBy('Library/Developer'), what: 'Simulators and Xcode builds', open: 'Library/Developer', grew: true,
+    why: 'Each simulator device keeps its own data, and DerivedData keeps every build and index Xcode makes.', link: ['/xcode-storage', 'Xcode storage'] },
+].sort((a, b) => b.size - a.size);
+
+for (const s of stories) {
+  const li = document.createElement('li');
+  const add = (cls, text) => { const e = document.createElement('span'); e.className = cls; e.textContent = text; li.append(e); };
+  add('size', (s.grew ? '+' : '') + fmt(s.size));
+  add('what', s.what);
+  add('why', s.why);
+  const row = document.createElement('span');
+  row.className = 'row';
+  const target = at(s.open);
+  if (target) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = 'Show on the map';
+    b.onclick = () => { view.zoomTo(target); showMap(); };
+    row.append(b);
+  }
+  if (s.link) { const a = document.createElement('a'); a.href = s.link[0]; a.textContent = s.link[1]; row.append(a); }
+  li.append(row);
+  el('stories').append(li);
+}
+
+// What changed, named where it starts: something new at its top, and growth at the smallest folder
+// that holds it, unless one new item or one child explains most of it, which is then named instead.
+const d = after.size - before.size;
+el('changes-title').textContent = `This home folder grew ${fmt(d)} between Monday and Friday`;
+const pathOf = (n) => { const p = []; for (let x = n; x.parent; x = x.parent) p.unshift(x.name); return '~/' + p.join('/'); };
+const grew = [], added = [];
+const walk = (n) => {
+  if (!n.old) { if (n.parent) added.push(n); return; }
+  const g = n.size - n.old;
+  const kids = n.children ?? [];
+  const biggestNew = Math.max(0, ...kids.filter((c) => !c.old).map((c) => c.size));
+  if (n.parent && g >= 1e8 && biggestNew < g / 2 && kids.every((c) => !c.old || c.size - c.old < g / 2)) { grew.push({ n, g }); return; }
+  kids.forEach(walk);
+};
+walk(after);
+const row = (list, n, size, color, open) => {
+  const li = document.createElement('li');
+  const b = document.createElement(open ? 'button' : 'div');
+  if (open) { b.type = 'button'; b.onclick = open; } else b.className = 'gone';
+  const sw = document.createElement('i');
+  sw.style.background = color;
+  const name = document.createElement('span');
+  name.className = 'name';
+  const parts = pathOf(n).split('/');
+  name.textContent = parts.length > 5 ? '…/' + parts.slice(-3).join('/') : pathOf(n);
+  name.title = pathOf(n);
+  const sz = document.createElement('span');
+  sz.className = 'size';
+  sz.textContent = size;
+  b.append(sw, name, sz);
+  li.append(b);
+  el(list).append(li);
+};
+const show = (n) => () => { setMode('change'); view.zoomTo(n.parent || n); view.select(n, { lock: true }); showMap(); };
+grew.sort((a, b) => b.g - a.g).slice(0, 8).forEach(({ n, g }) => row('grew', n, '+' + fmt(g), STEPS[stepOf(n)][1], show(n)));
+added.sort((a, b) => b.size - a.size).slice(0, 8).forEach((n) => row('added', n, fmt(n.size), STEPS[7][1], show(n)));
+removed.sort((a, b) => b.size - a.size).slice(0, 8).forEach((n) => row('removed', n, '−' + fmt(n.size), STEPS[0][1], null));
+for (const id of ['grew', 'added', 'removed']) if (!el(id).children.length) { const li = document.createElement('li'); li.className = 'empty'; li.textContent = 'Nothing'; el(id).append(li); }
+</script>
+</body>
+</html>

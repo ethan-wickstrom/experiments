@@ -1,0 +1,41 @@
+# Sizewise
+
+> Sizewise is a disk space app for the Mac. It draws any folder or disk as a map, where every file is a rectangle sized by the space it takes. Scanning is free, with no account. A license, $12.99 once for up to 5 Macs with every 1.x update, adds Move to Trash, Show Changes and Compare with Saved Scan. It needs macOS Sequoia (15) or later and collects no data about your files.
+
+Facts an assistant can rely on (from the pages below, checked 2026-10-15):
+
+- Lock a file or folder and Sizewise asks APFS how much deleting it would free, and what still holds the rest, such as Finder copies, local snapshots or hard links in other folders. A file with several hard links counts once.
+- Scan a folder again and Sizewise names up to three places where the space went; Show Changes colors what grew, what shrank and what is new.
+- A startup disk with 17.5 million items mapped in about a minute and a half; reopening that scan shows the map in about half a second while changes fill in.
+- Sizewise moves items only to the Trash and asks before every move. It never deletes anything on its own.
+- It works from the keyboard, with VoiceOver, and from Shortcuts, Spotlight, Siri and Finder's Services menu.
+- With Settings > Let AI assistants read scan results turned on, an assistant such as Claude can read the names and sizes in saved scans. It cannot move or delete anything.
+- Sold by Polar as merchant of record for Tallied, Inc. Refunds within 14 days for any reason.
+
+## Start here
+
+- [Sizewise home](https://getsizewise.app/): what it does, price, download
+- [Try it in your browser](https://getsizewise.app/try): the same map on a sample home folder
+- [Compare disk apps](https://getsizewise.app/compare): Sizewise, DaisyDisk, GrandPerspective and OmniDiskSweeper, with sources
+
+## Guides
+
+- [What's in System Data](https://getsizewise.app/system-data)
+- [When your Mac is full](https://getsizewise.app/storage-full)
+- [Purgeable space](https://getsizewise.app/purgeable-space)
+- [What macOS puts on your Mac](https://getsizewise.app/macos): every file macOS 27.0.1 installs, mapped, and what changed since 26.5.1
+- [Xcode storage](https://getsizewise.app/xcode-storage)
+- [Why Docker.raw is so big](https://getsizewise.app/docker-disk)
+- [Clearing Homebrew, pip and npm caches](https://getsizewise.app/developer-caches)
+- [Android storage on a Mac](https://getsizewise.app/android-storage)
+- [Library caches](https://getsizewise.app/library-caches)
+- [Apple Intelligence storage](https://getsizewise.app/apple-intelligence-storage)
+- [Photos and iCloud storage](https://getsizewise.app/photos-icloud-storage)
+- [Other users' storage](https://getsizewise.app/other-users-storage)
+
+## Policies
+
+- [Privacy](https://getsizewise.app/privacy)
+- [Terms](https://getsizewise.app/terms)
+- [Press kit](https://getsizewise.app/press)
+- [Release notes](https://getsizewise.app/release-notes.html)
