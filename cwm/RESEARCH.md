@@ -74,3 +74,9 @@ The sum ranges over microstep counts and action-compatible alignments through te
 - [Interchange interventions](https://proceedings.neurips.cc/paper_files/paper/2021/hash/4f5c422f4d49a5a807eda27434231040-Abstract.html): changing a causal input is a stronger test than decoding its correlation. Our signal swap is an **input** intervention; it does not identify a neural circuit.
 
 Replay the ambiguity audit with `gzip -dc bench/first-write/train.jsonl.gz > train.jsonl && bun bench/observability.ts train.jsonl` from `cwm/`. The [scalar](bench/composition/README.md) and [belief](bench/belief/README.md) reports give exact replay commands and scope.
+
+## From execution to project decisions
+
+The [MiniCPM project experiments](bench/development/README.md) train a coding policy and a joint model from the same pinned release. A candidate's downstream visible test and a paused function's next native observation are separate targets. The joint adapter reduces scalar next-token loss relative to the base and coding-only model. It still misses all complete fresh scalar rollouts. The original three arms all fail the six free-action requests and four directed edits. Reversing a requirement while keeping both candidate sources identical exposes a different failure: ranking within a project often stays fixed when the correct decision changes. [Independent project and reversal evidence](bench/development/evaluation.md)
+
+A second experiment doubles the adapter rank and separates choosing an action from writing source. Its blind evaluation compares direct generation to the learned policy and grades actual follow-up state. This gives separate denominators for stopping early, generating an invalid edit, and passing all independent checks. It also measures what a read, write and test loop can accomplish with the unchanged base under the same interface. [Training](bench/development/c2/README.md) · [Blind results](bench/development/c2-results/README.md)

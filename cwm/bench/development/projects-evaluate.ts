@@ -8,6 +8,7 @@ import { runTests } from "../../project/sandbox.ts";
 import { held } from "./held.ts";
 import { directedHeld } from "./directed-held.ts";
 import { editFile } from "../../project/directed.ts";
+import { workFile } from "../../project/work.ts";
 
 async function acceptance(files: Map<string, string>, tests: string[]) {
   const grades = [];
@@ -24,6 +25,7 @@ async function acceptance(files: Map<string, string>, tests: string[]) {
 async function policy(
   project: (typeof held)[number] | (typeof directedHeld)[number],
   generate: Generate,
+  mode: string,
 ) {
   const files = new Map(Object.entries(project.files));
   const session = new ProjectSession({ files }, generate);
@@ -33,7 +35,13 @@ async function policy(
     checks.push(accept);
     const start = performance.now();
     const result =
-      "path" in project ? await editFile(session, project.path, goal) : await session.turn(goal);
+      "path" in project
+        ? await editFile(session, project.path, goal)
+        : mode === "work" || mode === "source"
+          ? await workFile(session, project.alternatives[0]!.path, goal, {
+              sourceOnly: mode === "source",
+            })
+          : await session.turn(goal);
     const elapsedMs = Math.round(performance.now() - start);
     const grades = await acceptance(files, checks);
     turns.push({
@@ -115,17 +123,17 @@ if (import.meta.main) {
   const [url, model, out, mode = "policy"] = process.argv.slice(2);
   if (!url || !model || !out)
     throw Error(
-      "Usage: bun projects-evaluate.ts CHAT_ENDPOINT MODEL FRESH_SCORES.json.gz [directed|policy]",
+      "Usage: bun projects-evaluate.ts CHAT_ENDPOINT MODEL FRESH_SCORES.json.gz [directed|policy|work|source]",
     );
-  if (!["directed", "policy"].includes(mode) || (await Bun.file(out).exists()))
+  if (!["directed", "policy", "work", "source"].includes(mode) || (await Bun.file(out).exists()))
     throw Error("Expected a valid mode and fresh output path");
   const generate = endpoint(url, model);
   const results = [];
-  for (const project of mode === "policy" ? held : directedHeld) {
+  for (const project of mode === "directed" ? directedHeld : held) {
     results.push({
       id: project.id,
-      turns: await policy(project, generate),
-      ...("alternatives" in project
+      turns: await policy(project, generate, mode),
+      ...(mode === "policy" && "alternatives" in project
         ? { alternatives: await counterfactuals(project, generate) }
         : {}),
     });

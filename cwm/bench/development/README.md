@@ -2,6 +2,8 @@
 
 A is the unchanged [MiniCPM5-1B post-trained release](https://huggingface.co/openbmb/MiniCPM5-1B/tree/ac83f813ba7da263c51a9f3ec37c2072597e54af). B and C are independently trained derivatives of A. B learned from coding actions on six libraries. C shared its adapter between coding actions, Bun test forecasts and V8 pause forecasts. [Base and derivative fingerprints](artifacts.json) · [Frozen training protocol](protocol.md)
 
+**Independent project results.** A, B and C each passed 0/6 free-action turns and 0/4 directed edits. The three counterfactual forecast pairs resolved no selections for any arm. See the [live project evaluation and reproduction commands](evaluation.md).
+
 ## Fresh execution and retention
 
 Three unseen scalar programs produced 23 next-pause transitions across six invocations. C assigned more probability to the observed next tokens, but every arm missed every complete pause and every complete rollout.

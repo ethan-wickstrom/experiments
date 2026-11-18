@@ -10,16 +10,34 @@ from model import adapted, chat_ids, load
 
 
 @torch.inference_mode()
-def compare(prompts):
-    for arm in ("B", "C"):
-        verify_arm(arm)
+def compare(prompts, arms):
+    for arm in arms:
+        if arm in ("B", "C"):
+            verify_arm(arm)
+        elif arm in ("B2", "C2"):
+            sys.path.insert(0, str(HERE / "c2"))
+            from package_model import verify
+            verify(arm)
+        elif arm != "A":
+            raise ValueError("Unknown arm: " + arm)
     base, tokenizer = load()
-    model = adapted(base, HERE / "B/peft")
-    model.load_adapter(HERE / "C/peft", adapter_name="joint")
+    model = base
+    adapters = {}
+    for arm in arms:
+        if arm == "A":
+            continue
+        path = (HERE / "c2" if arm.endswith("2") else HERE) / arm / "peft"
+        if not adapters:
+            model = adapted(base, path)
+            adapters[arm] = "default"
+        else:
+            model.load_adapter(path, adapter_name=arm)
+            adapters[arm] = arm
     result = {}
-    for arm in ("A", "B", "C"):
-        model.set_adapter("joint" if arm == "C" else "default")
-        with model.disable_adapter() if arm == "A" else nullcontext():
+    for arm in arms:
+        if arm != "A":
+            model.set_adapter(adapters[arm])
+        with model.disable_adapter() if arm == "A" and adapters else nullcontext():
             answers = []
             for i, prompt in enumerate(prompts):
                 yes, no = ("yes", "no") if i % 2 else ("pass", "fail")
@@ -35,4 +53,4 @@ def compare(prompts):
 
 
 if __name__ == "__main__":
-    print(json.dumps(compare(json.load(sys.stdin))))
+    print(json.dumps(compare(json.load(sys.stdin), sys.argv[1:] or ["A", "B", "C"])))

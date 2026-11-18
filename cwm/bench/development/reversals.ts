@@ -107,15 +107,18 @@ function queries() {
 }
 
 if (import.meta.main) {
-  const [out] = process.argv.slice(2);
+  const [out, ...arms] = process.argv.slice(2);
   if (!out || (await Bun.file(out).exists())) throw Error("Pass a fresh .json.gz output path");
   const cases = queries();
   const inputs = cases.flatMap((c) => [c.forecast, c.preference]);
-  const child = Bun.spawn([process.env.CWM_PYTHON ?? "python", import.meta.dir + "/margins.py"], {
-    stdin: new Blob([JSON.stringify(inputs)]),
-    stdout: "pipe",
-    stderr: "inherit",
-  });
+  const child = Bun.spawn(
+    [process.env.CWM_PYTHON ?? "python", import.meta.dir + "/margins.py", ...arms],
+    {
+      stdin: new Blob([JSON.stringify(inputs)]),
+      stdout: "pipe",
+      stderr: "inherit",
+    },
+  );
   try {
     const response = await new Response(child.stdout).text();
     assert.equal(await child.exited, 0);
