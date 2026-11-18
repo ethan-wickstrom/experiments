@@ -42,10 +42,11 @@ for (const [index, turn] of project.turns.entries()) {
     hiddenPass;
   const forecastFailures = result.writes.flatMap((w) => w.forecastFailure ?? []);
   const cost = {
-    modelCalls: result.calls.length + forecastFailures.length,
-    inputTokens: result.calls.reduce((n, c) => n + c.reply.inputTokens, 0),
-    outputTokens: result.calls.reduce((n, c) => n + c.reply.tokens, 0),
-    modelMs: [...result.calls, ...forecastFailures].reduce((n, c) => n + c.elapsedMs, 0),
+    completedModelCalls: result.calls.length,
+    failedForecastAttempts: forecastFailures.length,
+    completedInputTokens: result.calls.reduce((n, c) => n + c.reply.inputTokens, 0),
+    completedOutputTokens: result.calls.reduce((n, c) => n + c.reply.tokens, 0),
+    modelAttemptMs: [...result.calls, ...forecastFailures].reduce((n, c) => n + c.elapsedMs, 0),
     elapsedMs,
     gradingMs: Math.round(performance.now() - gradeStart),
   };
