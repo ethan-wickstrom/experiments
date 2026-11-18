@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { Effect } from "effect";
 import libraries from "./libraries.json";
-import { FORECAST, type Event, type Action } from "../contract.ts";
+import { FORECAST, type Event, type Action } from "../../../project/protocol.ts";
 import { edit, decide, jsonState, type Source } from "./wire.ts";
 
 type Project = {
