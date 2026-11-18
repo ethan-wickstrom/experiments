@@ -53,7 +53,13 @@ for (const arm of ["base", "trained", "edit-only"]) {
       const matches = before === gold;
       const edit = result.edit;
       const eligible = matches && edit !== null;
-      const reason = !matches ? "divergent predecessor" : !edit ? "no usable edit" : "eligible";
+      const reason = !matches
+        ? "divergent predecessor"
+        : edit
+          ? "eligible"
+          : result.span
+            ? "span only"
+            : "no usable edit";
       async function hybrid(start: number, end: number, replacement: string) {
         const text = splice(before, start, end, replacement);
         const errors = syntax(project.path, text);
@@ -70,7 +76,10 @@ for (const arm of ["base", "trained", "edit-only"]) {
           pass: Boolean(grades?.visiblePass && grades.hiddenPass),
         };
       }
-      const modelSpan = eligible ? await hybrid(edit.start, edit.end, ref.replacement) : null;
+      const modelSpan =
+        matches && result.span
+          ? await hybrid(result.span[0], result.span[1], ref.replacement)
+          : null;
       const modelReplacement = eligible ? await hybrid(ref.start, ref.end, edit.replacement) : null;
       const diagnostics = arm + "-" + project.id + "-" + (i + 1) + ".json.gz";
       await writeFile(
