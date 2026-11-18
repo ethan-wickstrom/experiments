@@ -38,6 +38,8 @@ On the original six cumulative requests C2 produced seven complete parseable fil
 
 Freeze two diagnostics before loading either trained line-editor checkpoint. Score the original 24 candidate forecasts, ten individual V8 pauses and four self-fed rollouts on the exact same weights used for editing. Separately, for each of the 24 local held requests, add two comment lines either before or after its module. This moves the required span by two lines while preserving both candidate coordinates, the requested behavior and the other model inputs. Score the joint token log probability of each complete coordinate string and its native stop under each layout. Both locations are legal in both versions. A pair succeeds only if the model's preference reverses in the correct direction. Each family contributes six requests. This measures a forced choice between two spans. The independent external evaluator measures unconstrained location choice and actual behavior. [Consequence and rollout scoring](local_edit/world_score.py) · [Location intervention](local_edit/position_score.py)
 
+A retrospective debugger check groups real transitions with the same current pause, two distinct source programs and different oracle successors. Two such pairs occur in the frozen ten transitions. In both pairs the joint editor greedily returned the same next row under either program. With both actual successors supplied as alternatives for teacher-forced scoring, neither the base nor the joint editor reversed its preference correctly on either pair. The source and current row are the only model inputs. Scores include every target token and the native stop. [Scorer](local_edit/source_pairs.py) · [Base](results/source-pairs-base.json.gz) · [Joint](results/source-pairs-trained.json.gz)
+
 ## Reproduce
 
 Build the sandbox from the project root as in the [project guide](../../PROMPTING.md#work-on-a-project). From this benchmark directory, start one b6602 server per arm in turn. Set `BASE_GGUF` to the pinned Q8_0 and `ARM` to A, B or C. Use a fresh result directory for each run.
@@ -66,5 +68,6 @@ bun reversals.ts "$out/reversals-2.json.gz" B2 C2
 for arm in base trained edit-only; do
   "$CWM_PYTHON" local_edit/world_score.py "$arm" "$out/world-$arm.json.gz"
   "$CWM_PYTHON" local_edit/position_score.py "$arm" "$out/position-$arm.json.gz"
+  "$CWM_PYTHON" local_edit/source_pairs.py "$arm" "$out/source-pairs-$arm.json.gz"
 done
 ```

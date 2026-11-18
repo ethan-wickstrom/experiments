@@ -4,30 +4,10 @@ import gzip
 import json
 from pathlib import Path
 
-import torch
-from backbone import chat_ids, target_ids
+from likelihood import sequence_logprobs
 from edit import Editor
 from local_data import HOLDOUT, authored
 from wire import derive, splice, user
-
-
-@torch.inference_mode()
-def span_logprobs(editor, prompt, spans):
-    prefix = chat_ids(editor.tok, prompt)
-    # Score the complete autoregressive span strings and native stop, without a decoding grammar.
-    tails = [target_ids(editor.tok, f"{a}:{b}") for a, b in spans]
-    sequences = [prefix + tail[:-1] for tail in tails]
-    width = max(map(len, sequences))
-    assert width <= editor.max_input
-    ids = torch.tensor([s + [editor.tok.pad_token_id] * (width - len(s)) for s in sequences])
-    mask = torch.tensor([[1] * len(s) + [0] * (width - len(s)) for s in sequences])
-    base = editor.model.get_base_model() if hasattr(editor.model, "get_base_model") else editor.model
-    hidden = base.model(input_ids=ids, attention_mask=mask, use_cache=False).last_hidden_state
-    scores = []
-    for i, tail in enumerate(tails):
-        logits = base.lm_head(hidden[i, len(prefix) - 1:len(prefix) - 1 + len(tail)])
-        scores.append(-torch.nn.functional.cross_entropy(logits, torch.tensor(tail), reduction="sum").item())
-    return scores
 
 
 def evaluate(arm):
@@ -45,7 +25,7 @@ def evaluate(arm):
                                                      (trivia + before, trivia + after))):
             assert splice(source, *spans[index], replacement) == reference
             files = [{**f, "text": source} if f["path"] == request["path"] else f for f in request["files"]]
-            scores.append(span_logprobs(editor, user({**request, "files": files}), spans))
+            scores.append(sequence_logprobs(editor, user({**request, "files": files}), [f"{a}:{b}" for a,b in spans]))
         hits = [pair[i] > pair[1-i] for i, pair in enumerate(scores)]
         records.append(dict(family=episode["family"], goal=episode["goal"], spans=spans, scores=scores, hits=hits))
     return dict(arm=arm, corpus_sha256=HOLDOUT, decisions=2*len(records), pairs=len(records),
