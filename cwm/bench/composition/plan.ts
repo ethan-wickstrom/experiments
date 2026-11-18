@@ -10,9 +10,8 @@ export function scalar(n: unknown): n is number {
   return typeof n === "number" && Number.isSafeInteger(n) && !Object.is(n, -0);
 }
 
-// Static scaffolding, not a learned part: lexical slots and straight-line sequencing.
-export function plan(source: string): Plan {
-  const syntax = parseSync("input.ts", source);
+export function entryFunction(file: string, source: string) {
+  const syntax = parseSync(file, source);
   const [top] = syntax.program.body;
   const f = top?.type === "ExportNamedDeclaration" ? top.declaration : null;
   if (
@@ -30,21 +29,31 @@ export function plan(source: string): Plan {
     if (p.type !== "Identifier" || names.includes(p.name)) throw new Error("Invalid parameter");
     names.push(p.name);
   }
-  function read(e: Expression): Expr {
+  return { names, statements: f.body.body };
+}
+
+export function expressions(names: readonly string[]) {
+  return function read(e: Expression): Expr {
     if (e.type === "ParenthesizedExpression") return read(e.expression);
     if (e.type === "Literal" && scalar(e.value)) return { literal: e.value };
     if (e.type === "Identifier" && names.includes(e.name)) return { slot: names.indexOf(e.name) };
     if (e.type === "BinaryExpression" && e.left.type !== "PrivateIdentifier")
       return { op: e.operator, l: read(e.left), r: read(e.right) };
     throw new Error("Unsupported expression: " + e.type);
-  }
+  };
+}
+
+// Static scaffolding, not a learned part: lexical slots and straight-line sequencing.
+export function plan(source: string): Plan {
+  const { names, statements } = entryFunction("input.ts", source),
+    read = expressions(names);
   const params = names.length;
   const code: Plan["code"] = [];
-  for (const [i, s] of f.body.body.entries()) {
+  for (const [i, s] of statements.entries()) {
     const line = source.slice(0, s.start).split("\n").length;
     if (line === code.at(-1)?.line || source.slice(s.start, s.end).includes("\n"))
       throw new Error("Projection requires one statement per line");
-    if (s.type === "ReturnStatement" && s.argument && i === f.body.body.length - 1) {
+    if (s.type === "ReturnStatement" && s.argument && i === statements.length - 1) {
       code.push({ line, expr: read(s.argument), returns: true });
     } else if (
       s.type === "VariableDeclaration" &&

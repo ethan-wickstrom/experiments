@@ -2,6 +2,8 @@
 
 | Item                                                                                     | Status | Resolution                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test unseen branch compositions without being given the successor                        | Closed | [Learned choices and self-fed CFG paths](bench/branch/README.md).                                                                              |
+| Predict raw V8 landing locations for unfamiliar expression spans                         | Open   | [Branch probe](bench/branch/README.md): all 20 return-site columns missed; fresh confirmation required.                                        |
 | Identify the effect of matching training inputs rather than collecting more of the same  | Closed | [Cover vs uniform](bench/belief/README.md) and [distinguishing V8 queries](bench/composition/regime.md).                                       |
 | Separate compositional state-update learning from control-flow scaffolding               | Closed | [Bounded operator rollouts](bench/composition/README.md) and [masked heap twins](bench/belief/README.md), evaluated at specified boundaries.   |
 | Transfer across control, aliasing and unfamiliar operators at raw pauses                 | Open   | [Promotion gate](RESEARCH.md): current benchmarks do not warrant replacing the raw predictor.                                                  |

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { cache, collect, load } from "../collect.ts";
 import { sourceOf } from "./cases.ts";
-import { fit, type Atom } from "./model.ts";
+import { fit } from "./model.ts";
 import { example, project } from "./project.ts";
 
 /** One injective query for all multilinear polynomials with coefficients in [-bound,bound]. */
@@ -40,12 +40,7 @@ async function run(root: string, live: boolean) {
   const training = await rows(args),
     model = fit(training),
     check = [14, 6];
-  function predict({ expr }: Atom) {
-    const plan = { names: ["x", "y", "m"], params: 2, code: [{ line: 2, expr, returns: false }] };
-    const next = model.next(plan, { store: check, pc: 0 });
-    return next && "store" in next ? next.store.at(-1) : null;
-  }
-  const predictions = training.map(predict); // No check labels have been requested.
+  const predictions = training.map(({ expr }) => model.evaluate(expr, check));
   const checks = await rows(check),
     audited = fit([...training, ...checks]);
   return {

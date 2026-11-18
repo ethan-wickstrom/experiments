@@ -1,7 +1,7 @@
-import { parseSync, type Expression, type Statement } from "oxc-parser";
+import type { Statement } from "oxc-parser";
 import type { Site } from "../../cwm.ts";
 import { fit, type Atom } from "../composition/model.ts";
-import { scalar, type Expr } from "../composition/plan.ts";
+import { entryFunction, expressions, scalar, type Expr } from "../composition/plan.ts";
 
 type Op =
   | { kind: "if"; yes: string; no: string }
@@ -9,33 +9,10 @@ type Op =
   | { kind: "return" };
 type Node = Op & { id: string; line: number; col: number; width: number; expr: Expr };
 export function graph(file: string, source: string) {
-  const ast = parseSync(file, source);
-  const decl = ast.program.body[0];
-  const f = decl?.type === "ExportNamedDeclaration" ? decl.declaration : null;
-  if (
-    ast.errors.length ||
-    ast.program.body.length !== 1 ||
-    f?.type !== "FunctionDeclaration" ||
-    f.async ||
-    f.generator ||
-    f.id?.name !== "run" ||
-    !f.body
-  )
-    throw Error("Expected one sync exported run");
-  const names = f.params.map((p) => {
-    if (p.type !== "Identifier") throw Error("Invalid parameter");
-    return p.name;
-  });
+  const { names, statements } = entryFunction(file, source),
+    read = expressions(names);
   const nodes = new Map<string, Node>(),
     byLine = new Map<number, Node>();
-  function read(e: Expression): Expr {
-    if (e.type === "Identifier" && names.includes(e.name)) return { slot: names.indexOf(e.name) };
-    if (e.type === "Literal" && scalar(e.value)) return { literal: e.value };
-    if (e.type === "ParenthesizedExpression") return read(e.expression);
-    if (e.type === "BinaryExpression" && e.left.type !== "PrivateIdentifier")
-      return { op: e.operator, l: read(e.left), r: read(e.right) };
-    throw Error("Unsupported expression " + e.type);
-  }
   function block(stmts: Statement[], path: string, after: string): string {
     let next = after;
     for (let i = stmts.length - 1; i >= 0; i--) {
@@ -84,7 +61,7 @@ export function graph(file: string, source: string) {
     }
     return next;
   }
-  const entry = block(f.body.body, "b", "");
+  const entry = block(statements, "b", "");
   return { file, names, nodes, byLine, entry };
 }
 export type Graph = ReturnType<typeof graph>;
@@ -163,15 +140,9 @@ export function train(demos: Demo[]) {
         Object.keys(predicates).filter((k) => rs.every((r) => predicates[k]!(r.x, r.y) === r.arm)),
       ]),
     );
-  function value(g: Graph, s: State, expr: Expr) {
-    const out = values.next(
-      { names: g.names, params: g.names.length, code: [{ expr, line: 1, returns: true }] },
-      { pc: 0, store: s.store },
-    );
-    return out && "returned" in out ? out.returned : undefined;
-  }
   function next(g: Graph, s: State, mode: Mode): Boundary | undefined {
-    const n = g.nodes.get(s.pc)!;
+    const n = g.nodes.get(s.pc);
+    if (!n || s.store.length !== g.names.length || !s.store.every(scalar)) return;
     if (n.kind === "if") {
       const e = n.expr;
       if (!("op" in e)) return;
@@ -180,8 +151,8 @@ export function train(demos: Demo[]) {
       let arm: boolean | undefined;
       if (mode === "majority") arm = rows.filter((r) => r.arm).length * 2 > rows.length;
       else {
-        const x = value(g, s, e.l),
-          y = value(g, s, e.r);
+        const x = values.evaluate(e.l, s.store),
+          y = values.evaluate(e.r, s.store);
         if (x === undefined || y === undefined) return;
         arm = unique(rules.get(e.op)!.map((k) => predicates[k]!(x, y)));
         if (arm === undefined) return;
@@ -190,7 +161,7 @@ export function train(demos: Demo[]) {
       const pc = arm ? n.yes : n.no;
       return pc ? { pc, store: [...s.store] } : undefined;
     }
-    const v = value(g, s, n.expr);
+    const v = values.evaluate(n.expr, s.store);
     if (v === undefined) return;
     if (n.kind === "return") return { returned: v };
     const store = [...s.store];

@@ -1,6 +1,6 @@
 # A code world model should predict what an intervention will reveal
 
-**Architecture decision:** Keep the TypeScript oracle and its raw-frame baseline. Develop the next model as a distribution over **where execution goes** and **what changes there**, conditioned on source and observed history. Do not train it to invent exact hidden state. This branch implements and tests two parts of that design; it does not claim state-of-the-art performance on real repositories.
+**Architecture decision:** Keep the TypeScript oracle and its raw-frame baseline. Model **where execution goes** and **what changes there**, conditioned on source and observed history. Do not train it to invent exact hidden state. We implement and test these factors on bounded programs; we do not claim state-of-the-art performance on real repositories.
 
 ## Why this is the next problem
 
@@ -16,6 +16,10 @@ We [grouped the frozen training traces](bench/observability.ts) by exactly what 
 | A more flexible model explains the same evidence equally well off distribution | Not established: the joint neural control could fit every training label yet its test decisions varied greatly by initialization                                | Same observed input fields and training labels; no foundation-model comparison            |
 
 ## State, action and uncertainty
+
+**Does the program counter transfer?** The [branch experiment](bench/branch/README.md) trains on observed arms and parameter writes, then recombines them on five new branching sources. It completes 14/20 self-fed semantic paths, versus 9/20 for a majority-arm baseline. At returns, 19/20 values are correct but **none** of the 20 exact next V8 locations are. A bare-name return in training did not distinguish a fixed column offset from a position relative to the whole expression. The failure of the raw location model survives the success of the semantic model. The separate straight-line parser does not even accept a source from the earlier eight-family transfer holdout; accuracy within a supported grammar is not coverage.
+
+**Can we design an identifying training input?** For the bounded scalar basis, a [positional probe](bench/composition/fingerprint.md) identifies all four coefficients with one exact store instead of the original six per token. It confidently identifies _false_ polynomials for OR and XOR as well. Use synthesized discriminating inputs to identify in-class parameters; use **independent inputs and programs** to falsify the class.
 
 **A negative result changed this design.** We [froze the scalar model and blinded operator names](bench/composition/regime.md). On integer pairs with disjoint bits, addition is indistinguishable from OR or XOR. Trained there, the model unanimously predicted addition and missed all 14 overlapping-bit stores. Giving both tokens the same extra candidate functions replaced all those errors with abstentions. Before reading any pool labels, maximum disagreement picked (3,5): the candidates predicted 8, 7 and 6. One V8 label per token then identified the right rule on all held-out inputs. This is [query by committee](https://doi.org/10.1145/130385.130417), not a general correctness certificate or a demonstrated win over random querying (three of five pool pairs were equally informative).
 
