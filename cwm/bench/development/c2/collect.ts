@@ -9,7 +9,13 @@ import libraries from "./libraries.json";
 import { FORECAST, type Event, type Action } from "../contract.ts";
 import { edit, decide, jsonState, type Source } from "./wire.ts";
 
-type Project = (typeof libraries)[number];
+type Project = {
+  name: string;
+  fn: string;
+  args: string;
+  initial: string;
+  turns: { call: string; goals: string[]; bodies: string[]; expected: unknown[] }[];
+};
 type Trial = { text: string; exit: number; stdout: string; stderr: string };
 export type Episode = {
   family: string;
@@ -113,9 +119,14 @@ async function run(dir: string, path: string, signal: AbortSignal): Promise<Tria
   );
   return { text, exit, stdout, stderr };
 }
-async function collect(root: string, out: string, signal: AbortSignal) {
+export async function collect(
+  root: string,
+  out: string,
+  signal: AbortSignal,
+  projects: readonly Project[] = libraries,
+) {
   const episodes: Episode[] = [];
-  for (const [i, p] of libraries.entries()) {
+  for (const [i, p] of projects.entries()) {
     const prefix: Event[] = [];
     const dir = join(root, p.name),
       path = p.name + ".ts";
