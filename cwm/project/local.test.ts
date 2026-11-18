@@ -1,6 +1,7 @@
 import { rejects } from "node:assert/strict";
 import { expect, test } from "bun:test";
 import { ProjectSession } from "./agent.ts";
+import { wire } from "./protocol.ts";
 import { editLocal, localSplice } from "./local.ts";
 import { modelProcess } from "./model-process.ts";
 
@@ -52,6 +53,37 @@ test("only an independently reconstructed and parsed replacement reaches the wor
   expect(result.stop).toBe("tested");
   expect(files.get(path)).toBe(text);
   expect(result.after?.run?.exit).toBe(0);
+});
+
+test("a capped local fill retains its chosen span and a follow-up forecast uses the supplied generator", async () => {
+  const path = "counter.ts";
+  const original = "export const count = 0;\n";
+  const files = new Map([[path, original]]);
+  let tests = 0;
+  const session = new ProjectSession(
+    { files },
+    async () => {
+      throw Error("unexpected generation on the default model");
+    },
+    async () => {
+      tests++;
+      return { exit: 1, stdout: "", stderr: "Expected: 1\nReceived: 0" };
+    },
+  );
+  const cap = { stopped: false as const, error: "replacement token cap", start: 0, end: 1 };
+  const result = await editLocal(session, async () => cap, path, "Increase count");
+  expect(result.reply).toEqual(cap);
+  const history = session.history.slice();
+  const action = { op: "test" } as const;
+  const answer = await session.predict(action, undefined, async (prompt, limit) => {
+    expect(prompt).toBe(wire([path], history, action));
+    expect(limit).toBe(8);
+    return { text: "fail", finish: "stop", tokens: 2, inputTokens: 24 };
+  });
+  expect(answer.prediction).toBe("fail");
+  expect(files.get(path)).toBe(original);
+  expect(session.history).toEqual(history);
+  expect(tests).toBe(1);
 });
 
 test("a serial model process reuses weights and drops interrupted or malformed replies before reuse", async () => {

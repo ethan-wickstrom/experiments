@@ -19,7 +19,12 @@ const decode = Schema.decodeUnknownSync(
       replacement: Schema.String,
       text: Schema.String,
     }),
-    Schema.Struct({ stopped: Schema.Literal(false), error: Schema.String }),
+    Schema.Struct({
+      stopped: Schema.Literal(false),
+      error: Schema.String,
+      start: Schema.optionalKey(Schema.Int),
+      end: Schema.optionalKey(Schema.Int),
+    }),
   ]),
 );
 type Propose = (request: Request, signal?: AbortSignal) => Promise<unknown>;
