@@ -8,6 +8,8 @@ Project chat uses [the shared protocol](project/protocol.ts) and [isolated Bun r
 
 For the line editor, use [the frozen training and inference protocol](bench/development/local_edit/README.md). The [external free-location transcripts](bench/development/local-external/README.md) and [fixed-location diagnostic](bench/development/local-external/oracle-results/README.md) are evaluation data. Preserve them outside training and model selection. Files and visible diagnostics cross the NDJSON boundary. The caller validates spans on the same observed source and independently runs tests. For candidate ranking and AST editing, preserve the order of model selection, real sandbox execution and hidden grading specified by each experiment. [Project CLI](PROMPTING.md) · [Independent diagnostics](bench/development/evaluation.md)
 
+The [paired assignment interventions](bench/development/interventions/README.md) are held execution probes. Keep their sources and observations out of training and model selection.
+
 From this directory with Bun 1.4+ and Node 24.11+ on PATH:
 
 ```sh
