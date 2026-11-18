@@ -25,10 +25,12 @@ export function openRanker(arm = "C2") {
 
 /** Only visible files and proposed writes cross stdin. */
 export async function rankPairs(pairs: Pair[], arm = "C2", signal?: AbortSignal) {
+  const deadline = AbortSignal.timeout(600000);
+  const batchSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
   const server = openRanker(arm);
   try {
     const answers = [];
-    for (const pair of pairs) answers.push(await server.choose(pair, signal));
+    for (const pair of pairs) answers.push(await server.choose(pair, batchSignal));
     return answers;
   } finally {
     await server.close();
