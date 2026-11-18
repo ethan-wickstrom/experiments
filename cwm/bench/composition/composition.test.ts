@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
-import { trace } from "../../cwm.ts";
+import { fileURLToPath } from "node:url";
+import { readTraces, trace } from "../../cwm.ts";
 import { atomic, sourceOf, trainInputs } from "./cases.ts";
 import { fit, rollout, type Atom } from "./model.ts";
 import { plan } from "./plan.ts";
 import { example, project } from "./project.ts";
+import { score } from "./score.ts";
 
 const binary: Atom["expr"] = { op: "+", l: { slot: 0 }, r: { slot: 1 } };
 const p = plan(sourceOf(atomic[0]!));
@@ -44,4 +46,21 @@ test("atomic supervision is the newly visible store, not the copied return", asy
   const stop = corrupt.frames.find((f) => f.locals["m"]?.exact)!;
   stop.locals["m"] = { exact: false, value: "<unavailable>" };
   expect(() => project(corrupt)).toThrow("observed exact safe integer");
+});
+
+test("offline replay counts stores, uninterrupted rollouts and invalid evidence separately", async () => {
+  const path = fileURLToPath(new URL("./traces.jsonl", import.meta.url));
+  const records = await Array.fromAsync(readTraces(path));
+  const { compose, whole, permuted, rawAdjacentFresh } = score(records);
+  expect(compose.fresh).toEqual({
+    stores: { exact: 36, wrong: 0, abstain: 0 },
+    rollouts: { exact: 24, total: 24 },
+  });
+  expect(compose.contrastPairs).toEqual({ exact: 4, total: 4 });
+  expect(compose.negative.stores).toEqual({ exact: 0, wrong: 0, abstain: 4 });
+  expect(whole.fresh.stores).toEqual({ exact: 8, wrong: 0, abstain: 28 });
+  expect(permuted.fresh.stores).toEqual({ exact: 0, wrong: 36, abstain: 0 });
+  expect(rawAdjacentFresh).toEqual({ total: 88, predicted: 0 });
+  expect(() => score(records.slice(1))).toThrow("Incomplete manifest");
+  expect(() => score(records.toReversed())).toThrow("Wrong source, split or input");
 });
