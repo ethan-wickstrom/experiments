@@ -2,6 +2,8 @@
 
 Given a paused TypeScript program, what will its next observable state be? The **oracle** runs the program once to collect labels. The **model** learns from those labels and predicts without running the program. These are separate operations. This is a small, CPU-only testbed inspired by [Meta's CWM](https://github.com/facebookresearch/cwm), not its weights, tokenizer, or benchmark results.
 
+To write and revise a function with the trace-trained MiniCPM5 checkpoint, simulate calls, or search for an edit with a required intermediate effect, follow the [TypeScript prompting guide](PROMPTING.md).
+
 For the experimental design and measured results beyond the raw-frame baseline, see [Learning compositional updates under partial observation](RESEARCH.md).
 
 The [recurrent raw-frame experiment](bench/recurrent/README.md) adds a source-held-out predictor for scalar assignments, branches and loops. It includes frozen oracle observations and commands to replay training, controls and independent falsification.

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fitStructured } from "../../structured.ts";
-import { loadSplit } from "./replay.ts";
+import { loadSplit } from "./dataset.ts";
 
 const file = (name: string) =>
   fileURLToPath(new URL("./data/" + name + ".jsonl.gz", import.meta.url));

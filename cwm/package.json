@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "chat": "bun chat.ts",
     "lint": "oxlint --deny-warnings --type-aware --type-check .",
     "format": "oxfmt --check ."
   },
