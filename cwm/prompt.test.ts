@@ -46,3 +46,44 @@ test("ambiguous single edits preserve source and partial forecasts retain their 
   assert.equal(report.comparison.complete, false);
   assert.throws(() => parseExample('{"args":[2,3],"return":5}'));
 });
+
+test("a follow-up receives the verified draft and distinguishes oracle evidence from intent", async () => {
+  const requests: { messages: { role: string; content: string }[] }[] = [];
+  const source = "export function run(x: number, y: number) { return x + y; }";
+  const server = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    async fetch(req) {
+      requests.push(await req.json());
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: source } }] });
+    },
+  });
+  try {
+    const cli = Bun.spawn([process.execPath, "chat.ts"], {
+      cwd: import.meta.dir,
+      env: { ...process.env, CWM_CHAT_URL: String(server.url) },
+      stdin: new Blob([
+        "Sum two integers\n/verify [7,2]\nKeep the behavior and clarify the parameter names\n",
+      ]),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [status, out, err] = await Promise.all([
+      cli.exited,
+      new Response(cli.stdout).text(),
+      new Response(cli.stderr).text(),
+    ]);
+    assert.equal(status, 0, err);
+    assert.match(out, /Structured CWM vs V8 oracle/);
+    assert.equal(requests.length, 2);
+    const followUp = requests[1]!.messages.find((m) => m.role === "user")!.content;
+    assert.ok(followUp.includes(source));
+    assert.ok(followUp.includes("Sum two integers"));
+    assert.ok(followUp.includes('"source":"oracle verification"'));
+    assert.ok(
+      followUp.includes('"observedOutcome":{"kind":"returned","result":{"value":9,"exact":true}}'),
+    );
+  } finally {
+    await server.stop(true);
+  }
+});

@@ -20,9 +20,9 @@ Write a request in ordinary language to create or revise the current function.
   /case {"args":[12,3],"returns":36}   Add or replace an expected behavior
   /cases                              Show current expectations
   /clear                              Clear expectations
-  /predict [12,3]                     Predict raw frames and the outcome
+  /predict [12,3]                     Predict frames and outcome with the structured CWM
   /resume S,2,1,2,3                   Ask the neural model for the next x,y pause
-  /verify [12,3]                      Execute trusted source and compare the oracle trace
+  /verify [12,3]                      Compare the structured forecast with trusted execution
   /check                              Compare predictions with all cases
   /repair                             Search single edits using the CWM
   /source                             Show the current draft
@@ -40,6 +40,7 @@ export async function chat(argv: string[]) {
   let draft: Draft = { entry, fn, files: { [entry]: file ? await readFile(file, "utf8") : "" } };
   const examples: Example[] = [],
     instructions: string[] = [];
+  let feedback: string | undefined;
   const model = await trainingModel();
   const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
   const lines = createInterface({
@@ -73,6 +74,7 @@ export async function chat(argv: string[]) {
             const idx = examples.findIndex((c) => equal(c.args, example.args));
             if (idx < 0) examples.push(example);
             else examples[idx] = example;
+            feedback = undefined;
             console.log("Case recorded", JSON.stringify(example));
             break;
           }
@@ -81,22 +83,49 @@ export async function chat(argv: string[]) {
             break;
           case "/clear":
             examples.length = 0;
+            feedback = undefined;
             console.log("Cases cleared");
             break;
-          case "/predict":
-            console.log("CWM prediction", JSON.stringify(forecast(model, draft, parseArgs(arg))));
+          case "/predict": {
+            const args = parseArgs(arg),
+              prediction = forecast(model, draft, args);
+            feedback = JSON.stringify({
+              source: "CWM prediction",
+              args,
+              stop: prediction.stop,
+              lastFrame: prediction.frames.at(-1),
+              outcome: prediction.stop === "terminal" ? prediction.outcome : undefined,
+            });
+            console.log("Structured CWM prediction", JSON.stringify(prediction));
             break;
+          }
           case "/resume":
             console.log("Neural prediction (" + modelName + ")", await resume(draft, arg));
             break;
-          case "/verify":
-            console.log(
-              "Oracle verification",
-              JSON.stringify(await verify(model, draft, parseArgs(arg))),
-            );
+          case "/verify": {
+            const args = parseArgs(arg),
+              report = await verify(model, draft, args);
+            const { observedFrom, exactPrefix, complete } = report.comparison;
+            feedback = JSON.stringify({
+              source: "oracle verification",
+              args,
+              comparison: report.comparison,
+              firstDivergentObservation:
+                !complete && observedFrom !== null
+                  ? report.observed.frames[observedFrom + exactPrefix]
+                  : undefined,
+              observedOutcome: report.observed.outcome,
+              predictionStop: report.prediction.stop,
+            });
+            console.log("Structured CWM vs V8 oracle", JSON.stringify(report));
             break;
+          }
           case "/check":
-            console.log("CWM assessment", JSON.stringify(assess(model, draft, examples)));
+            feedback = JSON.stringify({
+              source: "CWM assessment",
+              cases: assess(model, draft, examples),
+            });
+            console.log(feedback);
             break;
           case "/save":
             if (!arg || !draft.files[entry])
@@ -109,12 +138,12 @@ export async function chat(argv: string[]) {
             if (command && !examples.length) throw Error("Provide a /case before /repair");
             const source = command
               ? draft.files[entry]
-              : await propose({ draft, examples, instructions: [...instructions, line] });
+              : await propose({ draft, examples, instructions: [...instructions, line], feedback });
             if (!source?.trim()) throw Error("Provide a draft before /repair");
             const result = await plan(model, { ...draft, files: { [entry]: source } }, examples);
             draft = result.draft;
-            if (!command) instructions.push(line);
             if (!command) {
+              instructions.push(line);
               console.log("Language proposal (" + modelName + ")");
               console.log(source);
             }
@@ -125,10 +154,12 @@ export async function chat(argv: string[]) {
               );
               console.log(draft.files[entry]);
             }
-            console.log(
-              "CWM assessment",
-              JSON.stringify({ status: result.status, cases: result.assessment }),
-            );
+            feedback = JSON.stringify({
+              source: "CWM assessment",
+              status: result.status,
+              cases: result.assessment,
+            });
+            console.log(feedback);
             break;
           }
           default:

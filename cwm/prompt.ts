@@ -65,6 +65,7 @@ export async function verify(model: Model, draft: Draft, args: Json[]) {
     prediction,
     observed: { frames: observed.frames, outcome: observed.outcome },
     comparison: {
+      predictor: "fitStructured",
       start: "predicted-entry",
       observedFrom: first < 0 ? null : first,
       observedCallFrames: frames.length,

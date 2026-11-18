@@ -7,10 +7,16 @@ export type Request = {
   draft: Draft;
   instructions: readonly string[];
   examples: readonly Example[];
+  feedback?: string;
 };
 export const modelName = process.env.CWM_CHAT_MODEL ?? "typescript-cwm-minicpm5";
 
-export async function propose({ draft, instructions, examples }: Request): Promise<string> {
+export async function propose({
+  draft,
+  instructions,
+  examples,
+  feedback,
+}: Request): Promise<string> {
   const source = draft.files[draft.entry]!;
   const system = [
     "Implement the user's request as TypeScript. Respond with just the complete source file in one code block.",
@@ -36,6 +42,7 @@ export async function propose({ draft, instructions, examples }: Request): Promi
         JSON.stringify(c.returns) +
         (c.visits?.length ? "; ordered local states " + JSON.stringify(c.visits) : ""),
     ),
+    ...(feedback ? ["Execution evidence for the current source: " + feedback] : []),
     "Current request: " + instructions.at(-1),
   ].join("\n\n");
   const text = await complete(
