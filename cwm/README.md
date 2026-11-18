@@ -22,6 +22,18 @@ bun cwm.ts score train.jsonl held-out.jsonl
 
 `total` counts adjacent observation pairs including the final outcome; `predicted` excludes abstentions; `correct` requires an exact match to the whole next observation, not just its source location. This is teacher-forced, one-step scoring. Splitting by arguments measures input generalization; split by source to test transfer. The model stores training examples in memory.
 
+### Compare predictors on identical observations
+
+The small [evaluation corpus](corpus.ts) emits programs, not labels. Collect both splits once, then run each predictor's score command against the **same files**. To isolate a family, append its name (e.g. `recursion`) to both generator commands.
+
+```sh
+bun corpus.ts train | bun cwm.ts > train.jsonl
+bun corpus.ts held-out | bun cwm.ts > held-out.jsonl
+bun cwm.ts score train.jsonl held-out.jsonl
+```
+
+Report correct, wrong (`predicted - correct`), and abstained (`total - predicted`) together. These eight small families share source between splits; they diagnose arithmetic, coupled inputs, branches, array mutation and recursion, not general TypeScript reasoning. Scoring reads held-out traces one record at a time.
+
 ## Predict multiple steps
 
 ```ts
@@ -47,7 +59,9 @@ console.log([...model.rollout(code.files, start, 8)].at(-1));
 // { kind: "returned", result: { value: 13, exact: true } }
 ```
 
-Only the starting frame is observed. Subsequent inputs to `rollout` are its own predictions. It stops at a predicted terminal, an unseen action, or the step budget. At a known action it retrieves a control-flow successor and carries unchanged locals forward. For a given outgoing edge, it also learns scalar updates by least squares when the inputs identify an affine map and it fits the training observations. It cannot in general infer unseen branches, algorithms or heap effects. The test suite checks an entire held-out arithmetic rollout; the list-insertion test checks the **oracle**, not model generalization.
+Only the starting frame is observed. Subsequent inputs to `rollout` are its own predictions. It stops at a predicted terminal, an abstention (`unseen`), or the step budget. At a known action the model retrieves the closest frames and carries unchanged locals forward. It returns a successor only if the tied candidates agree on the whole prediction. This matters when the same visible frame precedes different hidden state or entry arguments.
+
+Each control-flow edge can learn scalar affine updates. Independent observations determine the coefficients; remaining examples check them. Coupled variables need not determine unique coefficients: when training always has `i === a`, a prediction at `(7, 7)` may still be identifiable, whereas `(7, 8)` is not. The model refuses to apply that fit outside the observed affine subspace (up to numerical tolerance). It never rounds a predicted value to an integer. It cannot in general infer unseen branches, algorithms or heap effects. The list-insertion test checks the **oracle**, not model generalization.
 
 ## Repository edits
 

@@ -1,4 +1,5 @@
 import { once } from "node:events";
+import { writeSync } from "node:fs";
 import type { Debugger, Runtime } from "node:inspector";
 import { Session } from "node:inspector/promises";
 import { SourceMap, type SourceMapPayload } from "node:module";
@@ -10,7 +11,7 @@ import { Readable } from "node:stream";
 import { createInterface } from "node:readline";
 import vm from "node:vm";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
-import { Matrix, SingularValueDecomposition } from "ml-matrix";
+import { LuDecomposition, Matrix, SingularValueDecomposition } from "ml-matrix";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
 
@@ -47,6 +48,9 @@ const executionSchema = mutableStruct({
   outcome: mutableStruct({ kind: Schema.Literals(["returned", "threw"]), result: snapshotSchema }),
 });
 const traceSchema = Schema.Struct({ ...programSchema.fields, ...executionSchema.fields });
+const strict = { onExcessProperty: "error" } as const;
+const decodeProgram = Schema.decodeUnknownSync(programSchema, strict);
+const decodeExecution = Schema.decodeUnknownSync(Schema.fromJsonString(executionSchema), strict);
 export type Json = Schema.MutableJson;
 export type Snapshot = typeof snapshotSchema.Type;
 export type Site = typeof siteSchema.Type;
@@ -187,12 +191,14 @@ async function observe(job: Job) {
     }
     await session.post("Debugger.resume");
   }
-  let failure: unknown;
   session.on("Debugger.paused", ({ params }) => {
     void paused(params).catch((error) => {
-      failure = error;
-      session.disconnect(); // Release the main thread even when collection fails.
-      port.postMessage({ error: String(error) });
+      // Neither worker stdio nor a port message can rely on a blocked debuggee's event loop.
+      try {
+        writeSync(2, String(error) + "\n");
+      } finally {
+        process.kill(process.pid, "SIGKILL");
+      }
     });
   });
   try {
@@ -206,7 +212,6 @@ async function observe(job: Job) {
     await session.post("Debugger.setPauseOnExceptions", { state: "all" });
     port.postMessage("ready");
     await finished;
-    if (failure) throw failure;
     if (!result) throw new Error("Execution completed without a debugger result");
     port.postMessage({ frames, result });
   } finally {
@@ -267,7 +272,6 @@ async function execute(job: Job): Promise<Execution> {
     complete(value);
     worker.postMessage("finished");
     const [answer] = await report;
-    if (answer.error) throw new Error(answer.error);
     return { frames: answer.frames, outcome: { kind, result: answer.result } };
   } finally {
     await worker.terminate();
@@ -279,14 +283,13 @@ export async function trace(
   program: Program,
   { maxFrames = 2048, timeoutMs = 10000 } = {},
 ): Promise<Trace> {
-  if (!Object.hasOwn(program.files, program.entry)) throw new Error("Entry file is missing");
-  if (
-    !Array.isArray(program.args) ||
-    !isDeepStrictEqual(JSON.parse(JSON.stringify(program.args)), program.args)
-  ) {
+  const decoded = decodeProgram(program);
+  if (!Object.hasOwn(decoded.files, decoded.entry)) throw new Error("Entry file is missing");
+  const args: Json[] = JSON.parse(JSON.stringify(decoded.args));
+  if (!isDeepStrictEqual(args, program.args)) {
     throw new Error("Expected losslessly JSON-serializable arguments");
   }
-  program = structuredClone(program);
+  program = { ...decoded, args };
   if (![timeoutMs, maxFrames].every((n) => Number.isSafeInteger(n) && n > 0))
     throw new Error("Expected positive limits");
   const { transformSync } = await import("oxc-transform");
@@ -333,7 +336,7 @@ export async function trace(
   const child = Bun.spawn(
     [
       node,
-      "--no-warnings",
+      "--disable-warning=ExperimentalWarning",
       "--max-old-space-size=192",
       "--experimental-vm-modules",
       fileURLToPath(import.meta.url),
@@ -357,8 +360,7 @@ export async function trace(
     throw new Error(
       stderr.trim() || `Engine stopped (${child.signalCode ?? code}; deadline ${timeoutMs} ms)`,
     );
-  const execution: Execution = JSON.parse(stdout);
-  return { ...program, ...execution };
+  return { ...program, ...decodeExecution(stdout) };
 }
 
 export interface Edit {
@@ -424,9 +426,12 @@ type Interaction =
   | { action: "run"; execution: Execution; verdict: "pass" | "fail" | "unknown" };
 
 export async function episode(initial: Program, actions: Iterable<Action>, expected: Json) {
-  let program = structuredClone(initial);
+  initial = structuredClone(initial);
+  expected = structuredClone(expected);
+  let program = initial;
   const steps: Interaction[] = [];
-  for (const action of actions) {
+  for (const input of actions) {
+    const action = input === "run" ? input : { ...input };
     try {
       if (action !== "run") {
         program = applyEdit(program, action);
@@ -460,7 +465,7 @@ export function repair(program: Program, edit: Edit, expected: Json) {
 
 export type Observation = Frame | Execution["outcome"];
 
-export function* transitions(run: Trace): Generator<readonly [Frame, Observation]> {
+export function* transitions(run: Execution): Generator<readonly [Frame, Observation]> {
   for (const [i, frame] of run.frames.entries()) yield [frame, run.frames[i + 1] ?? run.outcome];
 }
 
@@ -480,53 +485,100 @@ function scalars(state: Observation): Map<string, Snapshot & { value: number }> 
   return slots;
 }
 
-function destination(state: Observation) {
-  return JSON.stringify([state.kind, "stack" in state ? state.stack : null]);
+function location(state: Observation, line?: string) {
+  const stack = "stack" in state ? state.stack.map((s) => [s.file, s.line, s.column, s.fn]) : null;
+  return JSON.stringify([state.kind, stack, line]);
 }
 
 /** Fit identifiable affine updates for one control-flow edge; keep retrieval for other outputs. */
 function fitDynamics(examples: Example[]) {
   const inputs = examples.map(([before]) => scalars(before));
   const outputs = examples.map(([, after]) => scalars(after));
-  const features = [...inputs[0]!.keys()].filter(
-    (k) =>
-      inputs.every((row) => row.has(k)) &&
-      inputs.some((row) => row.get(k)!.value !== inputs[0]!.get(k)!.value),
-  );
-  const targets = [...outputs[0]!.keys()].filter((k) => outputs.every((row) => row.has(k)));
-  if (!features.length || !targets.length || examples.length <= features.length + 1) return;
-  const x = new Matrix(inputs.map((row) => [1, ...features.map((k) => row.get(k)!.value)]));
-  const y = new Matrix(outputs.map((row) => targets.map((k) => row.get(k)!.value)));
-  const decomposition = new SingularValueDecomposition(x);
-  if (decomposition.rank !== x.columns) return;
-  const weights = decomposition.solve(y);
-  const residual = x.mmul(weights).sub(y);
-  const learned = targets.flatMap((key, i) => {
-    if (
-      !residual
-        .getColumn(i)
-        .every((e, r) => Math.abs(e) <= 1e-10 * Math.max(1, Math.abs(y.get(r, i))))
-    )
-      return [];
-    return [{ key, coefficients: weights.getColumn(i) }];
+  const shared = [...inputs[0]!.keys()].filter((k) => inputs.every((row) => row.has(k))).sort();
+  const constants = new Map<string, number>();
+  const features = shared.filter((k) => {
+    const first = inputs[0]!.get(k)!.value;
+    if (inputs.some((r) => r.get(k)!.value !== first)) return true;
+    constants.set(k, first);
+    return false;
   });
+  const targets = [...outputs[0]!.keys()].filter(
+    (k) =>
+      outputs.every((row) => row.has(k)) &&
+      !outputs.every((row, i) => row.get(k)!.value === inputs[i]!.get(k)?.value),
+  );
+  if (!shared.length || !targets.length || examples.length < 2) return;
+  const vector = (row: ReturnType<typeof scalars>) => [
+    1,
+    ...features.map((k) => row.get(k)!.value),
+  ];
+  const x = new Matrix(inputs.map(vector));
+  const scales = x
+    .clone()
+    .abs()
+    .max("column")
+    .map((v) => v || 1);
+  const y = new Matrix(outputs.map((row) => targets.map((k) => row.get(k)!.value)));
+  const decomposition = new SingularValueDecomposition(x.clone().divRowVector(scales), {
+    autoTranspose: true,
+  });
+  const rank = decomposition.rank;
+  if (examples.length <= rank) return;
+  // Pivot the singular vectors to choose independent real observations and coordinates.
+  const pivots = (basis: Matrix) =>
+    new LuDecomposition(
+      basis.subMatrix(0, basis.rows - 1, 0, rank - 1),
+    ).pivotPermutationVector.slice(0, rank);
+  const cols = pivots(decomposition.rightSingularVectors);
+  const rows = pivots(decomposition.leftSingularVectors);
+  const basis = new LuDecomposition(x.selection(rows, cols));
+  if (basis.isSingular()) return;
+  const weights = basis.solve(y.subMatrixRow(rows));
+  const residual = x.subMatrixColumn(cols).mmul(weights).sub(y);
+  const learned = targets.flatMap((key, i) =>
+    residual.getColumn(i).every((e, r) => Math.abs(e) <= 1e-10 * Math.abs(y.get(r, i)))
+      ? [{ key, coefficients: weights.getColumn(i) }]
+      : [],
+  );
+  if (!learned.length) return;
+  const constraints = scales.flatMap((scale, j) =>
+    cols.includes(j)
+      ? []
+      : [
+          {
+            j,
+            scale,
+            coefficients: basis.solve(x.selection(rows, [j])).getColumn(0),
+          },
+        ],
+  );
   return (before: Frame, prediction: Observation) => {
     const row = scalars(before);
-    if (!features.every((k) => row.has(k))) return;
-    const values = [1, ...features.map((k) => row.get(k)!.value)];
+    for (const [k, value] of constants) if (row.get(k)?.value !== value) return false;
+    if (!features.every((k) => row.has(k))) return false;
+    const values = vector(row);
+    const independent = cols.map((j) => values[j]!);
+    if (
+      !constraints.every(
+        ({ j, scale, coefficients }) =>
+          Math.abs(dot(independent, coefficients) - values[j]!) <=
+          1e-10 * Math.max(scale, Math.abs(values[j]!)),
+      )
+    )
+      return false;
     const output = scalars(prediction);
     for (const { key, coefficients } of learned) {
+      const estimate = dot(independent, coefficients);
       const field = output.get(key);
-      const estimate = coefficients.reduce((sum, w, i) => sum + w * values[i]!, 0);
-      if (!field || !Number.isFinite(estimate)) continue;
-      // Remove solver roundoff near integers; never round a general fractional target.
-      const rounded = Math.round(estimate);
-      field.value =
-        Math.abs(rounded - estimate) <= 8 * Number.EPSILON * Math.max(1, Math.abs(estimate))
-          ? rounded
-          : estimate;
+      if (!field || !Number.isFinite(estimate)) return false;
+      field.value = estimate;
     }
+    return true;
   };
+}
+
+function dot(a: number[], b: number[]) {
+  return a.reduce((sum, v, i) => sum + v * b[i]!, 0);
 }
 
 /** Fit control-flow examples and local scalar dynamics. Prediction never executes source. */
@@ -537,22 +589,22 @@ export class WorldModel {
   private key(files: Program["files"], frame: Frame) {
     const action = frame.stack[0]!;
     const line = files[action.file]?.split(/\r\n|[\r\n\u2028\u2029]/u)[action.line - 1];
-    return JSON.stringify([frame.kind, frame.stack, line]);
+    return location(frame, line);
   }
 
   fit(runs: Iterable<Trace>) {
     this.cases.clear();
     this.dynamics.clear();
-    for (const run of runs) {
-      for (const pair of transitions(run)) {
-        const key = this.key(run.files, pair[0]);
+    for (const { files, frames, outcome } of runs) {
+      for (const pair of transitions(structuredClone({ frames, outcome }))) {
+        const key = this.key(files, pair[0]);
         const cases = this.cases.get(key) ?? [];
-        cases.push(structuredClone(pair));
+        cases.push(pair);
         this.cases.set(key, cases);
       }
     }
     for (const [key, cases] of this.cases) {
-      const edges = Map.groupBy(cases, ([, next]) => destination(next));
+      const edges = Map.groupBy(cases, ([, next]) => location(next));
       this.dynamics.set(key, new Map([...edges].map(([edge, rows]) => [edge, fitDynamics(rows)])));
     }
     return this;
@@ -563,7 +615,7 @@ export class WorldModel {
     const cases = this.cases.get(key);
     if (!cases) return;
     let best = -Infinity;
-    let nearest = cases[0]!;
+    const nearest: Example[] = [];
     for (const pair of cases) {
       const previous = pair[0];
       let score = Number(isDeepStrictEqual(previous.value, current.value));
@@ -574,23 +626,32 @@ export class WorldModel {
         score += isDeepStrictEqual(previous.locals[name], current.locals[name]) ? 1 : -1;
       }
       if (score > best) {
-        nearest = pair;
+        nearest.length = 0;
         best = score;
       }
+      if (score === best) nearest.push(pair);
     }
-    const [from, to] = nearest;
-    const next = structuredClone(to);
-    if ("locals" in next) {
-      for (const [name, old] of Object.entries(from.locals)) {
-        if (Object.hasOwn(current.locals, name) && isDeepStrictEqual(next.locals[name], old)) {
-          next.locals[name] = structuredClone(current.locals[name]!);
+    let answer: Observation | undefined;
+    for (const [from, to] of nearest) {
+      const next = structuredClone(to);
+      if (!isDeepStrictEqual(current, from)) {
+        if ("locals" in next) {
+          for (const [name, old] of Object.entries(from.locals)) {
+            if (Object.hasOwn(current.locals, name) && isDeepStrictEqual(next.locals[name], old)) {
+              next.locals[name] = structuredClone(current.locals[name]!);
+            }
+          }
+          if (from.value && current.value && isDeepStrictEqual(from.value, next.value))
+            next.value = structuredClone(current.value);
+        } else if (from.value && current.value && isDeepStrictEqual(from.value, next.result)) {
+          next.result = structuredClone(current.value);
         }
+        if (this.dynamics.get(key)?.get(location(next))?.(current, next) === false) return;
       }
-    } else if (from.value && current.value && isDeepStrictEqual(from.value, next.result)) {
-      next.result = structuredClone(current.value);
+      if (answer && !isDeepStrictEqual(answer, next)) return;
+      answer = next;
     }
-    this.dynamics.get(key)?.get(destination(next))?.(current, next);
-    return next;
+    return answer;
   }
 
   *rollout(
@@ -612,10 +673,11 @@ export class WorldModel {
   }
 }
 
-export function evaluate(model: WorldModel, heldOut: Iterable<Trace>) {
-  let total = 0,
-    predicted = 0,
-    correct = 0;
+export function evaluate(
+  model: WorldModel,
+  heldOut: Iterable<Trace>,
+  { total, predicted, correct } = { total: 0, predicted: 0, correct: 0 },
+) {
   for (const run of heldOut) {
     for (const [frame, truth] of transitions(run)) {
       const guess = model.predict(run.files, frame);
@@ -631,13 +693,13 @@ async function* records<T>(
   input: NodeJS.ReadableStream,
   schema: Schema.Codec<T>,
 ): AsyncGenerator<T> {
-  const decode = Schema.decodeUnknownSync(schema, { onExcessProperty: "error" });
+  const decode = Schema.decodeUnknownSync(Schema.fromJsonString(schema), strict);
   let index = 0;
   for await (const line of createInterface({ input, crlfDelay: Infinity })) {
     index++;
     if (!line.trim()) continue;
     try {
-      yield decode(JSON.parse(line));
+      yield decode(line);
     } catch (cause) {
       throw new Error(`Invalid JSONL record at line ${index}`, { cause });
     }
@@ -655,9 +717,9 @@ if (!isMainThread && workerData?.cwmObserver) {
     process.stdout.write(JSON.stringify(await execute((await json(process.stdin)) as Job)));
   } else if (process.argv.length === 5 && process.argv[2] === "score") {
     const model = new WorldModel().fit(await Array.fromAsync(readTraces(process.argv[3]!)));
-    console.log(
-      JSON.stringify(evaluate(model, await Array.fromAsync(readTraces(process.argv[4]!)))),
-    );
+    let score = evaluate(model, []);
+    for await (const run of readTraces(process.argv[4]!)) score = evaluate(model, [run], score);
+    console.log(JSON.stringify(score));
   } else if (process.argv.length === 2) {
     for await (const program of records(process.stdin, programSchema))
       console.log(JSON.stringify(await trace(program)));

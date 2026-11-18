@@ -1,9 +1,13 @@
 # Ledger
 
-| Item                                                                       | Status | Resolution                                                 |
-| -------------------------------------------------------------------------- | ------ | ---------------------------------------------------------- |
-| Separate observations from predictions and expose both to callers          | Closed | [Trace, fit and rollout](README.md#predict-multiple-steps) |
-| Compare traces with uninstrumented execution and prove held-out prediction | Closed | [Regression cases](cwm.test.ts)                            |
-| Keep failed edits and limit failures out of successful labels              | Closed | [Repository episodes](README.md#repository-edits)          |
-| Define the trust boundary and the observable subset of TypeScript          | Closed | [Oracle contract](README.md#what-the-oracle-observes)      |
-| Preserve the JSONL contract when switching schema libraries                | Closed | [Strict validation and round-trip tests](cwm.test.ts)      |
+| Item                                                                           | Status | Resolution                                                                                                |
+| ------------------------------------------------------------------------------ | ------ | --------------------------------------------------------------------------------------------------------- |
+| Separate observations from predictions and expose both to callers              | Closed | [Trace, fit and rollout](README.md#predict-multiple-steps)                                                |
+| Compare traces with uninstrumented execution and prove held-out prediction     | Closed | [Regression cases](cwm.test.ts)                                                                           |
+| Keep failed edits and limit failures out of successful labels                  | Closed | [Repository episodes](README.md#repository-edits)                                                         |
+| Define the trust boundary and the observable subset of TypeScript              | Closed | [Oracle contract](README.md#what-the-oracle-observes)                                                     |
+| Preserve the JSONL contract when switching schema libraries                    | Closed | [Strict validation and round-trip tests](cwm.test.ts)                                                     |
+| Reject traces the public reader cannot round-trip and detach episode records   | Closed | [Boundary and replay regressions](cwm.test.ts)                                                            |
+| Stop frame-limited collection without waiting for a busy guest                 | Closed | [Observer failure policy](DECISIONS.md)                                                                   |
+| Compare ambiguous and rank-deficient predictions against the original baseline | Closed | [Replayable corpus](README.md#compare-predictors-on-identical-observations)                               |
+| Generalize to nonlinear returns, unseen recursion depths and heap edits        | Open   | [Same-source stress cases](corpus.ts); neither retrieval nor scalar affine fitting solves this generally. |
