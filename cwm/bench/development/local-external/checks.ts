@@ -23,15 +23,17 @@ export function lines(text: string) {
 }
 export function splice(source: string, start: number, end: number, replacement: string) {
   const old = lines(source);
-  if (
-    !Number.isSafeInteger(start) ||
-    !Number.isSafeInteger(end) ||
-    start < 0 ||
-    end < start ||
-    end > old.length
-  )
-    throw Error("Out-of-bounds line span");
+  if (!legalSpan(start, end, old.length)) throw Error("Out-of-bounds line span");
   return old.slice(0, start).join("") + replacement + old.slice(end).join("");
+}
+export function legalSpan(start: number, end: number, count: number) {
+  return (
+    Number.isSafeInteger(start) &&
+    Number.isSafeInteger(end) &&
+    start >= 0 &&
+    end >= start &&
+    end <= count
+  );
 }
 export function reference(source: string, turn: { old: string; replacement: string }) {
   const index = source.indexOf(turn.old);
