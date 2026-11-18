@@ -1,0 +1,39 @@
+{
+  "base_revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+  "base": {
+    "model-00000-of-00001.safetensors": "7ab8fd86563125929be78aeec8cb3969c7ed2ead3be1ab9d3ec0a9fa69c8660d",
+    "model.safetensors.index.json": "162add042e75abc3d571c4a8679523fa4f1ffc55d1fea25fc6658a19d6e957ee",
+    "config.json": "6a6509b646cb3169616c5ffc3196e7ccaf9d4d6bc17b266581d241a31c217714",
+    "tokenizer_config.json": "094efb3cf1ff412284cc5945fc99dff58673a912760d04483a04aa1c716f66fd",
+    "tokenizer.json": "3e065a558a034185fe299917b398685c1facd0169a9eea1e629eb30c171fed81",
+    "special_tokens_map.json": "82d96d7a9e6ced037f12394b7ea6a5b02e6ca87e0d11edaa8d60d9be857ce7db",
+    "chat_template.jinja": "7451a05cf1e28a79d97d7c0bc951028c0b1915119bf9046acd06a0e3d931f47c",
+    "generation_config.json": "92afd6424501426eddcf7e1542f013d19e5987544977b4ee7bd26359bd5fd2ab"
+  },
+  "adapters": {
+    "B2": "16576944ce670148ea84b611678335d02c42d983d695930dc0933d64da5d3220",
+    "C2": "b9fb5a3ad9c501210deefd63fcf9a67f727e0cf52a0933af34414566d7a84043"
+  },
+  "oracle": "579596a65d87a88f1643dc39a617972d117bdbe01f2d144fdba899a2afcf6588",
+  "c2_features": {
+    "inputs": "702f266cf22a35e4c727069154591192a5fb9761c921ba4478e6af99a92df27b",
+    "residuals": "a2c41c118448f480383c99dfb1d300a805ce0cb75e84397861f04218592cd456",
+    "labels": "ffb56474c4d4eefac2c60dda1e085153843e36c06c92fbfd9e8405fb87d29635"
+  },
+  "features_sha256": "bc476de1b97961e5d58e506ae398ee2eb8d7e90d5e274ebff257ea13c284db0f",
+  "regularization": 0.1,
+  "heads": {
+    "A": "386daed309061b5c9974864112429a8827d96481f46e05f4c4476727ca5fa3c9",
+    "B2": "48043d4fba25dc135d3f3aa29a6fc68f1bdc657a2ab2eba489b79c633f3ddc9c",
+    "C2": "bf3a0f07354a07fef48a28fe6724a541eca604a81c2be049a5284fae04e51a07"
+  },
+  "protocol": "3d47cdf120f4b95057f818740d1f4f7f3e37914fe658799190dabdbe895acde9",
+  "code": {
+    "encoder.py": "4d862470f5a84c0f12f95152f61a5fa9dd30cf248fd3607ad481281aa3bbbf07",
+    "build.py": "a2230c1405fc1d975b071831915b46ff15a5da6380a3a7241c40d5118a6ac446",
+    "head.py": "45fdc59f08350ec19cb5a09aa3ea6b36eef3ac0b05a9a30ed673cb460cd95c47",
+    "rank.py": "2912f153cac2723fb20f376deeba1bbd2abb326f8694b5d59f58fac8b399e734",
+    "train.py": "375bb014c5c55281c4cc2c5fe56e7b99cd6bc3a1932d00decb5bf13b53e0ded6"
+  },
+  "fold_predictions_uncompressed": "4e521c201983fa34c1de79bea6b405417e39d238441336244fcbd4ea1aab05f2"
+}

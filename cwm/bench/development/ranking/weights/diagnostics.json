@@ -1,0 +1,267 @@
+{
+  "condition_blind": {
+    "correct": 30,
+    "ties": 0,
+    "both": 0,
+    "requests": 60,
+    "blocks": 30
+  },
+  "A": {
+    "archived_margin": {
+      "correct": 36,
+      "ties": 0,
+      "both": 8,
+      "requests": 60,
+      "blocks": 30
+    },
+    "last_margin": {
+      "correct": 34,
+      "ties": 0,
+      "both": 6,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_margin": {
+      "correct": 32,
+      "ties": 0,
+      "both": 5,
+      "requests": 60,
+      "blocks": 30
+    },
+    "comparison": {
+      "correct": 37,
+      "ties": 0,
+      "both": 7,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_goal_logp": {
+      "correct": 43,
+      "ties": 0,
+      "both": 14,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_checks_logp": {
+      "correct": 41,
+      "ties": 0,
+      "both": 12,
+      "requests": 60,
+      "blocks": 30
+    },
+    "archived_final": {
+      "correct": 39,
+      "ties": 0,
+      "both": 9,
+      "requests": 60,
+      "blocks": 30
+    },
+    "last_final": {
+      "correct": 39,
+      "ties": 0,
+      "both": 9,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_final": {
+      "correct": 35,
+      "ties": 0,
+      "both": 6,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_token_evidence": {
+      "correct": 46,
+      "ties": 0,
+      "both": 17,
+      "requests": 60,
+      "blocks": 30
+    },
+    "full": {
+      "correct": 45,
+      "ties": 0,
+      "both": 16,
+      "requests": 60,
+      "blocks": 30
+    },
+    "full_resubstitution": {
+      "correct": 46,
+      "ties": 0,
+      "both": 17,
+      "requests": 60,
+      "blocks": 30
+    }
+  },
+  "B2": {
+    "archived_margin": {
+      "correct": 35,
+      "ties": 0,
+      "both": 6,
+      "requests": 60,
+      "blocks": 30
+    },
+    "last_margin": {
+      "correct": 33,
+      "ties": 0,
+      "both": 5,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_margin": {
+      "correct": 31,
+      "ties": 0,
+      "both": 5,
+      "requests": 60,
+      "blocks": 30
+    },
+    "comparison": {
+      "correct": 37,
+      "ties": 0,
+      "both": 7,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_goal_logp": {
+      "correct": 45,
+      "ties": 0,
+      "both": 16,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_checks_logp": {
+      "correct": 40,
+      "ties": 0,
+      "both": 11,
+      "requests": 60,
+      "blocks": 30
+    },
+    "archived_final": {
+      "correct": 39,
+      "ties": 0,
+      "both": 9,
+      "requests": 60,
+      "blocks": 30
+    },
+    "last_final": {
+      "correct": 39,
+      "ties": 0,
+      "both": 9,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_final": {
+      "correct": 34,
+      "ties": 0,
+      "both": 5,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_token_evidence": {
+      "correct": 45,
+      "ties": 0,
+      "both": 16,
+      "requests": 60,
+      "blocks": 30
+    },
+    "full": {
+      "correct": 45,
+      "ties": 0,
+      "both": 17,
+      "requests": 60,
+      "blocks": 30
+    },
+    "full_resubstitution": {
+      "correct": 45,
+      "ties": 0,
+      "both": 17,
+      "requests": 60,
+      "blocks": 30
+    }
+  },
+  "C2": {
+    "archived_margin": {
+      "correct": 37,
+      "ties": 0,
+      "both": 8,
+      "requests": 60,
+      "blocks": 30
+    },
+    "last_margin": {
+      "correct": 36,
+      "ties": 0,
+      "both": 6,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_margin": {
+      "correct": 33,
+      "ties": 0,
+      "both": 6,
+      "requests": 60,
+      "blocks": 30
+    },
+    "comparison": {
+      "correct": 36,
+      "ties": 0,
+      "both": 6,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_goal_logp": {
+      "correct": 47,
+      "ties": 0,
+      "both": 18,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_checks_logp": {
+      "correct": 42,
+      "ties": 0,
+      "both": 12,
+      "requests": 60,
+      "blocks": 30
+    },
+    "archived_final": {
+      "correct": 39,
+      "ties": 0,
+      "both": 9,
+      "requests": 60,
+      "blocks": 30
+    },
+    "last_final": {
+      "correct": 39,
+      "ties": 0,
+      "both": 9,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_final": {
+      "correct": 35,
+      "ties": 0,
+      "both": 6,
+      "requests": 60,
+      "blocks": 30
+    },
+    "first_token_evidence": {
+      "correct": 47,
+      "ties": 0,
+      "both": 17,
+      "requests": 60,
+      "blocks": 30
+    },
+    "full": {
+      "correct": 44,
+      "ties": 0,
+      "both": 15,
+      "requests": 60,
+      "blocks": 30
+    },
+    "full_resubstitution": {
+      "correct": 45,
+      "ties": 0,
+      "both": 16,
+      "requests": 60,
+      "blocks": 30
+    }
+  }
+}
