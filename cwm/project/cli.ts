@@ -5,10 +5,12 @@ import { openProject } from "./workspace.ts";
 import { decodeAction } from "./protocol.ts";
 import { workFile } from "./work.ts";
 import { editFile } from "./directed.ts";
+import { editBody } from "./body.ts";
+import { bodyEndpoint } from "./body-completion.ts";
 
 if (!process.argv[2] || process.argv.includes("--help")) {
   console.log(
-    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /forecast ACTION_JSON, or /quit. Writes update the project. Free-action turns allow eight actions. Directed edits allow two proposals with a test run after each write.",
+    "Usage: bun run project DIRECTORY\nEnter a request, /edit PATH REQUEST, /work PATH REQUEST (C2), /body PATH EXPORT|* REQUEST, /forecast ACTION_JSON, or /quit. Writes update the project. Free-action turns allow eight actions. Directed edits allow two proposals with a test run after each write.",
   );
 } else {
   const project = await openProject(resolve(process.argv[2]));
@@ -43,6 +45,33 @@ if (!process.argv[2] || process.argv.includes("--help")) {
             JSON.stringify({
               kind: "prediction",
               answer: await session.predict(decodeAction(line.slice(10)), abort.signal),
+            }),
+          );
+        } else if (/^\/body\b/.test(line)) {
+          const match = /^\/body\s+(\S+)\s+(\S+)\s+(.+)$/.exec(line);
+          if (!match) throw Error("Usage: /body PATH EXPORT|* REQUEST");
+          const generateBody = bodyEndpoint(
+            process.env.CWM_PROJECT_URL ?? "http://127.0.0.1:8082",
+            model,
+          );
+          const result = await editBody(session, generateBody, match[1]!, match[3]!, {
+            name: match[2] === "*" ? undefined : match[2],
+            signal: abort.signal,
+          });
+          console.log(
+            JSON.stringify({
+              kind: "body",
+              stop: result.stop,
+              selection: result.selection,
+              selected: result.selected,
+              before: result.before,
+              calls: result.calls.map(({ kind, reply }) => ({
+                kind,
+                text: reply.text,
+                finish: reply.finish,
+                tokens: reply.tokens,
+              })),
+              writes: result.writes,
             }),
           );
         } else if (line.startsWith("/edit ") || line.startsWith("/work ")) {

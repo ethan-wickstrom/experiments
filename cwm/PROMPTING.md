@@ -25,6 +25,10 @@ Type a goal such as `Make the board restore its saved lanes from the local JSON 
 
 - `/edit board.ts REQUEST` selects the file explicitly and asks the checkpoint for complete replacement source. After a failing real test it gets one repair attempt.
 - `/work board.ts REQUEST` uses the factorized action and raw-source interface. To try it, use the same server command above with `bench/development/c2/C2/adapter-f32.gguf` in place of the rank-16 adapter. [Blind evaluation](bench/development/c2-results/README.md)
+- `/body PATH * REQUEST` edits one named exported function declaration in the selected file. For example, enter `/body outline.ts * Keep only heading lines.` Use `/body outline.ts headings REQUEST` to choose the function yourself. With `*`, the model chooses among multiple declarations. The runner tests the current files, shows the model the observed result, prefills the selected declaration through its opening brace, and writes the first complete generated body. It records a separate forecast before the write and runs the actual tests after it. A visible failure permits one more attempt on the same function. Each accepted edit persists, including an edit that fails its tests.
+
+  For this command, serve the [pinned F16 release and C2 adapter](bench/development/c2/README.md) with b6602, `--jinja -c 4096 --alias minicpm5-joint-c2`. Set `CWM_PROJECT_MODEL=minicpm5-joint-c2` and `CWM_PROJECT_URL=http://127.0.0.1:8080/v1/chat/completions` when launching the CLI. The command calls the llama-server template, tokenizer and raw completion endpoints on that origin. Import `editBody` from `project/body.ts` and `bodyEndpoint` from `project/body-completion.ts` to use the same operation with a `ProjectSession`.
+
 - `/forecast {"op":"test"}` asks the same checkpoint to predict the current tests. A candidate `write` asks about replacing a file and then running the tests. This command neither writes nor executes.
 - `/quit` closes the project session. The server in the first terminal has its own lifetime. Set `CWM_PROJECT_URL` and `CWM_PROJECT_MODEL` to address another local instance.
 
