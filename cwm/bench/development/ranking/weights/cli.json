@@ -1,0 +1,62 @@
+{
+  "A": {
+    "observed_choice": 0,
+    "actual": {
+      "scores": [-0.1296982443298704, 0.1296982443298704],
+      "choice": 1
+    },
+    "swapped": {
+      "scores": [0.1296982443298704, -0.1296982443298704],
+      "choice": 0
+    },
+    "identical": {
+      "scores": [0.0, -0.0],
+      "choice": null
+    },
+    "expected_from_cache": {
+      "scores": [-0.1296982443298704, 0.1296982443298704],
+      "choice": 1
+    },
+    "head_sha256": "386daed309061b5c9974864112429a8827d96481f46e05f4c4476727ca5fa3c9"
+  },
+  "B2": {
+    "observed_choice": 0,
+    "actual": {
+      "scores": [-0.15531673067490653, 0.15531673067490653],
+      "choice": 1
+    },
+    "swapped": {
+      "scores": [0.15531673067490653, -0.15531673067490653],
+      "choice": 0
+    },
+    "identical": {
+      "scores": [0.0, -0.0],
+      "choice": null
+    },
+    "expected_from_cache": {
+      "scores": [-0.15531673067490653, 0.15531673067490653],
+      "choice": 1
+    },
+    "head_sha256": "48043d4fba25dc135d3f3aa29a6fc68f1bdc657a2ab2eba489b79c633f3ddc9c"
+  },
+  "C2": {
+    "observed_choice": 0,
+    "actual": {
+      "scores": [-0.08629825868140979, 0.08629825868140979],
+      "choice": 1
+    },
+    "swapped": {
+      "scores": [0.08629825868140979, -0.08629825868140979],
+      "choice": 0
+    },
+    "identical": {
+      "scores": [0.0, -0.0],
+      "choice": null
+    },
+    "expected_from_cache": {
+      "scores": [-0.08629825868140979, 0.08629825868140979],
+      "choice": 1
+    },
+    "head_sha256": "bf3a0f07354a07fef48a28fe6724a541eca604a81c2be049a5284fae04e51a07"
+  }
+}

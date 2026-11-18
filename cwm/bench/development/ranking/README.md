@@ -76,3 +76,28 @@ python build.py "$work/c2-features.pt" "$work/rebuild/ranker-features.pt"
 sha256sum "$work/rebuild/ranker-features.pt"
 python -m unittest -v test_rank
 ```
+
+## Frozen diagnostics
+
+Each cell below gives **correct requests out of 60 / complete reversals out of 30**. Each fitted head predicted all six requests for a family after training on the other nine. Every arm and method had zero ties. Direct model margins and visible-token likelihoods use no trained head.
+
+| Readout                                                | Unchanged A | Policy-only B2 | Joint C2    |
+| ------------------------------------------------------ | ----------- | -------------- | ----------- |
+| Native forecast margin, archived history               | 36 / 8      | 35 / 6         | 37 / 8      |
+| Learned archived final state                           | 39 / 9      | 39 / 9         | 39 / 9      |
+| Learned candidate-last final state, current state only | 39 / 9      | 39 / 9         | 39 / 9      |
+| Learned candidate-first final state, same information  | 35 / 6      | 34 / 5         | 35 / 6      |
+| Direct order-corrected A/B judgment                    | 37 / 7      | 37 / 7         | 36 / 6      |
+| Candidate-first goal likelihood alone                  | 43 / 14     | 45 / 16        | 47 / 18     |
+| Candidate-first fitted goal and test likelihoods       | 46 / 17     | 45 / 16        | 47 / 17     |
+| **Released head design**                               | **45 / 16** | **45 / 17**    | **44 / 15** |
+
+The C2 head improved on its native archived margin by seven correct requests and seven complete reversals. Its request count improved on seven families and tied on three. Putting the edit first reduced held-family separability at the final prompt token. Reading likelihoods **at the requirement tokens** recovered conditional information. The predeclared combined C2 head scored below the simpler requirement-likelihood diagnostic. The matched A and B2 heads also scored slightly higher than the combined C2 head. These data support improved candidate ranking under this readout and provide no evidence that joint execution training caused the gain.
+
+The full C2 head refit on all 30 blocks gets 45 requests and 16 complete reversals on those same blocks. The 44/60 and 15/30 figures above come from out-of-fold heads. The released C2 and B2 backbones had already seen every family during prior LoRA training. Only A provides family-held-out readout diagnostics with an experiment-unadapted backbone. Two candidates from trusted authored alternatives are easier to evaluate than arbitrary generated writes. Neither the parent project's independent reversal suite nor its coding suite enters this experiment.
+
+The metrics, per-fork margins, model and tensor provenance are under `weights/`. The following command starts fresh A, B2 and C2 processes through the persistent public CLI. It checks score agreement with the frozen features, swapped scores, ties on identical writes, and recovery from invalid requests.
+
+```sh
+python check_release.py "$work/ranker-features.pt"
+```
