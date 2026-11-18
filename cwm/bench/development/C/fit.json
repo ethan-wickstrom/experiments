@@ -1,0 +1,112 @@
+{
+  "recipe": {
+    "arm": "C",
+    "revision": "ac83f813ba7da263c51a9f3ec37c2072597e54af",
+    "corpus": "c0f61edeeb8370079dedfafd3100b363a1e0bb4389558779c6b41d6372f23354",
+    "rank": 16,
+    "alpha": 16,
+    "draws": {
+      "policy": 24,
+      "execution": 12,
+      "forecast": 12
+    },
+    "seed": 17,
+    "lr": 0.001,
+    "steps": 256,
+    "cache_version": 1
+  },
+  "step": 256,
+  "data_lengths": {
+    "forecast": {
+      "records": 66,
+      "target_tokens": 138,
+      "prompt": {
+        "min": 93,
+        "median": 258.0,
+        "max": 459
+      },
+      "target": {
+        "min": 2,
+        "median": 2.0,
+        "max": 3
+      },
+      "total": {
+        "min": 96,
+        "median": 260.0,
+        "max": 461
+      }
+    },
+    "policy": {
+      "records": 66,
+      "target_tokens": 1002,
+      "prompt": {
+        "min": 83,
+        "median": 281.0,
+        "max": 486
+      },
+      "target": {
+        "min": 6,
+        "median": 6.0,
+        "max": 57
+      },
+      "total": {
+        "min": 94,
+        "median": 291.0,
+        "max": 492
+      }
+    },
+    "execution": {
+      "records": 98,
+      "target_tokens": 1076,
+      "prompt": {
+        "min": 95,
+        "median": 103.0,
+        "max": 105
+      },
+      "target": {
+        "min": 10,
+        "median": 10.0,
+        "max": 12
+      },
+      "total": {
+        "min": 105,
+        "median": 113.0,
+        "max": 117
+      }
+    }
+  },
+  "history": [
+    {
+      "step": 32,
+      "batch_ce": 0.9137890338897705
+    },
+    {
+      "step": 64,
+      "batch_ce": 0.3842690885066986
+    },
+    {
+      "step": 96,
+      "batch_ce": 0.4894300699234009
+    },
+    {
+      "step": 128,
+      "batch_ce": 0.3866409957408905
+    },
+    {
+      "step": 160,
+      "batch_ce": 0.5416950583457947
+    },
+    {
+      "step": 192,
+      "batch_ce": 0.5237833857536316
+    },
+    {
+      "step": 224,
+      "batch_ce": 0.2602650225162506
+    },
+    {
+      "step": 256,
+      "batch_ce": 0.3508155643939972
+    }
+  ]
+}
