@@ -63,7 +63,7 @@ if (!process.argv[2] || process.argv.includes("--help")) {
               answer: await session.predict(
                 decodeAction(line.slice(10)),
                 abort.signal,
-                focusedPath ? localEditor.forecast : generate,
+                focusedPath ? { generate: localEditor.forecast, includeSources: true } : undefined,
               ),
             }),
           );

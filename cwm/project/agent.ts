@@ -142,7 +142,14 @@ export class ProjectSession {
     return { observed, run };
   }
   // A write candidate asks about applying the replacement followed by the project's tests.
-  async predict(candidate: Action, signal?: AbortSignal, generate = this.generate) {
+  async predict(
+    candidate: Action,
+    signal?: AbortSignal,
+    {
+      generate = this.generate,
+      includeSources = false,
+    }: { generate?: Generate; includeSources?: boolean } = {},
+  ) {
     if (candidate.op !== "write" && candidate.op !== "test")
       throw Error("Forecast a write followed by tests, or the current tests");
     const current = (await this.project.snapshot?.()) ?? this.project.files;
@@ -151,7 +158,22 @@ export class ProjectSession {
       .sort()
       .filter((path) => current.get(path) !== this.project.files.get(path))
       .map((path) => ({ path, text: current.get(path) ?? null }));
-    const prompt = wire(files, this.history, candidate, changed.length ? changed : undefined);
+    // Disk changes and real reads already expose those bytes. A local forecast can also
+    // inspect the other current files without adding read actions or granting write permission.
+    const sources = includeSources
+      ? files
+          .filter(
+            (path) => !this.read.has(path) && current.get(path) === this.project.files.get(path),
+          )
+          .map((path) => ({ path, text: current.get(path)! }))
+      : [];
+    const prompt = wire(
+      files,
+      this.history,
+      candidate,
+      changed.length ? changed : undefined,
+      sources.length ? sources : undefined,
+    );
     if (Buffer.byteLength(prompt) > 32000)
       throw Error("Forecast exceeds the project context budget");
     const reply = await generate(prompt, 8, signal);

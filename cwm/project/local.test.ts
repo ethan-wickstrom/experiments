@@ -75,10 +75,13 @@ test("a capped local fill retains its chosen span and a follow-up forecast uses 
   expect(result.reply).toEqual(cap);
   const history = session.history.slice();
   const action = { op: "test" } as const;
-  const answer = await session.predict(action, undefined, async (prompt, limit) => {
-    expect(prompt).toBe(wire([path], history, action));
-    expect(limit).toBe(8);
-    return { text: "fail", finish: "stop", tokens: 2, inputTokens: 24 };
+  const answer = await session.predict(action, undefined, {
+    includeSources: true,
+    generate: async (prompt, limit) => {
+      expect(prompt).toBe(wire([path], history, action));
+      expect(limit).toBe(8);
+      return { text: "fail", finish: "stop", tokens: 2, inputTokens: 24 };
+    },
   });
   expect(answer.prediction).toBe("fail");
   expect(files.get(path)).toBe(original);
@@ -110,4 +113,28 @@ test("a serial model process reuses weights and drops interrupted or malformed r
     await server.close();
   }
   await rejects(server.request("e"));
+});
+
+test("a fresh local forecast sees current source without granting a read or executing a tool", async () => {
+  const path = "price.ts";
+  const original = "export const price = 1;";
+  const files = new Map([[path, original]]);
+  const session = new ProjectSession({ files }, async () => {
+    throw Error("unexpected default model");
+  });
+  const prompts: string[] = [];
+  for (const text of [original, "export const price = 2;"]) {
+    files.set(path, text);
+    await session.predict({ op: "test" }, undefined, {
+      includeSources: true,
+      generate: async (prompt) => {
+        prompts.push(prompt);
+        return { text: "pass", finish: "stop", tokens: 2, inputTokens: 24 };
+      },
+    });
+    expect(JSON.parse(prompts.at(-1)!.split("\n")[1]!).visibleSources).toEqual([{ path, text }]);
+  }
+  expect(prompts[0]).not.toBe(prompts[1]);
+  expect(session.history).toEqual([]);
+  expect((await session.act({ op: "write", path, text: original })).observed).toBe("rejected");
 });

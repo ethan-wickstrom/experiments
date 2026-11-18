@@ -29,8 +29,11 @@ export function wire(
   history: Event[],
   candidate?: Action,
   externalChanges?: { path: string; text: string | null }[],
+  visibleSources?: { path: string; text: string }[],
 ) {
-  const state = candidate ? { files, history, externalChanges, candidate } : { files, history };
+  const state = candidate
+    ? { files, history, externalChanges, visibleSources, candidate }
+    : { files, history };
   return (candidate ? FORECAST : POLICY) + "\n" + projectJson(state);
 }
 export function permittedActions(unread: string[], tested: boolean, needsTest = false) {
