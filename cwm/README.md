@@ -4,6 +4,8 @@ Given a paused TypeScript program, what will its next observable state be? The *
 
 To write and revise a function with the trace-trained MiniCPM5 checkpoint, simulate calls, or search for an edit with a required intermediate effect, follow the [TypeScript prompting guide](PROMPTING.md).
 
+To work against a directory with a MiniCPM5 derivative trained on edits, tool observations and execution, see [project chat](PROMPTING.md#work-on-a-project). The [controlled comparison](bench/development/evaluation.md) includes the weights, independent acceptance results and transcripts. All three original checkpoints failed the ten project requests.
+
 For the experimental design and measured results beyond the raw-frame baseline, see [Learning compositional updates under partial observation](RESEARCH.md).
 
 The [recurrent raw-frame experiment](bench/recurrent/README.md) adds a source-held-out predictor for scalar assignments, branches and loops. It includes frozen oracle observations and commands to replay training, controls and independent falsification.

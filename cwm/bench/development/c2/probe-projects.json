@@ -1,0 +1,60 @@
+[
+  {
+    "name": "catalog",
+    "fn": "titles",
+    "args": "entries: {title: string, starred: boolean}[]",
+    "initial": "return entries;",
+    "turns": [
+      {
+        "call": "[{title:\"Map\",starred:true},{title:\"Sky\",starred:false}]",
+        "goals": [
+          "List titles of the starred catalog entries.",
+          "List titles of the unstarred catalog entries."
+        ],
+        "bodies": [
+          "return entries.filter(e => e.starred).map(e => e.title);",
+          "return entries.filter(e => !e.starred).map(e => e.title);"
+        ],
+        "expected": [["Map"], ["Sky"]]
+      },
+      {
+        "call": "[{title:\"Map\",starred:true},{title:\"Sky\",starred:false},{title:\"Ice\",starred:true}]",
+        "goals": [
+          "Return the number of starred entries.",
+          "Return the number of unstarred entries."
+        ],
+        "bodies": [
+          "return entries.filter(e => e.starred).length;",
+          "return entries.filter(e => !e.starred).length;"
+        ],
+        "expected": [2, 1]
+      }
+    ]
+  },
+  {
+    "name": "ticket",
+    "fn": "ticket",
+    "args": "value: string",
+    "initial": "return value;",
+    "turns": [
+      {
+        "call": "\" ST-204 \"",
+        "goals": [
+          "Take the part before the dash in the trimmed ticket.",
+          "Take the part after the dash in the trimmed ticket."
+        ],
+        "bodies": ["return value.trim().split(\"-\")[0];", "return value.trim().split(\"-\")[1];"],
+        "expected": ["ST", "204"]
+      },
+      {
+        "call": "\" ST-204 \"",
+        "goals": ["Return the numeric suffix as a number.", "Return the lowercase prefix."],
+        "bodies": [
+          "return Number(value.trim().split(\"-\")[1]);",
+          "return value.trim().split(\"-\")[0].toLowerCase();"
+        ],
+        "expected": [204, "st"]
+      }
+    ]
+  }
+]

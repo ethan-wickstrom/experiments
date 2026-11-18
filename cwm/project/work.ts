@@ -50,7 +50,7 @@ export async function workFile(
       if (choice === "done") {
         event.action = { op: "done" };
         onEvent?.(event);
-        return finish(status === "written" ? "untested" : "done");
+        return finish(session.untestedChanges ? "untested" : "done");
       }
       if (choice === "read" || choice === "test") {
         const action =

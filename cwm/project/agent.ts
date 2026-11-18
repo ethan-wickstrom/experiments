@@ -83,6 +83,9 @@ export class ProjectSession {
   state() {
     return { files: [...this.project.files.keys()].sort(), history: this.history.slice() };
   }
+  get untestedChanges() {
+    return this.needsTest;
+  }
   async begin(goal: string) {
     if (!goal.trim()) throw Error("Expected a project request");
     await this.project.refresh?.();

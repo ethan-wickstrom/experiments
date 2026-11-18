@@ -1,0 +1,9 @@
+{
+  "arm": "C2",
+  "adapter": "C2/adapter-f32.gguf",
+  "scale": 1.0,
+  "tokens": 154,
+  "template_sha256": "6e731efa11351a53b7159b3d416686b362f416bee999620caf45c6eaed761d47",
+  "output": "export function headings(lines: string[]) {\n  return lines.filter(s => s.startsWith(\"#\"));\n}\n",
+  "finish_reason": "stop"
+}

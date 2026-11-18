@@ -2,6 +2,34 @@
 
 Start from the question you want answered. A coding request needs a draft and an intended behavior. A simulation needs source and a call. A next-pause question needs source and the state the debugger currently shows. The CLI keeps those inputs distinct and lets you move between them in one session.
 
+## Work on a project
+
+From the `cwm` directory, install the locked dependencies, build the disposable Bun test image, and serve the joint coding and execution adapter. Download the official base once using the [local server instructions](#local-model-server). This setup uses Docker, Bun 1.4.4 and llama.cpp b6602.
+
+```sh
+bun install --frozen-lockfile
+docker build -f project/Dockerfile -t cwm-bun-project:1.4.4 .
+base="$HOME/.cache/typescript-cwm/MiniCPM5-1B-Q8_0.gguf"
+llama-server -m "$base" --lora bench/development/C/adapter-f32.gguf \
+  --alias minicpm5-joint --jinja -c 16384 -t 4 -tb 4 --parallel 1 \
+  --host 127.0.0.1 --port 8082
+```
+
+In a second terminal open a small project. Use a dedicated working copy. Writes change its TypeScript files immediately. The workspace assumes a single writer during each turn. It refreshes at the next request, checks for stale bytes before replacing a file, and uses an atomic rename. Concurrent mutation of files or directory entries during those checks is outside the persistence guarantee.
+
+```sh
+bun run project /path/to/project
+```
+
+Type a goal such as `Make the board restore its saved lanes from the local JSON file.` Then give a follow-up such as `Keep persistence working and fix the duplicate task after a move.` The policy chooses from reads, writes, tests and done, with eight decisions per turn. The JSON action grammar limits repeated reads and tests. The tool returns file bytes, a write acknowledgment, or the actual test status and a bounded diagnostic. Hidden benchmark suites live outside the project supplied to the model.
+
+- `/edit board.ts REQUEST` selects the file explicitly and asks the checkpoint for complete replacement source. After a failing real test it gets one repair attempt.
+- `/work board.ts REQUEST` uses the factorized action and raw-source interface. To try it, use the same server command above with `bench/development/c2/C2/adapter-f32.gguf` in place of the rank-16 adapter. [Blind evaluation](bench/development/c2-results/README.md)
+- `/forecast {"op":"test"}` asks the same checkpoint to predict the current tests. A candidate `write` asks about replacing a file and then running the tests. This command neither writes nor executes.
+- `/quit` closes the project session. The server in the first terminal has its own lifetime. Set `CWM_PROJECT_URL` and `CWM_PROJECT_MODEL` to address another local instance.
+
+The sandbox sends project bytes into a fresh unprivileged container with no host mounts or network. It provides Bun and the installed Effect package. The workspace supports up to 128 UTF-8 source, JSON and Markdown files, each at most 64 KiB. Writes are limited to TypeScript. A model's `done` and a visible test pass each have their own meaning. Check the changed source and independent behavior before relying on it. [Held project transcripts and limits](bench/development/evaluation.md)
+
 ## Write and revise a function
 
 From `cwm/`, install dependencies with `bun install --frozen-lockfile`. Use Bun 1.4+ and Node 24.11+ on your PATH. To enable natural language and neural next-pause queries, start the local server below. Then run `bun run chat` in a second terminal. Paste these lines one at a time:
