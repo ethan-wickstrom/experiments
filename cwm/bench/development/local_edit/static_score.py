@@ -31,7 +31,9 @@ def check(episode, text):
                              stderr=subprocess.STDOUT, timeout=30)
         if job.returncode and "error TS" not in job.stdout:
             raise RuntimeError(job.stdout)
-        return {"exit": job.returncode, "diagnostics": job.stdout.rstrip()}
+        # TS2339 includes the temporary absolute module path inside typeof import(...).
+        diagnostics = job.stdout.rstrip().replace(root.as_posix() + "/", "./")
+        return {"exit": job.returncode, "diagnostics": diagnostics}
 
 
 def evaluate():
