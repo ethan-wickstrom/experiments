@@ -19,7 +19,13 @@
   - **Paul Graham** (Viaweb, 2001) — [The Other Road Ahead](https://paulgrahamessays.com/road.html): "you can't have any idea what users will be thinking, believe me, until you watch them... RTML became a kind of suggestion box, because users only used it when the predefined page styles couldn't do what they wanted."
   - **Paul Adams** (Intercom, 2013–2014) — [Asking customers what you want to hear](https://www.intercom.com/blog/asking-customers-what-you-want-to-hear) and [The blind product manager](https://www.intercom.com/blog/the-blind-product-manager): hypothetical questions create false demand; analytics alone blind product teams to why users struggle.
   - **Scott Cook** (Intuit, 1984+) — [Inc. profile (2004)](https://www.inc.com/magazine/20040401/25cook.html) and [Inc. (1995)](https://www.inc.com/articles/1995/01/11165.html): Follow Me Home — watching new buyers install and use Quicken silently to spot every pause and confusion.
-  - *Ask list open:* add 7 to 10 active solo or small-team builders shipping with coding agents who have publicly said they lost touch with users or don't know what to build next.
+
+- **People to ask (all strangers; active 2026 solo builders who publicly stated this problem):**
+  1. **Muhamad J. Akoum** (stranger) — [Building a Product Solo With AI](https://akoum.me/blog/built-solo-with-ai-and-what-it-didnt-do) (2026-07-04): "An agent can draft a message, produce a landing-page variant, or cluster interview notes. It cannot make another person care, and it cannot notice the weight behind a hesitation unless I am present enough to hear it."
+  2. **Piotr Czerwinski** (stranger) — [Running a Product Solo With AI Agents: 8 Months In](https://piotrczerwinski.dev/writing/ai-agents-as-co-engineers) (2026-07-24): "Product decisions. Which feature to build, which segment to serve, what to cut. An agent will happily argue any position with equal confidence. The decision quality comes from talking to users and watching real behavior, and no model does that for me."
+  3. **Daniel Goldman** (stranger) — [When AI Writes Most of the Code, My Job Is Deciding What Not to Build](https://danielthegoldman.com/blog/when-ai-writes-most-of-the-code-my-job-is-deciding-what-not-to-build/en/) (2026-09-01): "what decides whether a product works has nothing to do with who typed the code. It's how fast I decide what to build, what to skip, and what to reject outright."
+  4. **Stefan-Iulian Tesoi** (stranger) — [Solo founder coding agents: shipping a product alone](https://laimonade.com/blog/running-a-product-single-handed-with-coding-agents) (2026-09-24): "They help least with the work where knowing what to build is the work. That distinction matters more when you are alone, because a team has people whose judgement differs from yours and a solo founder has only the agent's agreement."
+  5. **Martin Dimoski** (stranger) — [Building Got Cheap. Judgement Didn't.](https://martindimoski.dev/blog/building-got-cheap) (2026-10-17): "Three things took exactly as long as they always have. Deciding what is worth building... Knowing whether it is any good... Knowing what 'right' means."
 
 - **Proposed stake:**
   A change to their work plus booked time: connect one live product with active users (or share 5 recent unedited user sessions / support threads) and book a 20-minute live working session next week to review the unasked-for friction and workarounds found in real usage. Both must be in hand for a yes to count.
@@ -28,7 +34,19 @@
   Within 5 days of receiving access, deliver one concrete change worth building (and one requested feature worth refusing) backed by unedited moments from their actual users — things the builder did not ask about. If missed, a public failure note is sent to them.
 
 - **Proposed rule (fix before sending):**
-  At least 3 of 10 builders put up the stake within 48 hours of being asked. Silence is a no.
+  At least 2 of the 5 builders (or 3 of 10 if 5 more are added) put up the stake within 48 hours of being asked. Silence is a no.
+
+## Draft message (for Ethan to edit and send; agent sends nothing per V4)
+
+> Subject: your post on [their post title]
+>
+> I read your post on [specific 1-line detail from their post]. I've hit the same wall: when implementation took hours alongside users, I overheard what was actually broken without knowing to ask. When coding agents shrink the build to minutes, that incidental contact disappears.
+>
+> I'm testing whether a solo builder can get the same unasked-for user signal continuously without living in support threads or asking leading "would you use X?" questions.
+>
+> If you'll connect one live product with active users (or share 5 recent unedited user sessions / support threads) and book 20 minutes next week within the next 48 hours, I'll deliver one concrete change worth building and one requested feature worth refusing within 5 days of receiving access, backed by unedited moments from your users. If I miss the date or it isn't useful on the call, I'll send you a short note on what failed.
+>
+> Worth 20 minutes, or have you already found a way to stay close to users?
 
 ## Answers
 | Person | Tie | Answer | Stake in hand? | Counts? |
