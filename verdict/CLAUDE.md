@@ -10,7 +10,7 @@ Make the truth about an idea arrive sooner for people who have lived with a prob
 
 1. `PLAN.md` is the schedule and who does each part. `PROTOCOL.md` is how an afternoon is run. `LEDGER.md` says what is open and what is asked of the owner. `DECISIONS.md` (V-numbers) says what was decided and what was rejected.
 2. `python3 verdict.py score` shows the bets and which are overdue. Give every overdue bet a verdict before other work.
-3. In flight: nothing can run until R1 or R2 in the ledger is answered. Without the owner, the next work is L2.
+3. In flight: Run 001 (`runs/001-compounding-creation.md`) is drafted and waiting on the owner to confirm the stake/rule, record the bet, and send the asks (V4). Without the owner, the next work is L2 or running the re-entry brief prototype on this repository's own three projects (`cwm`, `frond`, `rachis`).
 
 ## Rules
 
