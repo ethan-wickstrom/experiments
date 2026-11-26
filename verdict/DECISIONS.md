@@ -20,3 +20,6 @@ The claim is that people corrected often become well calibrated. The agent doing
 
 **V7. Six-week outcomes count everyone who put up the stake, and require unprompted use in week six (days 36 to 42).**
 Dropping out during week one is a failure of the fix, not a reason to remove someone from the denominator. Counting an earlier commit would pass a tool that was tried once and abandoned. Half of the cohort is the initial bar before any run has been scored; adjust after Gate C if calibration shows a better bar. Rejected: counting only week-one completers, or counting any commit before day 42.
+
+**V8. Run 001 goes before Run 002.**
+Run 001 already has seven verified builders and a ready draft message, so it can start today; Run 002 still needs an active-builder ask list. Experiment priority belongs to the agent (`../CLAUDE.md`). Rejected: waiting on the owner to pick the order.

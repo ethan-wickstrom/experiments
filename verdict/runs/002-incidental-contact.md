@@ -39,5 +39,5 @@
 - **What the people who said no do instead:**
 
 ## Six weeks
-- **Outcome named on day one:** During week six (days 36 to 42), without prompting, at least half of the builders who put up the stake have shipped or refused a change citing an unprompted user moment surfaced from live usage (V7).
+- **Outcome named on day one:** During week six (days 36 to 42), without prompting, at least half of the builders who put up the stake have shipped or refused a change citing a new unprompted user moment from live usage observed in weeks five or six (not the week-one report; V7).
 - **Result on day 42:**

@@ -37,4 +37,4 @@ The question an afternoon answers: does this problem deserve a week? Not whether
 ## The week and the six weeks
 
 - **A week:** the fix is in real daily use by the people who said yes. Changes that can be undone ship without review. A change that sends someone a message or touches their money waits for the person whose name is on it.
-- **Six weeks:** one outcome decides, named on day one, that neither the asker nor an agent can raise by trying: a second payment, or use on day 42 that nobody prompted. The early numbers guide the work. This one judges it.
+- **Six weeks:** one outcome decides, named on day one, that neither the asker nor an agent can raise by trying: a second payment, or unprompted use in week six (days 36 to 42; see V7). The early numbers guide the work. This one judges it.

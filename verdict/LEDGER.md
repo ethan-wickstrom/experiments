@@ -5,7 +5,7 @@
 - **R1. Open. Name the first people, or a trade to start in.** Need: up to ten people who have each lived with a problem for years and would spend an afternoon on it, or one trade you can reach. Cost: introductions. Unblocks: gates A and B in `PLAN.md`. The agent does not contact people on its own (V4).
 - **R3. Open. A way to take a deposit and return it.** Need: a payment account that can issue a payment link and a refund. Cost: no fee to open one; the processor's fee on each charge. Unblocks: the strongest stake in `PROTOCOL.md`. Until then, runs use the other two stakes.
 - **R4. Open. Approve and send Run 001.** Need: review the stake, rule and draft message in [`runs/001-compounding-creation.md`](runs/001-compounding-creation.md), approve recording the pre-ask bet in `bets.jsonl`, and send the messages (or say who and how, per V4). Cost: ~15 minutes. Unblocks: gate A in `PLAN.md`.
-- **R5. Open. Pick Run 001 or Run 002 first (or run both).** Run 002 ([`runs/002-incidental-contact.md`](runs/002-incidental-contact.md)) captures the second lived problem the owner named: preserving incidental contact with users when agents shrink building to minutes. Need: decide whether to run 001, 002, or both this week, and confirm the ask list for 002. Cost: ~10 minutes. Unblocks: gate A in `PLAN.md`.
+- **R5. Open. Outreach approval for Run 002 (queued behind Run 001 per V8).** Run 002 ([`runs/002-incidental-contact.md`](runs/002-incidental-contact.md)) captures preserving incidental contact with users when agents shrink building to minutes. Need: any builders you want on the Run 002 ask list, and approval to send once the list is ready (V4). Cost: ~10 minutes. Unblocks: Run 002.
 
 ## Open
 
