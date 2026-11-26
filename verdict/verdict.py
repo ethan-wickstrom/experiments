@@ -22,8 +22,11 @@ def load(path: Path, new: dict | None = None) -> tuple[dict[str, dict], dict[str
     bets: dict[str, dict] = {}
     verdicts: dict[str, dict] = {}
     # Split on "\n" only: a pasted claim may hold other characters that str.splitlines treats as line ends.
-    events = [json.loads(line) for line in (path.read_text().split("\n") if path.exists() else []) if line.strip()]
-    for n, e in enumerate(events + ([new] if new else []), 1):
+    lines = path.read_text().split("\n") if path.exists() else []
+    items = [(i, json.loads(line)) for i, line in enumerate(lines, 1) if line.strip()]
+    if new is not None:
+        items.append((len(lines) + 1, new))
+    for n, e in items:
         if e["kind"] == "bet":
             if e["id"] in bets:
                 raise ValueError(f"line {n}: bet {e['id']} is already recorded")
@@ -42,8 +45,9 @@ def load(path: Path, new: dict | None = None) -> tuple[dict[str, dict], dict[str
 
 
 def append(path: Path, event: dict) -> None:
+    prefix = "\n" if path.exists() and path.stat().st_size > 0 and not path.read_text().endswith("\n") else ""
     with path.open("a") as f:
-        f.write(json.dumps(event, ensure_ascii=False) + "\n")
+        f.write(prefix + json.dumps(event, ensure_ascii=False) + "\n")
 
 
 def score(bets: dict[str, dict], verdicts: dict[str, dict], today: str) -> str:

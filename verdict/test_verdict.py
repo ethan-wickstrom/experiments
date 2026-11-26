@@ -43,6 +43,15 @@ class Record(unittest.TestCase):
         self.assertEqual(self.run_cli("bet", "a", "0.5", "2000-01-01", "one\u2028two", "--decided-by", "d"), 0)
         self.assertEqual(verdict.load(self.path)[0]["a"]["claim"], "one\u2028two")
 
+    def test_appending_after_a_missing_newline_keeps_entries_separate_and_line_numbers_accurate(self) -> None:
+        self.run_cli("bet", "a", "0.5", "2000-01-01", "x", "--decided-by", "d")
+        self.path.write_text(self.path.read_text().rstrip("\n"))
+        self.assertEqual(self.run_cli("bet", "b", "0.5", "2000-01-01", "y", "--decided-by", "d"), 0)
+        self.assertEqual(set(verdict.load(self.path)[0]), {"a", "b"})
+        self.path.write_text(self.path.read_text() + '\n{"kind": "unknown"}\n')
+        with self.assertRaisesRegex(ValueError, "^line 4:"):
+            verdict.load(self.path)
+
     def test_the_committed_record_loads(self) -> None:
         verdict.load(verdict.RECORD)
 
