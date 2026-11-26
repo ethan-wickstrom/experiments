@@ -14,6 +14,7 @@
 - **L4. Stakes outside markets.** A school or a town has no deposit. `PROTOCOL.md` doesn't yet say what the afternoon stake is there.
 - **L5. The vision page still shows a dated twelve-month ladder.** It lives outside this repository and predates V3.
 - **L6. US five-year business survival, quoted in the vision page as 50.2% for the 2015 cohort,** was read from a search summary. The BLS table was fetched only as far as the 2000 cohort (49.6% for 1994).
+- **L7. Nothing checks the afternoon's noes.** Only problems that pass go into real use, so the six-week comparison measures how often a yes was right and says nothing about how often a no was wrong. Raised by review on PR #78. A way to check some noes, such as building a few anyway, is not decided.
 
 ## Closed
 
