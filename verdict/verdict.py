@@ -17,13 +17,13 @@ from pathlib import Path
 RECORD = Path(__file__).with_name("bets.jsonl")
 
 
-def load(path: Path) -> tuple[dict[str, dict], dict[str, dict]]:
+def load(path: Path, new: dict | None = None) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Read the record, with `new` checked as if it were its next line."""
     bets: dict[str, dict] = {}
     verdicts: dict[str, dict] = {}
-    for n, line in enumerate(path.read_text().splitlines() if path.exists() else [], 1):
-        if not line.strip():
-            continue
-        e = json.loads(line)
+    # Split on "\n" only: a pasted claim may hold other characters that str.splitlines treats as line ends.
+    events = [json.loads(line) for line in (path.read_text().split("\n") if path.exists() else []) if line.strip()]
+    for n, e in enumerate(events + ([new] if new else []), 1):
         if e["kind"] == "bet":
             if e["id"] in bets:
                 raise ValueError(f"line {n}: bet {e['id']} is already recorded")
@@ -87,14 +87,12 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(score(*load(a.record), today))
         return 0
-    before = a.record.read_text() if a.record.exists() else None
-    append(a.record, event)
     try:
-        load(a.record)
+        load(a.record, event)
     except ValueError as err:
-        a.record.write_text(before) if before is not None else a.record.unlink()
         print(err, file=sys.stderr)
         return 1
+    append(a.record, event)
     return 0
 
 

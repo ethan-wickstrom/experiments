@@ -39,6 +39,10 @@ class Record(unittest.TestCase):
         self.assertEqual(self.run_cli("bet", "c", "1.0", "2000-01-01", "x", "--decided-by", "d"), 1)
         self.assertEqual(self.path.read_text(), before)
 
+    def test_a_pasted_line_separator_stays_inside_its_claim(self) -> None:
+        self.assertEqual(self.run_cli("bet", "a", "0.5", "2000-01-01", "one\u2028two", "--decided-by", "d"), 0)
+        self.assertEqual(verdict.load(self.path)[0]["a"]["claim"], "one\u2028two")
+
     def test_the_committed_record_loads(self) -> None:
         verdict.load(verdict.RECORD)
 
