@@ -53,10 +53,10 @@ def score(bets: dict[str, dict], verdicts: dict[str, dict], today: str) -> str:
         brier = sum((p - y) ** 2 for p, y in done) / len(done)
         out.append(f"Brier score {brier:.3f} (0 is perfect; always saying 50% scores 0.250).")
         out.append("said     n  happened")
-        for lo in (0.0, 0.2, 0.4, 0.6, 0.8):
-            ys = [y for p, y in done if lo <= p < lo + 0.2]
+        for k in range(5):  # five bins by percentage points; each probability falls in exactly one
+            ys = [y for p, y in done if min(int(round(p * 100, 6)) // 20, 4) == k]
             if ys:
-                out.append(f"{lo:.0%}-{lo + 0.2:.0%}".ljust(8) + f"{len(ys):>2}  {sum(ys) / len(ys):.0%}")
+                out.append(f"{k * 20}%-{k * 20 + 20}%".ljust(8) + f"{len(ys):>2}  {sum(ys) / len(ys):.0%}")
     late = sorted((b["due"], i) for i, b in bets.items() if i not in verdicts and b["due"] < today)
     out += [f"overdue: {i} (due {due})" for due, i in late]
     return "\n".join(out)
@@ -80,8 +80,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     today = dt.date.today().isoformat()
     if a.cmd == "bet":
-        dt.date.fromisoformat(a.due)
-        event = {"kind": "bet", "id": a.id, "made": today, "p": a.p, "due": a.due, "claim": a.claim, "decided_by": a.decided_by}
+        due = dt.date.fromisoformat(a.due).isoformat()
+        event = {"kind": "bet", "id": a.id, "made": today, "p": a.p, "due": due, "claim": a.claim, "decided_by": a.decided_by}
     elif a.cmd == "verdict":
         event = {"kind": "verdict", "id": a.id, "on": today, "happened": a.happened == "yes", "evidence": a.evidence}
     else:

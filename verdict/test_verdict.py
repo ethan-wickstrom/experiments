@@ -21,6 +21,15 @@ class Record(unittest.TestCase):
         self.assertIn("overdue: b", text)
         self.assertNotIn("overdue: a", text)
 
+    def test_a_probability_on_a_bin_edge_is_counted_once_and_a_compact_date_is_stored_in_full(self) -> None:
+        self.run_cli("bet", "a", "0.6", "20000101", "x", "--decided-by", "d")
+        self.run_cli("verdict", "a", "yes", "--evidence", "e")
+        self.run_cli("bet", "b", "0.5", "20000101", "x", "--decided-by", "d")
+        text = verdict.score(*verdict.load(self.path), "2026-01-01")
+        self.assertIn("60%-80%  1  100%", text)
+        self.assertNotIn("40%-60%", text)
+        self.assertIn("overdue: b (due 2000-01-01)", text)
+
     def test_refuses_a_second_verdict_and_leaves_the_record_unchanged(self) -> None:
         self.run_cli("bet", "a", "0.5", "2000-01-01", "x", "--decided-by", "d")
         self.run_cli("verdict", "a", "yes", "--evidence", "e")
