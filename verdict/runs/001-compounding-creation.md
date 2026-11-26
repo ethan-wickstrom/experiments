@@ -26,7 +26,7 @@
   7. **Diego Cervera** (stranger) — [The Hard Part About Consistency When Building Products](https://journal.messyfounder.com/the-hard-part-about-consistency-when-building-products-a0e65acdf9cf) (2026-06-15): accumulated solo projects with no structure to sustain them once initial excitement fades.
 
 - **Proposed stake (requires no payment account yet):**
-  A change to their work plus booked time: grant read access to 2 real repositories (one active, one untouched for 30+ days) and book a 20-minute live working session next week to return to the paused repo and review live user/dependency drift in the active one, with zero manual documentation written by them. (If R3 is set up before sending, optionally pair with a refundable deposit.)
+  A change to their work plus booked time: provide read access to 2 real repositories (public URLs or read-only collaborator access: one active, one untouched for 30+ days) and book a 20-minute live working session next week. Both must be in hand for a yes to count.
 
 - **Delivery date, and what is returned if it is missed:**
   Within 5 days of receiving repo access, deliver a runnable re-entry brief for the paused repo (what it does, why recent choices were made, what broke since they left, what is waiting for a human call) and a zero-noise drift report for the active repo. If missed, any deposit is refunded in full and a public failure note is sent to them.
@@ -42,7 +42,7 @@
 >
 > I'm testing whether a paused project can have zero re-entry tax and an active project can surface only what actually needs your judgment, without you writing or maintaining any docs.
 >
-> If you'll point me at 2 real repos (one active, one you haven't touched in 30+ days) and book 20 minutes next week, I'll have a live re-entry brief and drift report in your hands within 5 days. If I miss that date or it isn't useful on the call, you owe nothing and I'll send you a short note on what failed.
+> If you'll give me read access to 2 real repos (public links or read-only access: one active, one you haven't touched in 30+ days) and book 20 minutes next week, I'll have a live re-entry brief and drift report in your hands within 5 days. If I miss that date or it isn't useful on the call, you owe nothing and I'll send you a short note on what failed.
 >
 > Worth 20 minutes, or have you already solved this for yourself?
 
@@ -55,5 +55,5 @@
 - **What the people who said no do instead:**
 
 ## Six weeks
-- **Outcome named on day one:** On day 42, without prompting, the builder ships a real change to a previously paused project using the brief, or pays for a second month.
+- **Outcome named on day one:** On day 42, without prompting, at least half of the builders who completed the week have shipped a real commit to a previously paused project using the brief.
 - **Result on day 42:**
