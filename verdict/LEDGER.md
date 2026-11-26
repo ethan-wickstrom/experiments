@@ -10,7 +10,6 @@
 ## Open
 
 - **L1. The protocol has never been run.** Every rule in it is a guess. The first run will change it. Closes with the first record in `runs/`.
-- **L2. Where money is already on named problems.** Prizes, bounties and public tenders may hold binding answers that exist today. Not checked: which sources are real, how many problems are open, and whether an insider with agents could meet them. One aggregator claims 134 open challenges; that is its own count.
 - **L3. Friends.** V5 drops their answers. Someone with ten years in a trade may know every buyer in it. Decide what counts in a small trade after the first run shows how often it matters.
 - **L4. Stakes outside markets.** A school or a town has no deposit. `PROTOCOL.md` doesn't yet say what the afternoon stake is there.
 - **L5. The vision page still shows a dated twelve-month ladder.** It lives outside this repository and predates V3.
@@ -21,3 +20,4 @@
 ## Closed
 
 - **R2. Closed (2026-11-26).** Owner provided the compounding-creation / maintenance-drag problem and four public builder posts. Opened as [`runs/001-compounding-creation.md`](runs/001-compounding-creation.md).
+- **L2. Closed (2026-11-26).** Checked primary pages in [`precommitted.md`](precommitted.md): Algora has real fast engineering bounties and NIH / USA.gov have real slow institutional prizes (`Challenge.gov` sunset March 30, 2026), but neither replaces an afternoon loop with ordinary buyers.
