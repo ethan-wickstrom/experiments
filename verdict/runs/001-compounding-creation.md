@@ -55,5 +55,5 @@
 - **What the people who said no do instead:**
 
 ## Six weeks
-- **Outcome named on day one:** On day 42, without prompting, at least half of the builders who completed the week have shipped a real commit to a previously paused project using the brief.
+- **Outcome named on day one:** During week six (days 36 to 42), without prompting, at least half of the builders who put up the stake use the brief on a real project (a commit, dependency fix, or decision logged from it).
 - **Result on day 42:**
