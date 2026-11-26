@@ -20,4 +20,4 @@
 ## Closed
 
 - **R2. Closed (2026-11-26).** Owner provided the compounding-creation / maintenance-drag problem and four public builder posts. Opened as [`runs/001-compounding-creation.md`](runs/001-compounding-creation.md).
-- **L2. Closed (2026-11-26).** Checked primary pages in [`precommitted.md`](precommitted.md): Algora has real fast engineering bounties and NIH / USA.gov have real slow institutional prizes (`Challenge.gov` sunset March 30, 2026), but neither replaces an afternoon loop with ordinary buyers.
+- **L2. Closed (2026-11-26).** Checked primary pages in [`precommitted.md`](precommitted.md): Algora has real fast engineering bounties and NIH / USA.gov have real slow institutional prizes (`Challenge.gov` sunset March 30, 2026), but public tenders were deferred as multi-month procurement cycles; none replaces an afternoon loop with ordinary buyers.

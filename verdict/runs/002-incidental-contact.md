@@ -26,7 +26,6 @@
   3. **Daniel Goldman** (stranger) — [When AI Writes Most of the Code, My Job Is Deciding What Not to Build](https://danielthegoldman.com/blog/when-ai-writes-most-of-the-code-my-job-is-deciding-what-not-to-build/en/) (2026-09-01): "what decides whether a product works has nothing to do with who typed the code. It's how fast I decide what to build, what to skip, and what to reject outright."
   4. **Stefan-Iulian Tesoi** (stranger) — [Solo founder coding agents: shipping a product alone](https://laimonade.com/blog/running-a-product-single-handed-with-coding-agents) (2026-09-24): "They help least with the work where knowing what to build is the work. That distinction matters more when you are alone, because a team has people whose judgement differs from yours and a solo founder has only the agent's agreement."
   5. **Martin Dimoski** (stranger) — [Building Got Cheap. Judgement Didn't.](https://martindimoski.dev/blog/building-got-cheap) (2026-10-17): "Three things took exactly as long as they always have. Deciding what is worth building... Knowing whether it is any good... Knowing what 'right' means."
-  6. **Nan Liang** (stranger) — [I Built a Few Products Nobody Used: Honest Lessons](https://javaeye.dev/blog/first-products-nobody-used/) (2026-09-29): shipped multiple AI-built tools with zero revenue; "The products went live, and then nothing happened. No users, no feedback."
 
 - **Proposed stake:**
   A change to their work plus booked time: connect one live product with active users (or share 5 recent unedited user sessions / support threads) and book a 20-minute live working session next week to review the unasked-for friction and workarounds found in real usage. Both must be in hand for a yes to count.
@@ -35,7 +34,7 @@
   Within 5 days of receiving access, deliver one concrete change worth building (and one requested feature worth refusing) backed by unedited moments from their actual users — things the builder did not ask about. If missed, a public failure note is sent to them.
 
 - **Proposed rule (fix before sending):**
-  At least 2 of the 6 builders (or 3 of 10 if 4 more are added) put up the stake within 48 hours of being asked. Silence is a no.
+  At least 2 of the 5 builders (or 3 of 10 if 5 more are added) put up the stake within 48 hours of being asked. Silence is a no.
 
 ## Draft message (for Ethan to edit and send; agent sends nothing per V4)
 
@@ -45,7 +44,7 @@
 >
 > I'm testing whether a solo builder can get the same unasked-for user signal continuously without living in support threads or asking leading "would you use X?" questions.
 >
-> If you'll connect one live product with active users (or share 5 recent unedited user sessions / support threads) and book 20 minutes next week, I'll deliver one concrete change worth building and one requested feature worth refusing within 5 days, backed by unedited moments from your users. If I miss the date or it isn't useful on the call, I'll send you a short note on what failed.
+> If you'll connect one live product with active users (or share 5 recent unedited user sessions / support threads) and book 20 minutes next week within the next 48 hours, I'll deliver one concrete change worth building and one requested feature worth refusing within 5 days of receiving access, backed by unedited moments from your users. If I miss the date or it isn't useful on the call, I'll send you a short note on what failed.
 >
 > Worth 20 minutes, or have you already found a way to stay close to users?
 
